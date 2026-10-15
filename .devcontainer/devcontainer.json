@@ -1,0 +1,17 @@
+{
+  "name": "Orpbal",
+  "dockerComposeFile": ["../docker-compose.yml", "docker-compose.devcontainer.yml"],
+  "service": "devcontainer",
+  "workspaceFolder": "/workspaces/Orpbal",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {}
+  },
+  "runServices": ["devcontainer", "web", "app", "db"],
+  "forwardPorts": [3001, 8080, 5432],
+  "postCreateCommand": "npm install -g bun && bun install && cd \"apps/server\" && go mod download",
+  "customizations": {
+    "vscode": {
+      "extensions": ["ms-azuretools.vscode-docker", "golang.go"]
+    }
+  }
+}

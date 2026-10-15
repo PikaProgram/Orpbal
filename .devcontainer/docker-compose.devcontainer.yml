@@ -1,0 +1,9 @@
+services:
+  devcontainer:
+    image: "mcr.microsoft.com/devcontainers/go:1-1.22-bookworm"
+    command: sleep infinity
+    init: true
+    environment:
+      DEVCONTAINER: "true"
+    volumes:
+      - .:/workspaces/Orpbal:cached

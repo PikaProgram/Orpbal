@@ -1,0 +1,51 @@
+{
+  "name": "Orpbal",
+  "private": true,
+  "workspaces": {
+    "packages": [
+      "apps/*",
+      "packages/*"
+    ],
+    "catalog": {
+      "dotenv": "^17.4.2",
+      "zod": "^4.6.5",
+      "@cloudflare/workers-types": "^4.20260629.1",
+      "alchemy": "^0.93.12",
+      "@types/bun": "^1.4.2"
+    }
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently --kill-others \"turbo -F web dev\" \"turbo -F @Orpbal/infra dev\" \"bash scripts/native/task-1.sh\"",
+    "build": "turbo build",
+    "check-types": "turbo check-types",
+    "dev:web": "turbo -F web dev",
+    "dev:server": "bash scripts/native/task-1.sh",
+    "setup:server": "bash scripts/native/task-2.sh",
+    "check:server": "bash scripts/native/task-3.sh",
+    "test:server": "bash scripts/native/task-3.sh",
+    "setup:part:backend:go:gin": "bash scripts/native/task-2.sh",
+    "dev:part:backend:go:gin": "bash scripts/native/task-1.sh",
+    "check:part:backend:go:gin": "bash scripts/native/task-3.sh",
+    "test:part:backend:go:gin": "bash scripts/native/task-3.sh",
+    "db:local": "turbo -F @Orpbal/db db:local",
+    "test": "bun run --filter web test",
+    "check": "oxlint && oxfmt --write"
+  },
+  "dependencies": {
+    "@Orpbal/env": "workspace:*",
+    "dotenv": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@Orpbal/config": "workspace:*",
+    "@cloudflare/workers-types": "catalog:",
+    "@types/bun": "catalog:",
+    "concurrently": "^9.2.1",
+    "oxfmt": "^0.56.0",
+    "oxlint": "^1.86.0",
+    "turbo": "2.10.11",
+    "typescript": "^6.0.3"
+  },
+  "packageManager": "bun@1.4.2"
+}
