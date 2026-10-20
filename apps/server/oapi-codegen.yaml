@@ -2,4 +2,4 @@ package: api
 output: openapi.gen.go
 generate:
   models: true
-  std-http-server: true
+  gin-server: true

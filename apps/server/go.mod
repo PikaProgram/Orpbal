@@ -8,6 +8,7 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/lib/pq v1.10.9
 	github.com/oapi-codegen/oapi-codegen/v2 v2.7.2
+	github.com/oapi-codegen/runtime v1.7.0
 	github.com/rs/zerolog v1.34.0
 	github.com/vektra/mockery/v3 v3.7.1
 	golang.org/x/crypto v0.51.0
@@ -16,6 +17,7 @@ require (
 require (
 	ariga.io/atlas v0.19.1-0.20240203083654-5948b60a8e43 // indirect
 	github.com/agext/levenshtein v1.2.1 // indirect
+	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/apparentlymart/go-textseg/v13 v13.0.0 // indirect
 	github.com/brunoga/deep v1.3.1 // indirect
 	github.com/bytedance/gopkg v0.1.3 // indirect
