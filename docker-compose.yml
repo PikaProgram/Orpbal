@@ -1,0 +1,58 @@
+name: Orpbal
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile.vite
+      args:
+        PUBLIC_SERVER_URL: http://localhost:8080
+        VITE_SERVER_URL: http://localhost:8080
+    env_file:
+      - apps/web/.env
+    ports:
+      - "3001:3000"
+    environment:
+      - NODE_ENV=production
+    depends_on:
+      - app
+    restart: unless-stopped
+
+  app:
+    build:
+      context: apps/server
+      dockerfile: Dockerfile
+    env_file:
+      - apps/server/.env
+    ports:
+      - "8080:8080"
+    environment:
+      - CORS_ORIGIN=http://localhost:3001
+      - HOST=0.0.0.0
+      - PORT=8080
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/Orpbal?sslmode=disable
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    container_name: Orpbal-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-Orpbal}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

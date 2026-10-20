@@ -1,0 +1,22 @@
+<section class="mt-8 rounded-lg border border-border bg-card p-6 shadow-sm">
+  <h2 class="mb-4 text-xl font-semibold">Backend Status</h2>
+  <div id="graph-backend-status" class="flex items-center gap-2 text-sm text-muted-foreground">
+    <span class="h-2 w-2 rounded-full bg-orange-400"></span>
+    <span>Checking...</span>
+  </div>
+</section>
+
+<script>
+  const status = document.getElementById("graph-backend-status");
+  fetch(`${(import.meta.env.PUBLIC_SERVER_URL ?? "http://localhost:8080")}/health`)
+    .then((response) => {
+      if (!status) return;
+      status.innerHTML = response.ok
+        ? '<span class="h-2 w-2 rounded-full bg-green-500"></span><span>Connected</span>'
+        : '<span class="h-2 w-2 rounded-full bg-red-500"></span><span>Disconnected</span>';
+    })
+    .catch(() => {
+      if (!status) return;
+      status.innerHTML = '<span class="h-2 w-2 rounded-full bg-red-500"></span><span>Disconnected</span>';
+    });
+</script>

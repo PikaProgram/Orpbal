@@ -1,0 +1,6 @@
+with-expecter: true
+dir: internal/testsupport/mocks
+packages:
+  Orpbal/internal/testsupport:
+    interfaces:
+      Service:
