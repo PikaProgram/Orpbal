@@ -1,84 +1,48 @@
 package database
 
 import (
-	"database/sql"
+	"context"
+	"fmt"
 	"os"
-	"strings"
+
+	"Orpbal/ent"
+	"Orpbal/ent/migrate"
 
 	_ "github.com/lib/pq"
-	_ "github.com/mattn/go-sqlite3"
 )
 
-var DB *sql.DB
+var client *ent.Client
 
-// InitDB initializes the database connection.
-// After running `go generate ./ent`, you can switch to using the Ent client directly.
-func InitDB() (*sql.DB, error) {
+// InitDB opens the PlatformDatabase and applies the non-destructive Ent schema.
+// DATABASE_URL is required: the platform does not fall back to SQLite.
+func InitDB(ctx context.Context) (*ent.Client, error) {
 	dsn := os.Getenv("DATABASE_URL")
-
-	var db *sql.DB
-	var err error
-
 	if dsn == "" {
-		// Default to SQLite for development
-		db, err = sql.Open("sqlite3", "file:app.db?cache=shared&_fk=1")
-	} else if strings.HasPrefix(dsn, "postgres") {
-		db, err = sql.Open("postgres", dsn)
-	} else {
-		// Assume SQLite file path
-		db, err = sql.Open("sqlite3", "file:"+dsn+"?cache=shared&_fk=1")
+		return nil, fmt.Errorf("DATABASE_URL is required")
 	}
 
+	c, err := ent.Open("postgres", dsn)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("open database: %w", err)
+	}
+	if err := c.Schema.Create(ctx, migrate.WithDropColumn(false), migrate.WithDropIndex(false)); err != nil {
+		_ = c.Close()
+		return nil, fmt.Errorf("migrate database: %w", err)
 	}
 
-	// Verify connection
-	if err := db.Ping(); err != nil {
-		db.Close()
-		return nil, err
-	}
-
-	// Create tables if they don't exist (SQLite dev mode)
-	if dsn == "" || !strings.HasPrefix(dsn, "postgres") {
-		if _, err := db.Exec(sqliteSchema); err != nil {
-			db.Close()
-			return nil, err
-		}
-	}
-
-	DB = db
-	return DB, nil
+	client = c
+	return client, nil
 }
 
-// GetDB returns the database instance
-func GetDB() *sql.DB {
-	return DB
+// GetClient returns the initialized Ent client.
+func GetClient() *ent.Client {
+	return client
 }
 
-// Close closes the database connection
-func Close() {
-	if DB != nil {
-		DB.Close()
+// Close closes the PlatformDatabase connection.
+func Close() error {
+	if client == nil {
+		return nil
 	}
+	return client.Close()
 }
-
-const sqliteSchema = `
-CREATE TABLE IF NOT EXISTS users (
-	id INTEGER PRIMARY KEY AUTOINCREMENT,
-	name TEXT NOT NULL,
-	email TEXT NOT NULL UNIQUE,
-	created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-	updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS posts (
-	id INTEGER PRIMARY KEY AUTOINCREMENT,
-	title TEXT NOT NULL,
-	content TEXT NOT NULL DEFAULT '',
-	published BOOLEAN NOT NULL DEFAULT 0,
-	author_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-	created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-	updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-`

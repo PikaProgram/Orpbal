@@ -27,10 +27,11 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - CORS_ORIGIN=http://localhost:3001
       - HOST=0.0.0.0
       - PORT=8080
       - DATABASE_URL=postgres://postgres:postgres@db:5432/Orpbal?sslmode=disable
+      - ORPBAL_BOOTSTRAP_ADMIN_USERNAME=${ORPBAL_BOOTSTRAP_ADMIN_USERNAME:-admin}
+      - ORPBAL_BOOTSTRAP_ADMIN_PASSWORD=${ORPBAL_BOOTSTRAP_ADMIN_PASSWORD:-Admin!23}
     depends_on:
       db:
         condition: service_healthy

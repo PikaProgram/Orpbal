@@ -8,19 +8,19 @@ import (
 	"entgo.io/ent/schema/field"
 )
 
-// User holds the schema definition for the User entity.
-type User struct {
+// Group holds the schema definition for the Group entity.
+type Group struct {
 	ent.Schema
 }
 
-// Fields of the User.
-func (User) Fields() []ent.Field {
+// Fields of the Group.
+func (Group) Fields() []ent.Field {
 	return []ent.Field{
 		field.String("name").
-			NotEmpty(),
-		field.String("email").
 			NotEmpty().
 			Unique(),
+		field.String("description").
+			Default(""),
 		field.Time("created_at").
 			Default(time.Now).
 			Immutable(),
@@ -30,9 +30,10 @@ func (User) Fields() []ent.Field {
 	}
 }
 
-// Edges of the User.
-func (User) Edges() []ent.Edge {
+// Edges of the Group.
+func (Group) Edges() []ent.Edge {
 	return []ent.Edge{
-		edge.To("posts", Post.Type),
+		edge.To("memberships", GroupMembership.Type),
+		edge.To("grants", DatabaseGrant.Type),
 	}
 }
