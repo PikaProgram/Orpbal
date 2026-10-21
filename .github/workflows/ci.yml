@@ -8,8 +8,23 @@ on:
 
 jobs:
   ci:
-    name: Lint, Type Check & Build
+    name: Lint, Type Check, Test & Build
     runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: orpbal_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     steps:
       - name: Checkout repository
@@ -20,11 +35,34 @@ jobs:
         with:
           bun-version: latest
 
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/server/go.mod
+          cache-dependency-path: apps/server/go.sum
+
       - name: Install dependencies
-        run: bun install
+        run: bun install --frozen-lockfile
+
+      - name: Download Go modules
+        working-directory: apps/server
+        run: go mod download
 
       - name: Type check
         run: bun run check-types
 
-      - name: Build
+      - name: Test web
+        run: bun run test
+
+      - name: Build web
         run: bun run build
+
+      - name: Vet Go
+        working-directory: apps/server
+        run: go vet ./...
+
+      - name: Test Go
+        working-directory: apps/server
+        env:
+          TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/orpbal_test?sslmode=disable
+        run: go test ./...

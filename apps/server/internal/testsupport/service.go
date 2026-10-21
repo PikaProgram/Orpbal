@@ -1,8 +1,0 @@
-package testsupport
-
-import "context"
-
-//go:generate go run github.com/vektra/mockery/v3 --name Service --output mocks
-type Service interface {
-	Execute(context.Context, string) error
-}

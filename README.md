@@ -53,11 +53,17 @@ Copy `apps/server/.env.example` to `apps/server/.env` and set:
 - `DATABASE_URL` - platform PostgreSQL connection string.
 - `ORPBAL_ENCRYPTION_KEY` - base64-encoded 32 bytes (`openssl rand -base64 32`) used to encrypt managed database passwords. Keep it stable; changing it makes stored passwords unreadable.
 - `ORPBAL_BOOTSTRAP_ADMIN_USERNAME` / `ORPBAL_BOOTSTRAP_ADMIN_PASSWORD` - creates the first platform admin when no users exist.
+- `APP_ENV` - `development` or `production`; `production` marks the session cookie `Secure`.
 - `APP_ORIGIN` - allowed browser origin for the API (default `http://localhost:4321`).
+- `ORPBAL_SESSION_IDLE_TIMEOUT` / `ORPBAL_SESSION_ABSOLUTE_TIMEOUT` / `ORPBAL_SESSION_ROTATION_INTERVAL` / `ORPBAL_SESSION_GRACE_PERIOD` - optional session policy overrides (30m / 8h / 15m / 30s).
+
+Copy `apps/web/.env.example` to `apps/web/.env` to change the Astro-to-API URL (`SERVER_URL`, default `http://localhost:8080`).
 
 Sign in at `/login` with the bootstrap admin. All later users are created from the Users admin page.
 
 ## Docker Compose
+
+Create `apps/server/.env` first (see above); Compose loads it for the API and derives the container database URL from `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB`.
 
 ```sh
 docker compose up --build
@@ -66,6 +72,22 @@ docker compose up --build
 - Web: `http://localhost:3001`
 - API: `http://localhost:8080`
 - PostgreSQL: `localhost:5432`
+
+The API image runs as a non-root user and does not need CGO. Web and API have healthchecks; web starts after the API is healthy. Compose defaults `APP_ENV=development` and `APP_ORIGIN=http://localhost:3001`; override them in the shell for a production origin.
+
+## Tests
+
+```sh
+bun run check-types
+bun run test
+bun run build
+
+cd apps/server
+go vet ./...
+TEST_DATABASE_URL='postgres://postgres:postgres@localhost:5432/Orpbal?sslmode=disable' go test ./...
+```
+
+Integration tests create isolated schemas and drop them afterwards. CI runs the same checks with a `postgres:16` service.
 
 ## Connections
 
