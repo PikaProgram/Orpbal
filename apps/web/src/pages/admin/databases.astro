@@ -1,0 +1,142 @@
+---
+import { actions } from "astro:actions";
+
+import Layout from "@/layouts/Layout.astro";
+import { api, type DatabaseConnection } from "@/lib/api";
+import { actionResults } from "@/lib/forms";
+import { requireAdmin } from "@/lib/session";
+
+const auth = await requireAdmin(Astro);
+if (auth instanceof Response) return auth;
+
+const outcome = actionResults(Astro, [
+	actions.createConnection,
+	actions.updateConnection,
+	actions.setConnectionEnabled,
+]);
+if (outcome.succeeded) return Astro.redirect("/admin/databases");
+
+const connections = (await api<DatabaseConnection[]>("/admin/databases", { cookie: auth.cookie })).data;
+const csrf = auth.session.csrf_token;
+const sslModes = ["disable", "require", "verify-ca", "verify-full"];
+const inputClass =
+	"w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-500";
+const buttonClass = "rounded-md bg-zinc-100 px-3 py-1.5 text-xs font-medium text-zinc-900 hover:bg-white";
+const quietButtonClass = "rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:border-zinc-500";
+---
+
+<Layout title="Connections" user={auth.session.user}>
+	<h1 class="text-2xl font-semibold tracking-tight">Database connections</h1>
+	<p class="mb-6 text-sm text-zinc-400">
+		Managed PostgreSQL targets. Creating or enabling a connection verifies it first.
+	</p>
+
+	{
+		outcome.error && (
+			<p class="mb-4 rounded-md border border-red-900 bg-red-950/50 px-3 py-2 text-sm text-red-300">
+				{outcome.error}
+			</p>
+		)
+	}
+
+	<form
+		method="POST"
+		action={actions.createConnection}
+		class="mb-6 grid gap-3 rounded-lg border border-zinc-800 bg-zinc-900 p-4 sm:grid-cols-2 lg:grid-cols-4"
+	>
+		<input type="hidden" name="csrf_token" value={csrf} />
+		<label class="block text-sm">
+			<span class="mb-1 block text-zinc-400">Name</span>
+			<input name="name" required class={inputClass} />
+		</label>
+		<label class="block text-sm">
+			<span class="mb-1 block text-zinc-400">Host</span>
+			<input name="host" required class={inputClass} />
+		</label>
+		<label class="block text-sm">
+			<span class="mb-1 block text-zinc-400">Port</span>
+			<input name="port" type="number" min="1" max="65535" value="5432" required class={inputClass} />
+		</label>
+		<label class="block text-sm">
+			<span class="mb-1 block text-zinc-400">Database</span>
+			<input name="database_name" required class={inputClass} />
+		</label>
+		<label class="block text-sm">
+			<span class="mb-1 block text-zinc-400">Username</span>
+			<input name="username" required class={inputClass} />
+		</label>
+		<label class="block text-sm">
+			<span class="mb-1 block text-zinc-400">Password</span>
+			<input name="password" type="password" class={inputClass} />
+		</label>
+		<label class="block text-sm">
+			<span class="mb-1 block text-zinc-400">SSL mode</span>
+			<select name="ssl_mode" class={inputClass}>
+				{sslModes.map((mode) => <option value={mode}>{mode}</option>)}
+			</select>
+		</label>
+		<div class="flex items-end">
+			<button type="submit" class={buttonClass}>Add connection</button>
+		</div>
+	</form>
+
+	<div class="space-y-4">
+		{connections.map((connection) => (
+			<section class="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
+				<div class="mb-3 flex flex-wrap items-start justify-between gap-3">
+					<div>
+						<h2 class="text-lg font-medium">{connection.name}</h2>
+						<p class="text-sm text-zinc-400">
+							{connection.host}:{connection.port}/{connection.database_name} · {connection.username}
+						</p>
+					</div>
+					<div class="flex items-center gap-2 text-xs">
+						<span class={connection.is_enabled ? "text-emerald-400" : "text-zinc-500"}>
+							{connection.is_enabled ? "Enabled" : "Disabled"}
+						</span>
+						<span class="text-zinc-500">SSL: {connection.ssl_mode}</span>
+						<span class="text-zinc-500">{connection.has_password ? "Password stored" : "No password"}</span>
+					</div>
+				</div>
+
+				<form method="POST" action={actions.setConnectionEnabled} class="mb-2">
+					<input type="hidden" name="csrf_token" value={csrf} />
+					<input type="hidden" name="id" value={connection.id} />
+					<input type="hidden" name="enabled" value={connection.is_enabled ? "false" : "true"} />
+					<button type="submit" class={quietButtonClass}>
+						{connection.is_enabled ? "Disable" : "Enable"}
+					</button>
+				</form>
+
+				<details class="border-t border-zinc-800 pt-3">
+					<summary class="cursor-pointer text-xs text-zinc-400">Edit connection</summary>
+					<form method="POST" action={actions.updateConnection} class="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+						<input type="hidden" name="csrf_token" value={csrf} />
+						<input type="hidden" name="id" value={connection.id} />
+						<input name="name" value={connection.name} required class={inputClass} />
+						<input name="host" value={connection.host} required class={inputClass} />
+						<input name="port" type="number" min="1" max="65535" value={connection.port} required class={inputClass} />
+						<input name="database_name" value={connection.database_name} required class={inputClass} />
+						<input name="username" value={connection.username} required class={inputClass} />
+						<input name="password" type="password" placeholder="Leave blank to keep" class={inputClass} />
+						<select name="ssl_mode" class={inputClass}>
+							{sslModes.map((mode) => (
+								<option value={mode} selected={mode === connection.ssl_mode}>
+									{mode}
+								</option>
+							))}
+						</select>
+						<div class="flex items-end">
+							<button type="submit" class={quietButtonClass}>Save changes</button>
+						</div>
+					</form>
+				</details>
+			</section>
+		))}
+		{connections.length === 0 && (
+			<p class="rounded-lg border border-zinc-800 bg-zinc-900 p-6 text-sm text-zinc-400">
+				No connections yet.
+			</p>
+		)}
+	</div>
+</Layout>

@@ -5,15 +5,13 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile.vite
-      args:
-        PUBLIC_SERVER_URL: http://localhost:8080
-        VITE_SERVER_URL: http://localhost:8080
-    env_file:
-      - apps/web/.env
     ports:
       - "3001:3000"
     environment:
       - NODE_ENV=production
+      - HOST=0.0.0.0
+      - PORT=3000
+      - SERVER_URL=http://app:8080
     depends_on:
       - app
     restart: unless-stopped
@@ -27,11 +25,13 @@ services:
     ports:
       - "8080:8080"
     environment:
+      - APP_ENV=development
+      - APP_ORIGIN=http://localhost:3001
       - HOST=0.0.0.0
       - PORT=8080
       - DATABASE_URL=postgres://postgres:postgres@db:5432/Orpbal?sslmode=disable
       - ORPBAL_BOOTSTRAP_ADMIN_USERNAME=${ORPBAL_BOOTSTRAP_ADMIN_USERNAME:-admin}
-      - ORPBAL_BOOTSTRAP_ADMIN_PASSWORD=${ORPBAL_BOOTSTRAP_ADMIN_PASSWORD:-Admin!23}
+      - ORPBAL_BOOTSTRAP_ADMIN_PASSWORD=${ORPBAL_BOOTSTRAP_ADMIN_PASSWORD:-ChangeMe-Admin1!}
     depends_on:
       db:
         condition: service_healthy

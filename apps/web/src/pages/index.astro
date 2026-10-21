@@ -1,58 +1,8 @@
 ---
-import Layout from '@/layouts/Layout.astro';
-import GraphBackendStatus from '@/components/GraphBackendStatus.astro';
-import Counter from '@/components/Counter';
+import { requireSession } from "@/lib/session";
+
+const auth = await requireSession(Astro);
+if (auth instanceof Response) return auth;
+
+return Astro.redirect(auth.session.user.is_platform_admin ? "/admin/users" : "/databases");
 ---
-
-<Layout title="Orpbal">
-	<div class="flex flex-col items-center justify-center gap-8 py-12">
-		<div class="text-center">
-			<h1 class="mb-4 text-4xl font-bold tracking-tight sm:text-5xl">
-				Welcome to <span class="text-primary">Orpbal</span>
-			</h1>
-			<p class="text-lg text-muted-foreground">
-				Built with Astro and Better Fullstack
-			</p>
-		</div>
-
-		<div class="mt-8 rounded-lg border border-border bg-card p-6 shadow-sm">
-			<h2 class="mb-4 text-xl font-semibold">Interactive Counter</h2>
-			<p class="mb-4 text-sm text-muted-foreground">
-				This is an island component using solid with client-side hydration.
-			</p>
-			<Counter client:load />
-		</div>
-
-		<GraphBackendStatus />
-
-		<div class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-			<a
-				href="https://docs.astro.build/"
-				target="_blank"
-				rel="noopener noreferrer"
-				class="rounded-lg border border-border bg-card p-4 transition-colors hover:border-primary"
-			>
-				<h3 class="font-semibold">Astro Docs</h3>
-				<p class="text-sm text-muted-foreground">Learn about Astro's features and API.</p>
-			</a>
-			<a
-				href="https://better-fullstack-web.vercel.app"
-				target="_blank"
-				rel="noopener noreferrer"
-				class="rounded-lg border border-border bg-card p-4 transition-colors hover:border-primary"
-			>
-				<h3 class="font-semibold">Better Fullstack</h3>
-				<p class="text-sm text-muted-foreground">Full-stack TypeScript development.</p>
-			</a>
-			<a
-				href="https://astro.build/integrations/"
-				target="_blank"
-				rel="noopener noreferrer"
-				class="rounded-lg border border-border bg-card p-4 transition-colors hover:border-primary"
-			>
-				<h3 class="font-semibold">Integrations</h3>
-				<p class="text-sm text-muted-foreground">Extend Astro with plugins and frameworks.</p>
-			</a>
-		</div>
-	</div>
-</Layout>

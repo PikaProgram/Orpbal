@@ -1,0 +1,107 @@
+---
+import { actions } from "astro:actions";
+
+import Layout from "@/layouts/Layout.astro";
+import { api, type DatabaseConnection, type Grant, type Group } from "@/lib/api";
+import { actionResults } from "@/lib/forms";
+import { requireAdmin } from "@/lib/session";
+
+const auth = await requireAdmin(Astro);
+if (auth instanceof Response) return auth;
+
+const outcome = actionResults(Astro, [actions.setGrant, actions.deleteGrant]);
+if (outcome.succeeded) return Astro.redirect("/admin/grants");
+
+const [groupsResult, connectionsResult, grantsResult] = await Promise.all([
+	api<Group[]>("/admin/groups", { cookie: auth.cookie }),
+	api<DatabaseConnection[]>("/admin/databases", { cookie: auth.cookie }),
+	api<Grant[]>("/admin/grants", { cookie: auth.cookie }),
+]);
+const groups = groupsResult.data;
+const connections = connectionsResult.data;
+const grants = grantsResult.data;
+const grantByKey = new Map(grants.map((grant) => [`${grant.group_id}:${grant.connection_id}`, grant]));
+const csrf = auth.session.csrf_token;
+const selectClass =
+	"rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-xs text-zinc-100 outline-none focus:border-zinc-500";
+const quietButtonClass = "rounded-md border border-zinc-700 px-2 py-1.5 text-xs text-zinc-300 hover:border-zinc-500";
+---
+
+<Layout title="Grants" user={auth.session.user}>
+	<h1 class="text-2xl font-semibold tracking-tight">Grants</h1>
+	<p class="mb-6 text-sm text-zinc-400">
+		Set each group's access per connection. A user in several groups receives the highest level.
+	</p>
+
+	{
+		outcome.error && (
+			<p class="mb-4 rounded-md border border-red-900 bg-red-950/50 px-3 py-2 text-sm text-red-300">
+				{outcome.error}
+			</p>
+		)
+	}
+
+	{
+		groups.length === 0 || connections.length === 0 ? (
+			<p class="rounded-lg border border-zinc-800 bg-zinc-900 p-6 text-sm text-zinc-400">
+				Create at least one group and one connection before assigning grants.
+			</p>
+		) : (
+			<div class="overflow-x-auto rounded-lg border border-zinc-800">
+				<table class="w-full text-left text-sm">
+					<thead class="bg-zinc-900 text-zinc-400">
+						<tr>
+							<th class="px-4 py-3 font-medium">Group</th>
+							{connections.map((connection) => (
+								<th class="px-4 py-3 font-medium">
+									{connection.name}
+									<span class="block text-xs font-normal text-zinc-500">
+										{connection.host}/{connection.database_name}
+									</span>
+								</th>
+							))}
+						</tr>
+					</thead>
+					<tbody class="divide-y divide-zinc-800 bg-zinc-950">
+						{groups.map((group) => (
+							<tr>
+								<td class="px-4 py-3 font-medium">{group.name}</td>
+								{connections.map((connection) => {
+									const grant = grantByKey.get(`${group.id}:${connection.id}`);
+									return (
+										<td class="px-4 py-3">
+											<form method="POST" action={actions.setGrant} class="flex flex-wrap items-center gap-2">
+												<input type="hidden" name="csrf_token" value={csrf} />
+												<input type="hidden" name="group_id" value={group.id} />
+												<input type="hidden" name="connection_id" value={connection.id} />
+												<select name="access_level" class={selectClass}>
+													<option value="view_only" selected={grant?.access_level !== "view_edit"}>
+														View Only
+													</option>
+													<option value="view_edit" selected={grant?.access_level === "view_edit"}>
+														View + Edit
+													</option>
+												</select>
+												<button type="submit" class={quietButtonClass}>Save</button>
+											</form>
+											{grant && (
+												<form method="POST" action={actions.deleteGrant} class="mt-1">
+													<input type="hidden" name="csrf_token" value={csrf} />
+													<input type="hidden" name="group_id" value={group.id} />
+													<input type="hidden" name="connection_id" value={connection.id} />
+													<button type="submit" class="text-xs text-red-400 hover:text-red-300">
+														Remove
+													</button>
+												</form>
+											)}
+										</td>
+									);
+								})}
+							</tr>
+						))}
+					</tbody>
+				</table>
+			</div>
+		)
+	}
+</Layout>

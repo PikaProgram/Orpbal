@@ -1,0 +1,146 @@
+---
+import { actions } from "astro:actions";
+
+import Layout from "@/layouts/Layout.astro";
+import { api, type Group, type GroupDetail, type User } from "@/lib/api";
+import { actionResults } from "@/lib/forms";
+import { requireAdmin } from "@/lib/session";
+
+const auth = await requireAdmin(Astro);
+if (auth instanceof Response) return auth;
+
+const outcome = actionResults(Astro, [
+	actions.createGroup,
+	actions.updateGroup,
+	actions.deleteGroup,
+	actions.addGroupMember,
+	actions.removeGroupMember,
+]);
+if (outcome.succeeded) return Astro.redirect("/admin/groups");
+
+const [groupsResult, usersResult] = await Promise.all([
+	api<Group[]>("/admin/groups", { cookie: auth.cookie }),
+	api<User[]>("/admin/users", { cookie: auth.cookie }),
+]);
+const groups = groupsResult.data;
+const users = usersResult.data;
+const details = await Promise.all(
+	groups.map((group) => api<GroupDetail>(`/admin/groups/${group.id}`, { cookie: auth.cookie })),
+);
+const detailByGroup = new Map(details.map((result) => [result.data.id, result.data]));
+const csrf = auth.session.csrf_token;
+const inputClass =
+	"w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-500";
+const buttonClass = "rounded-md bg-zinc-100 px-3 py-1.5 text-xs font-medium text-zinc-900 hover:bg-white";
+const quietButtonClass = "rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:border-zinc-500";
+---
+
+<Layout title="Groups" user={auth.session.user}>
+	<h1 class="text-2xl font-semibold tracking-tight">Groups</h1>
+	<p class="mb-6 text-sm text-zinc-400">
+		Database access is granted to groups. A user in several groups receives the highest grant.
+	</p>
+
+	{
+		outcome.error && (
+			<p class="mb-4 rounded-md border border-red-900 bg-red-950/50 px-3 py-2 text-sm text-red-300">
+				{outcome.error}
+			</p>
+		)
+	}
+
+	<form
+		method="POST"
+		action={actions.createGroup}
+		class="mb-6 grid gap-3 rounded-lg border border-zinc-800 bg-zinc-900 p-4 sm:grid-cols-3"
+	>
+		<input type="hidden" name="csrf_token" value={csrf} />
+		<label class="block text-sm">
+			<span class="mb-1 block text-zinc-400">Name</span>
+			<input name="name" required minlength="2" maxlength="64" class={inputClass} />
+		</label>
+		<label class="block text-sm">
+			<span class="mb-1 block text-zinc-400">Description</span>
+			<input name="description" class={inputClass} />
+		</label>
+		<div class="flex items-end">
+			<button type="submit" class={buttonClass}>Create group</button>
+		</div>
+	</form>
+
+	<div class="space-y-4">
+		{groups.map((group) => {
+			const detail = detailByGroup.get(group.id);
+			const members = detail?.members ?? [];
+			const memberIds = new Set(members.map((member) => member.id));
+			const available = users.filter((user) => !memberIds.has(user.id));
+			return (
+				<section class="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
+					<div class="mb-3 flex flex-wrap items-start justify-between gap-3">
+						<div>
+							<h2 class="text-lg font-medium">{group.name}</h2>
+							<p class="text-sm text-zinc-400">{group.description || "No description"}</p>
+						</div>
+						<div class="text-xs text-zinc-500">
+							{members.length} member{members.length === 1 ? "" : "s"} · {detail?.grants.length ?? 0} grant
+							{(detail?.grants.length ?? 0) === 1 ? "" : "s"}
+						</div>
+					</div>
+
+					<div class="mb-3 flex flex-wrap gap-2">
+						{members.map((member) => (
+							<form method="POST" action={actions.removeGroupMember} class="flex items-center gap-1">
+								<input type="hidden" name="csrf_token" value={csrf} />
+								<input type="hidden" name="group_id" value={group.id} />
+								<input type="hidden" name="user_id" value={member.id} />
+								<span class="rounded bg-zinc-800 px-2 py-1 text-xs">{member.username}</span>
+								<button type="submit" class="text-xs text-red-400 hover:text-red-300">
+									Remove
+								</button>
+							</form>
+						))}
+						{members.length === 0 && <span class="text-xs text-zinc-500">No members</span>}
+					</div>
+
+					<form method="POST" action={actions.addGroupMember} class="mb-3 flex flex-wrap items-end gap-2">
+						<input type="hidden" name="csrf_token" value={csrf} />
+						<input type="hidden" name="group_id" value={group.id} />
+						<label class="block text-xs">
+							<span class="mb-1 block text-zinc-400">Add member</span>
+							<select name="user_id" class="rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-xs">
+								{available.map((user) => <option value={user.id}>{user.username}</option>)}
+							</select>
+						</label>
+						<button type="submit" class={quietButtonClass} disabled={available.length === 0}>
+							Add
+						</button>
+					</form>
+
+					<details class="border-t border-zinc-800 pt-3">
+						<summary class="cursor-pointer text-xs text-zinc-400">Edit group</summary>
+						<form method="POST" action={actions.updateGroup} class="mt-3 grid gap-2 sm:grid-cols-3">
+							<input type="hidden" name="csrf_token" value={csrf} />
+							<input type="hidden" name="id" value={group.id} />
+							<input name="name" value={group.name} required class={inputClass} />
+							<input name="description" value={group.description} class={inputClass} />
+							<button type="submit" class={quietButtonClass}>Save</button>
+						</form>
+					</details>
+
+					<form method="POST" action={actions.deleteGroup} class="mt-3">
+						<input type="hidden" name="csrf_token" value={csrf} />
+						<input type="hidden" name="id" value={group.id} />
+						<button type="submit" class="text-xs text-red-400 hover:text-red-300">
+							Delete group
+						</button>
+					</form>
+				</section>
+			);
+		})}
+		{groups.length === 0 && (
+			<p class="rounded-lg border border-zinc-800 bg-zinc-900 p-6 text-sm text-zinc-400">
+				No groups yet.
+			</p>
+		)}
+	</div>
+</Layout>

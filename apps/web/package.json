@@ -11,6 +11,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@astrojs/node": "^11.1.9",
     "@astrojs/solid-js": "^7.1.0",
     "@tanstack/solid-table": "^9.3.1",
     "astro": "^7.4.1",

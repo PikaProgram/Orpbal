@@ -1,0 +1,127 @@
+---
+import { actions } from "astro:actions";
+
+import Layout from "@/layouts/Layout.astro";
+import { api, type User } from "@/lib/api";
+import { actionResults } from "@/lib/forms";
+import { requireAdmin } from "@/lib/session";
+
+const auth = await requireAdmin(Astro);
+if (auth instanceof Response) return auth;
+
+const outcome = actionResults(Astro, [
+	actions.createUser,
+	actions.setUserActive,
+	actions.setUserAdmin,
+	actions.resetUserPassword,
+]);
+if (outcome.succeeded) return Astro.redirect("/admin/users");
+
+const users = (await api<User[]>("/admin/users", { cookie: auth.cookie })).data;
+const csrf = auth.session.csrf_token;
+const inputClass =
+	"w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-500";
+const buttonClass = "rounded-md bg-zinc-100 px-3 py-1.5 text-xs font-medium text-zinc-900 hover:bg-white";
+const quietButtonClass = "rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:border-zinc-500";
+---
+
+<Layout title="Users" user={auth.session.user}>
+	<div class="mb-6 flex flex-wrap items-end justify-between gap-2">
+		<div>
+			<h1 class="text-2xl font-semibold tracking-tight">Users</h1>
+			<p class="text-sm text-zinc-400">Platform accounts and their administrative flags.</p>
+		</div>
+	</div>
+
+	{
+		outcome.error && (
+			<p class="mb-4 rounded-md border border-red-900 bg-red-950/50 px-3 py-2 text-sm text-red-300">
+				{outcome.error}
+			</p>
+		)
+	}
+
+	<form
+		method="POST"
+		action={actions.createUser}
+		class="mb-6 grid gap-3 rounded-lg border border-zinc-800 bg-zinc-900 p-4 sm:grid-cols-2 lg:grid-cols-5"
+	>
+		<input type="hidden" name="csrf_token" value={csrf} />
+		<label class="block text-sm">
+			<span class="mb-1 block text-zinc-400">Username</span>
+			<input name="username" required class={inputClass} />
+		</label>
+		<label class="block text-sm">
+			<span class="mb-1 block text-zinc-400">Password</span>
+			<input name="password" type="password" required class={inputClass} />
+		</label>
+		<label class="block text-sm">
+			<span class="mb-1 block text-zinc-400">Platform admin</span>
+			<select name="is_platform_admin" class={inputClass}>
+				<option value="false">No</option>
+				<option value="true">Yes</option>
+			</select>
+		</label>
+		<div class="flex items-end">
+			<button type="submit" class={buttonClass}>Create user</button>
+		</div>
+	</form>
+
+	<div class="overflow-hidden rounded-lg border border-zinc-800">
+		<table class="w-full text-left text-sm">
+			<thead class="bg-zinc-900 text-zinc-400">
+				<tr>
+					<th class="px-4 py-3 font-medium">Username</th>
+					<th class="px-4 py-3 font-medium">Status</th>
+					<th class="px-4 py-3 font-medium">Platform admin</th>
+					<th class="px-4 py-3 font-medium">Actions</th>
+				</tr>
+			</thead>
+			<tbody class="divide-y divide-zinc-800 bg-zinc-950">
+				{users.map((user) => (
+					<tr>
+						<td class="px-4 py-3 font-medium">{user.username}</td>
+						<td class="px-4 py-3">
+							<span class={user.is_active ? "text-emerald-400" : "text-zinc-500"}>
+								{user.is_active ? "Active" : "Inactive"}
+							</span>
+						</td>
+						<td class="px-4 py-3">{user.is_platform_admin ? "Yes" : "No"}</td>
+						<td class="px-4 py-3">
+							<div class="flex flex-wrap items-center gap-2">
+								<form method="POST" action={actions.setUserActive}>
+									<input type="hidden" name="csrf_token" value={csrf} />
+									<input type="hidden" name="id" value={user.id} />
+									<input type="hidden" name="active" value={user.is_active ? "false" : "true"} />
+									<button type="submit" class={quietButtonClass}>
+										{user.is_active ? "Deactivate" : "Activate"}
+									</button>
+								</form>
+								<form method="POST" action={actions.setUserAdmin}>
+									<input type="hidden" name="csrf_token" value={csrf} />
+									<input type="hidden" name="id" value={user.id} />
+									<input type="hidden" name="admin" value={user.is_platform_admin ? "false" : "true"} />
+									<button type="submit" class={quietButtonClass}>
+										{user.is_platform_admin ? "Remove admin" : "Make admin"}
+									</button>
+								</form>
+								<form method="POST" action={actions.resetUserPassword} class="flex items-center gap-2">
+									<input type="hidden" name="csrf_token" value={csrf} />
+									<input type="hidden" name="id" value={user.id} />
+									<input
+										name="new_password"
+										type="password"
+										placeholder="New password"
+										required
+										class="w-36 rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-xs text-zinc-100 outline-none focus:border-zinc-500"
+									/>
+									<button type="submit" class={quietButtonClass}>Reset</button>
+								</form>
+							</div>
+						</td>
+					</tr>
+				))}
+			</tbody>
+		</table>
+	</div>
+</Layout>

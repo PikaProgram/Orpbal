@@ -1,0 +1,28 @@
+---
+import { actions } from "astro:actions";
+
+import Layout from "@/layouts/Layout.astro";
+import { readSession } from "@/lib/session";
+
+const result = Astro.getActionResult(actions.logout);
+if (result?.data?.ok) return Astro.redirect("/login");
+
+const session = await readSession(Astro.cookies);
+if (!session) return Astro.redirect("/login");
+---
+
+<Layout title="Sign out" user={session.user}>
+	<div class="mx-auto max-w-md space-y-4">
+		<h1 class="text-2xl font-semibold tracking-tight">Sign out</h1>
+		<p class="text-sm text-zinc-400">This revokes the current session on the server.</p>
+		<form method="POST" action={actions.logout}>
+			<input type="hidden" name="csrf_token" value={session.csrf_token} />
+			<button
+				type="submit"
+				class="rounded-md bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-900 hover:bg-white"
+			>
+				Sign out
+			</button>
+		</form>
+	</div>
+</Layout>

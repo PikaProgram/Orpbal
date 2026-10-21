@@ -1,26 +1,61 @@
 ---
-import '@/styles/global.css';
-import Header from '@/components/Header.astro';
+import "@/styles/global.css";
+
+import type { User } from "@/lib/api";
 
 interface Props {
 	title: string;
+	user?: User;
 }
 
-const { title } = Astro.props;
+const { title, user } = Astro.props;
+const navLink = "text-sm text-zinc-400 transition-colors hover:text-zinc-100";
 ---
 
 <!doctype html>
 <html lang="en" class="dark">
 	<head>
 		<meta charset="UTF-8" />
-		<meta name="description" content="Astro website built with Better Fullstack" />
+		<meta name="description" content="Orpbal database management platform" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 		<meta name="generator" content={Astro.generator} />
 		<title>{title}</title>
 	</head>
 	<body class="min-h-screen bg-background text-foreground antialiased">
-		<Header />
+		<header class="border-b border-zinc-800 bg-zinc-900/60">
+			<div class="container mx-auto flex items-center justify-between gap-4 px-4 py-3">
+				<a href="/" class="text-lg font-semibold tracking-tight">Orpbal</a>
+				{
+					user && (
+						<nav class="flex flex-wrap items-center gap-4">
+							<a href="/databases" class={navLink}>
+								Databases
+							</a>
+							{user.is_platform_admin && (
+								<>
+									<a href="/admin/users" class={navLink}>
+										Users
+									</a>
+									<a href="/admin/groups" class={navLink}>
+										Groups
+									</a>
+									<a href="/admin/databases" class={navLink}>
+										Connections
+									</a>
+									<a href="/admin/grants" class={navLink}>
+										Grants
+									</a>
+								</>
+							)}
+							<a href="/logout" class={navLink}>
+								Sign out
+							</a>
+						</nav>
+					)
+				}
+			</div>
+		</header>
 		<main class="container mx-auto px-4 py-8">
 			<slot />
 		</main>

@@ -1,0 +1,63 @@
+---
+import { actions } from "astro:actions";
+
+import Layout from "@/layouts/Layout.astro";
+import { readSession } from "@/lib/session";
+
+const result = Astro.getActionResult(actions.login);
+if (result?.data?.ok) return Astro.redirect("/");
+if (Astro.request.method === "GET") {
+	const session = await readSession(Astro.cookies);
+	if (session) return Astro.redirect("/");
+}
+
+const error =
+	result?.data && result.data.ok === false
+		? result.data.error
+		: result?.error
+			? "Check your username and password."
+			: null;
+---
+
+<Layout title="Sign in">
+	<div class="mx-auto max-w-md">
+		<h1 class="mb-2 text-2xl font-semibold tracking-tight">Sign in</h1>
+		<p class="mb-6 text-sm text-zinc-400">Use the account created by a Platform Admin.</p>
+
+		{
+			error && (
+				<p class="mb-4 rounded-md border border-red-900 bg-red-950/50 px-3 py-2 text-sm text-red-300">
+					{error}
+				</p>
+			)
+		}
+
+		<form method="POST" action={actions.login} class="space-y-4 rounded-lg border border-zinc-800 bg-zinc-900 p-6">
+			<label class="block text-sm">
+				<span class="mb-1 block text-zinc-400">Username</span>
+				<input
+					name="username"
+					autocomplete="username"
+					required
+					class="w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100 outline-none focus:border-zinc-500"
+				/>
+			</label>
+			<label class="block text-sm">
+				<span class="mb-1 block text-zinc-400">Password</span>
+				<input
+					type="password"
+					name="password"
+					autocomplete="current-password"
+					required
+					class="w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-zinc-100 outline-none focus:border-zinc-500"
+				/>
+			</label>
+			<button
+				type="submit"
+				class="w-full rounded-md bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-900 hover:bg-white"
+			>
+				Sign in
+			</button>
+		</form>
+	</div>
+</Layout>

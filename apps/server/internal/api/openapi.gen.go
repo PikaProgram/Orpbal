@@ -229,9 +229,6 @@ type ConnectionId = int
 // CsrfToken defines model for CsrfToken.
 type CsrfToken = string
 
-// GroupId defines model for GroupId.
-type GroupId = int
-
 // Id defines model for Id.
 type Id = int
 
@@ -283,18 +280,6 @@ type CreateGroupParams struct {
 	XCSRFToken CsrfToken `json:"X-CSRF-Token"`
 }
 
-// DeleteGrantParams defines parameters for DeleteGrant.
-type DeleteGrantParams struct {
-	// XCSRFToken Per-session CSRF token from GET /auth/session
-	XCSRFToken CsrfToken `json:"X-CSRF-Token"`
-}
-
-// SetGrantParams defines parameters for SetGrant.
-type SetGrantParams struct {
-	// XCSRFToken Per-session CSRF token from GET /auth/session
-	XCSRFToken CsrfToken `json:"X-CSRF-Token"`
-}
-
 // DeleteGroupParams defines parameters for DeleteGroup.
 type DeleteGroupParams struct {
 	// XCSRFToken Per-session CSRF token from GET /auth/session
@@ -303,6 +288,18 @@ type DeleteGroupParams struct {
 
 // UpdateGroupParams defines parameters for UpdateGroup.
 type UpdateGroupParams struct {
+	// XCSRFToken Per-session CSRF token from GET /auth/session
+	XCSRFToken CsrfToken `json:"X-CSRF-Token"`
+}
+
+// DeleteGrantParams defines parameters for DeleteGrant.
+type DeleteGrantParams struct {
+	// XCSRFToken Per-session CSRF token from GET /auth/session
+	XCSRFToken CsrfToken `json:"X-CSRF-Token"`
+}
+
+// SetGrantParams defines parameters for SetGrant.
+type SetGrantParams struct {
 	// XCSRFToken Per-session CSRF token from GET /auth/session
 	XCSRFToken CsrfToken `json:"X-CSRF-Token"`
 }
@@ -358,11 +355,11 @@ type UpdateDatabaseConnectionJSONRequestBody = UpdateConnectionRequest
 // CreateGroupJSONRequestBody defines body for CreateGroup for application/json ContentType.
 type CreateGroupJSONRequestBody = CreateGroupRequest
 
-// SetGrantJSONRequestBody defines body for SetGrant for application/json ContentType.
-type SetGrantJSONRequestBody = SetGrantRequest
-
 // UpdateGroupJSONRequestBody defines body for UpdateGroup for application/json ContentType.
 type UpdateGroupJSONRequestBody = UpdateGroupRequest
+
+// SetGrantJSONRequestBody defines body for SetGrant for application/json ContentType.
+type SetGrantJSONRequestBody = SetGrantRequest
 
 // CreateUserJSONRequestBody defines body for CreateUser for application/json ContentType.
 type CreateUserJSONRequestBody = CreateUserRequest
@@ -403,12 +400,6 @@ type ServerInterface interface {
 	// (POST /admin/groups)
 	CreateGroup(c *gin.Context, params CreateGroupParams)
 
-	// (DELETE /admin/groups/{groupId}/grants/{connectionId})
-	DeleteGrant(c *gin.Context, groupId GroupId, connectionId ConnectionId, params DeleteGrantParams)
-
-	// (PUT /admin/groups/{groupId}/grants/{connectionId})
-	SetGrant(c *gin.Context, groupId GroupId, connectionId ConnectionId, params SetGrantParams)
-
 	// (DELETE /admin/groups/{id})
 	DeleteGroup(c *gin.Context, id Id, params DeleteGroupParams)
 
@@ -417,6 +408,12 @@ type ServerInterface interface {
 
 	// (PATCH /admin/groups/{id})
 	UpdateGroup(c *gin.Context, id Id, params UpdateGroupParams)
+
+	// (DELETE /admin/groups/{id}/grants/{connectionId})
+	DeleteGrant(c *gin.Context, id Id, connectionId ConnectionId, params DeleteGrantParams)
+
+	// (PUT /admin/groups/{id}/grants/{connectionId})
+	SetGrant(c *gin.Context, id Id, connectionId ConnectionId, params SetGrantParams)
 
 	// (DELETE /admin/groups/{id}/members/{userId})
 	RemoveGroupMember(c *gin.Context, id Id, userId UserId, params RemoveGroupMemberParams)
@@ -705,132 +702,6 @@ func (siw *ServerInterfaceWrapper) CreateGroup(c *gin.Context) {
 	siw.Handler.CreateGroup(c, params)
 }
 
-// DeleteGrant operation middleware
-func (siw *ServerInterfaceWrapper) DeleteGrant(c *gin.Context) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "groupId" -------------
-	var groupId GroupId
-
-	err = runtime.BindStyledParameterWithOptions("simple", "groupId", c.Param("groupId"), &groupId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: ""})
-	if err != nil {
-		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter groupId: %w", err), http.StatusBadRequest)
-		return
-	}
-
-	// ------------- Path parameter "connectionId" -------------
-	var connectionId ConnectionId
-
-	err = runtime.BindStyledParameterWithOptions("simple", "connectionId", c.Param("connectionId"), &connectionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: ""})
-	if err != nil {
-		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter connectionId: %w", err), http.StatusBadRequest)
-		return
-	}
-
-	c.Set(string(CookieAuthScopes), []string{})
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params DeleteGrantParams
-
-	headers := c.Request.Header
-
-	// ------------- Required header parameter "X-CSRF-Token" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
-		var XCSRFToken CsrfToken
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandler(c, fmt.Errorf("Expected one value for X-CSRF-Token, got %d", n), http.StatusBadRequest)
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter X-CSRF-Token: %w", err), http.StatusBadRequest)
-			return
-		}
-
-		params.XCSRFToken = XCSRFToken
-
-	} else {
-		siw.ErrorHandler(c, fmt.Errorf("Header parameter X-CSRF-Token is required, but not found"), http.StatusBadRequest)
-		return
-	}
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		middleware(c)
-		if c.IsAborted() {
-			return
-		}
-	}
-
-	siw.Handler.DeleteGrant(c, groupId, connectionId, params)
-}
-
-// SetGrant operation middleware
-func (siw *ServerInterfaceWrapper) SetGrant(c *gin.Context) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "groupId" -------------
-	var groupId GroupId
-
-	err = runtime.BindStyledParameterWithOptions("simple", "groupId", c.Param("groupId"), &groupId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: ""})
-	if err != nil {
-		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter groupId: %w", err), http.StatusBadRequest)
-		return
-	}
-
-	// ------------- Path parameter "connectionId" -------------
-	var connectionId ConnectionId
-
-	err = runtime.BindStyledParameterWithOptions("simple", "connectionId", c.Param("connectionId"), &connectionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: ""})
-	if err != nil {
-		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter connectionId: %w", err), http.StatusBadRequest)
-		return
-	}
-
-	c.Set(string(CookieAuthScopes), []string{})
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params SetGrantParams
-
-	headers := c.Request.Header
-
-	// ------------- Required header parameter "X-CSRF-Token" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
-		var XCSRFToken CsrfToken
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandler(c, fmt.Errorf("Expected one value for X-CSRF-Token, got %d", n), http.StatusBadRequest)
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter X-CSRF-Token: %w", err), http.StatusBadRequest)
-			return
-		}
-
-		params.XCSRFToken = XCSRFToken
-
-	} else {
-		siw.ErrorHandler(c, fmt.Errorf("Header parameter X-CSRF-Token is required, but not found"), http.StatusBadRequest)
-		return
-	}
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		middleware(c)
-		if c.IsAborted() {
-			return
-		}
-	}
-
-	siw.Handler.SetGrant(c, groupId, connectionId, params)
-}
-
 // DeleteGroup operation middleware
 func (siw *ServerInterfaceWrapper) DeleteGroup(c *gin.Context) {
 
@@ -964,6 +835,132 @@ func (siw *ServerInterfaceWrapper) UpdateGroup(c *gin.Context) {
 	}
 
 	siw.Handler.UpdateGroup(c, id, params)
+}
+
+// DeleteGrant operation middleware
+func (siw *ServerInterfaceWrapper) DeleteGrant(c *gin.Context) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", c.Param("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter id: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	// ------------- Path parameter "connectionId" -------------
+	var connectionId ConnectionId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "connectionId", c.Param("connectionId"), &connectionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter connectionId: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	c.Set(string(CookieAuthScopes), []string{})
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteGrantParams
+
+	headers := c.Request.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandler(c, fmt.Errorf("Expected one value for X-CSRF-Token, got %d", n), http.StatusBadRequest)
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter X-CSRF-Token: %w", err), http.StatusBadRequest)
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		siw.ErrorHandler(c, fmt.Errorf("Header parameter X-CSRF-Token is required, but not found"), http.StatusBadRequest)
+		return
+	}
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.DeleteGrant(c, id, connectionId, params)
+}
+
+// SetGrant operation middleware
+func (siw *ServerInterfaceWrapper) SetGrant(c *gin.Context) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", c.Param("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter id: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	// ------------- Path parameter "connectionId" -------------
+	var connectionId ConnectionId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "connectionId", c.Param("connectionId"), &connectionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter connectionId: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	c.Set(string(CookieAuthScopes), []string{})
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SetGrantParams
+
+	headers := c.Request.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandler(c, fmt.Errorf("Expected one value for X-CSRF-Token, got %d", n), http.StatusBadRequest)
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter X-CSRF-Token: %w", err), http.StatusBadRequest)
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		siw.ErrorHandler(c, fmt.Errorf("Header parameter X-CSRF-Token is required, but not found"), http.StatusBadRequest)
+		return
+	}
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.SetGrant(c, id, connectionId, params)
 }
 
 // RemoveGroupMember operation middleware
@@ -1467,11 +1464,11 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 	router.GET(options.BaseURL+"/admin/grants", wrapper.ListGrants)
 	router.GET(options.BaseURL+"/admin/groups", wrapper.ListGroups)
 	router.POST(options.BaseURL+"/admin/groups", wrapper.CreateGroup)
-	router.DELETE(options.BaseURL+"/admin/groups/:groupId/grants/:connectionId", wrapper.DeleteGrant)
-	router.PUT(options.BaseURL+"/admin/groups/:groupId/grants/:connectionId", wrapper.SetGrant)
 	router.DELETE(options.BaseURL+"/admin/groups/:id", wrapper.DeleteGroup)
 	router.GET(options.BaseURL+"/admin/groups/:id", wrapper.GetGroup)
 	router.PATCH(options.BaseURL+"/admin/groups/:id", wrapper.UpdateGroup)
+	router.DELETE(options.BaseURL+"/admin/groups/:id/grants/:connectionId", wrapper.DeleteGrant)
+	router.PUT(options.BaseURL+"/admin/groups/:id/grants/:connectionId", wrapper.SetGrant)
 	router.DELETE(options.BaseURL+"/admin/groups/:id/members/:userId", wrapper.RemoveGroupMember)
 	router.PUT(options.BaseURL+"/admin/groups/:id/members/:userId", wrapper.AddGroupMember)
 	router.GET(options.BaseURL+"/admin/users", wrapper.ListUsers)

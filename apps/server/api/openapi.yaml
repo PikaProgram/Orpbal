@@ -542,12 +542,12 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "500":
           $ref: "#/components/responses/InternalError"
-  /admin/groups/{groupId}/grants/{connectionId}:
+  /admin/groups/{id}/grants/{connectionId}:
     put:
       operationId: setGrant
       tags: [admin]
       parameters:
-        - $ref: "#/components/parameters/GroupId"
+        - $ref: "#/components/parameters/Id"
         - $ref: "#/components/parameters/ConnectionId"
         - $ref: "#/components/parameters/CsrfToken"
       requestBody:
@@ -573,7 +573,7 @@ paths:
       operationId: deleteGrant
       tags: [admin]
       parameters:
-        - $ref: "#/components/parameters/GroupId"
+        - $ref: "#/components/parameters/Id"
         - $ref: "#/components/parameters/ConnectionId"
         - $ref: "#/components/parameters/CsrfToken"
       responses:
@@ -610,13 +610,6 @@ components:
         minimum: 1
     UserId:
       name: userId
-      in: path
-      required: true
-      schema:
-        type: integer
-        minimum: 1
-    GroupId:
-      name: groupId
       in: path
       required: true
       schema:
