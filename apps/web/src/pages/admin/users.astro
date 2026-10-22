@@ -20,9 +20,9 @@ if (outcome.succeeded) return Astro.redirect("/admin/users");
 const users = (await api<User[]>("/admin/users", { cookie: auth.cookie })).data;
 const csrf = auth.session.csrf_token;
 const inputClass =
-	"w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-500";
-const buttonClass = "rounded-md bg-zinc-100 px-3 py-1.5 text-xs font-medium text-zinc-900 hover:bg-white";
-const quietButtonClass = "rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:border-zinc-500";
+	"field";
+const buttonClass = "btn-brass px-3 py-1.5 text-xs";
+const quietButtonClass = "btn-steel px-3 py-1.5 text-xs";
 ---
 
 <Layout title="Users" user={auth.session.user}>
@@ -35,7 +35,7 @@ const quietButtonClass = "rounded-md border border-zinc-700 px-3 py-1.5 text-xs 
 
 	{
 		outcome.error && (
-			<p class="mb-4 rounded-md border border-red-900 bg-red-950/50 px-3 py-2 text-sm text-red-300">
+			<p class="error-note">
 				{outcome.error}
 			</p>
 		)
@@ -44,7 +44,7 @@ const quietButtonClass = "rounded-md border border-zinc-700 px-3 py-1.5 text-xs 
 	<form
 		method="POST"
 		action={actions.createUser}
-		class="mb-6 grid gap-3 rounded-lg border border-zinc-800 bg-zinc-900 p-4 sm:grid-cols-2 lg:grid-cols-5"
+		class="mb-6 grid gap-3 panel p-4 sm:grid-cols-2 lg:grid-cols-5"
 	>
 		<input type="hidden" name="csrf_token" value={csrf} />
 		<label class="block text-sm">
@@ -67,9 +67,9 @@ const quietButtonClass = "rounded-md border border-zinc-700 px-3 py-1.5 text-xs 
 		</div>
 	</form>
 
-	<div class="overflow-hidden rounded-lg border border-zinc-800">
+	<div class="panel overflow-hidden">
 		<table class="w-full text-left text-sm">
-			<thead class="bg-zinc-900 text-zinc-400">
+			<thead class="border-b-2 border-seam bg-plate-raised text-dim">
 				<tr>
 					<th class="px-4 py-3 font-medium">Username</th>
 					<th class="px-4 py-3 font-medium">Status</th>
@@ -113,7 +113,7 @@ const quietButtonClass = "rounded-md border border-zinc-700 px-3 py-1.5 text-xs 
 										type="password"
 										placeholder="New password"
 										required
-										class="w-36 rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-xs text-zinc-100 outline-none focus:border-zinc-500"
+										class="field field-sm w-36"
 									/>
 									<button type="submit" class={quietButtonClass}>Reset</button>
 								</form>

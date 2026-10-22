@@ -9,7 +9,8 @@ interface Props {
 }
 
 const { title, user } = Astro.props;
-const navLink = "text-sm text-zinc-400 transition-colors hover:text-zinc-100";
+const navLink =
+	"text-sm text-dim transition-colors hover:text-brass-lit focus-visible:text-brass-lit";
 ---
 
 <!doctype html>
@@ -23,9 +24,12 @@ const navLink = "text-sm text-zinc-400 transition-colors hover:text-zinc-100";
 		<title>{title}</title>
 	</head>
 	<body class="min-h-screen bg-background text-foreground antialiased">
-		<header class="border-b border-zinc-800 bg-zinc-900/60">
+		<div class="h-1 bg-brass"></div>
+		<header class="border-b-2 border-seam bg-plate/60">
 			<div class="container mx-auto flex items-center justify-between gap-4 px-4 py-3">
-				<a href="/" class="text-lg font-semibold tracking-tight">Orpbal</a>
+				<a href="/" class="text-lg font-bold tracking-tight text-foreground">
+					Orpbal
+				</a>
 				{
 					user && (
 						<nav class="flex flex-wrap items-center gap-4">
@@ -56,6 +60,7 @@ const navLink = "text-sm text-zinc-400 transition-colors hover:text-zinc-100";
 				}
 			</div>
 		</header>
+		<div class="h-1 bg-brass"></div>
 		<main class="container mx-auto px-4 py-8">
 			<slot />
 		</main>

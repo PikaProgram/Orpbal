@@ -30,9 +30,9 @@ const details = await Promise.all(
 const detailByGroup = new Map(details.map((result) => [result.data.id, result.data]));
 const csrf = auth.session.csrf_token;
 const inputClass =
-	"w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-500";
-const buttonClass = "rounded-md bg-zinc-100 px-3 py-1.5 text-xs font-medium text-zinc-900 hover:bg-white";
-const quietButtonClass = "rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:border-zinc-500";
+	"field";
+const buttonClass = "btn-brass px-3 py-1.5 text-xs";
+const quietButtonClass = "btn-steel px-3 py-1.5 text-xs";
 ---
 
 <Layout title="Groups" user={auth.session.user}>
@@ -43,7 +43,7 @@ const quietButtonClass = "rounded-md border border-zinc-700 px-3 py-1.5 text-xs 
 
 	{
 		outcome.error && (
-			<p class="mb-4 rounded-md border border-red-900 bg-red-950/50 px-3 py-2 text-sm text-red-300">
+			<p class="error-note">
 				{outcome.error}
 			</p>
 		)
@@ -52,7 +52,7 @@ const quietButtonClass = "rounded-md border border-zinc-700 px-3 py-1.5 text-xs 
 	<form
 		method="POST"
 		action={actions.createGroup}
-		class="mb-6 grid gap-3 rounded-lg border border-zinc-800 bg-zinc-900 p-4 sm:grid-cols-3"
+		class="mb-6 grid gap-3 panel p-4 sm:grid-cols-3"
 	>
 		<input type="hidden" name="csrf_token" value={csrf} />
 		<label class="block text-sm">
@@ -75,7 +75,7 @@ const quietButtonClass = "rounded-md border border-zinc-700 px-3 py-1.5 text-xs 
 			const memberIds = new Set(members.map((member) => member.id));
 			const available = users.filter((user) => !memberIds.has(user.id));
 			return (
-				<section class="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
+				<section class="panel p-4">
 					<div class="mb-3 flex flex-wrap items-start justify-between gap-3">
 						<div>
 							<h2 class="text-lg font-medium">{group.name}</h2>
@@ -93,7 +93,7 @@ const quietButtonClass = "rounded-md border border-zinc-700 px-3 py-1.5 text-xs 
 								<input type="hidden" name="csrf_token" value={csrf} />
 								<input type="hidden" name="group_id" value={group.id} />
 								<input type="hidden" name="user_id" value={member.id} />
-								<span class="rounded bg-zinc-800 px-2 py-1 text-xs">{member.username}</span>
+								<span class="bg-plate-raised border border-seam px-2 py-1 text-xs">{member.username}</span>
 								<button type="submit" class="text-xs text-red-400 hover:text-red-300">
 									Remove
 								</button>
@@ -107,7 +107,7 @@ const quietButtonClass = "rounded-md border border-zinc-700 px-3 py-1.5 text-xs 
 						<input type="hidden" name="group_id" value={group.id} />
 						<label class="block text-xs">
 							<span class="mb-1 block text-zinc-400">Add member</span>
-							<select name="user_id" class="rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-xs">
+							<select name="user_id" class="field field-sm">
 								{available.map((user) => <option value={user.id}>{user.username}</option>)}
 							</select>
 						</label>
@@ -116,7 +116,7 @@ const quietButtonClass = "rounded-md border border-zinc-700 px-3 py-1.5 text-xs 
 						</button>
 					</form>
 
-					<details class="border-t border-zinc-800 pt-3">
+					<details class="border-t-2 border-seam pt-3">
 						<summary class="cursor-pointer text-xs text-zinc-400">Edit group</summary>
 						<form method="POST" action={actions.updateGroup} class="mt-3 grid gap-2 sm:grid-cols-3">
 							<input type="hidden" name="csrf_token" value={csrf} />
@@ -138,7 +138,7 @@ const quietButtonClass = "rounded-md border border-zinc-700 px-3 py-1.5 text-xs 
 			);
 		})}
 		{groups.length === 0 && (
-			<p class="rounded-lg border border-zinc-800 bg-zinc-900 p-6 text-sm text-zinc-400">
+			<p class="panel p-6 text-sm text-zinc-400">
 				No groups yet.
 			</p>
 		)}

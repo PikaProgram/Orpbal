@@ -23,8 +23,8 @@ const grants = grantsResult.data;
 const grantByKey = new Map(grants.map((grant) => [`${grant.group_id}:${grant.connection_id}`, grant]));
 const csrf = auth.session.csrf_token;
 const selectClass =
-	"rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-xs text-zinc-100 outline-none focus:border-zinc-500";
-const quietButtonClass = "rounded-md border border-zinc-700 px-2 py-1.5 text-xs text-zinc-300 hover:border-zinc-500";
+	"field field-sm";
+const quietButtonClass = "btn-steel px-2 py-1.5 text-xs";
 ---
 
 <Layout title="Grants" user={auth.session.user}>
@@ -35,7 +35,7 @@ const quietButtonClass = "rounded-md border border-zinc-700 px-2 py-1.5 text-xs 
 
 	{
 		outcome.error && (
-			<p class="mb-4 rounded-md border border-red-900 bg-red-950/50 px-3 py-2 text-sm text-red-300">
+			<p class="error-note">
 				{outcome.error}
 			</p>
 		)
@@ -43,19 +43,19 @@ const quietButtonClass = "rounded-md border border-zinc-700 px-2 py-1.5 text-xs 
 
 	{
 		groups.length === 0 || connections.length === 0 ? (
-			<p class="rounded-lg border border-zinc-800 bg-zinc-900 p-6 text-sm text-zinc-400">
+			<p class="panel p-6 text-sm text-zinc-400">
 				Create at least one group and one connection before assigning grants.
 			</p>
 		) : (
-			<div class="overflow-x-auto rounded-lg border border-zinc-800">
+			<div class="panel overflow-x-auto">
 				<table class="w-full text-left text-sm">
-					<thead class="bg-zinc-900 text-zinc-400">
+					<thead class="border-b-2 border-seam bg-plate-raised text-dim">
 						<tr>
 							<th class="px-4 py-3 font-medium">Group</th>
 							{connections.map((connection) => (
 								<th class="px-4 py-3 font-medium">
 									{connection.name}
-									<span class="block text-xs font-normal text-zinc-500">
+									<span class="block font-mono text-xs font-normal text-zinc-500">
 										{connection.host}/{connection.database_name}
 									</span>
 								</th>

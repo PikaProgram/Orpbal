@@ -3,16 +3,174 @@
 
 @custom-variant dark (&:is(.dark *));
 
+@import url("https://fonts.googleapis.com/css2?family=Titillium+Web:wght@400;600;700&display=swap");
+
 @theme {
-  --color-background: oklch(100% 0 0);
-  --color-foreground: oklch(14.08% 0.004 285.82);
-  --color-primary: oklch(20.47% 0.006 285.88);
-  --color-secondary: oklch(96.76% 0.001 286.38);
+  --color-background: #171a21;
+  --color-foreground: #e8e5da;
+  --color-plate: #232936;
+  --color-plate-raised: #2d3442;
+  --color-seam: #3a4254;
+  --color-brass: #f1a13c;
+  --color-brass-lit: #ffd496;
+  --color-dim: #8a93a6;
+  --color-ok: #62bc79;
+  --color-alert: #e05c5c;
+  --font-sans: "Titillium Web", ui-sans-serif, system-ui, sans-serif;
+
+  /* legacy mappings so existing zinc-* classes keep working */
+  --color-zinc-950: #14171d;
+  --color-zinc-900: #232936;
+  --color-zinc-800: #3a4254;
+  --color-zinc-700: #3a4254;
+  --color-zinc-500: #6a7386;
+  --color-zinc-400: #8a93a6;
+  --color-zinc-300: #b8bfcc;
+  --color-zinc-100: #e8e5da;
+  --color-emerald-400: #62bc79;
 }
 
-.dark {
-  --color-background: oklch(14.08% 0.004 285.82);
-  --color-foreground: oklch(98.51% 0.001 106.42);
-  --color-primary: oklch(98.51% 0.001 106.42);
-  --color-secondary: oklch(26.96% 0.005 286.03);
+/* Bolted machine panel: square corners, 2px seam, corner rivets */
+.panel {
+  position: relative;
+  border: 2px solid var(--color-seam);
+  background: var(--color-plate);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.4);
+}
+.panel::before,
+.panel::after {
+  content: "";
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: var(--color-seam);
+  box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.6);
+}
+.panel::before {
+  top: 6px;
+  left: 6px;
+}
+.panel::after {
+  top: 6px;
+  right: 6px;
+}
+
+/* Panel title strip, like a machine nameplate */
+.nameplate {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-bottom: 2px solid var(--color-seam);
+  background: var(--color-plate-raised);
+  padding: 0.5rem 1rem 0.5rem 1.75rem; /* clears the rivet */
+  font-weight: 700;
+  font-size: 0.8125rem;
+  letter-spacing: 0.02em;
+}
+
+/* Brass primary button: the Factorio orange, flat with a hard bottom edge */
+.btn-brass {
+  background: var(--color-brass);
+  color: #171a21;
+  font-weight: 600;
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.35);
+  transition: background-color 120ms;
+}
+.btn-brass:hover {
+  background: var(--color-brass-lit);
+}
+.btn-brass:active {
+  box-shadow: inset 0 2px 0 rgba(0, 0, 0, 0.25);
+}
+
+/* Quiet steel button */
+.btn-steel {
+  border: 1px solid var(--color-seam);
+  background: var(--color-plate-raised);
+  color: var(--color-foreground);
+  transition: border-color 120ms, background-color 120ms;
+}
+.btn-steel:hover {
+  border-color: var(--color-dim);
+  background: #343c4d;
+}
+
+/* Conveyor rows: brass sweep on hover, like a belt moving */
+table tbody tr {
+  transition: background-color 120ms;
+}
+table tbody tr:hover {
+  background: rgba(241, 161, 60, 0.06);
+}
+
+/* Machine identifiers: hosts, db names */
+.mono {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.8125rem;
+  color: var(--color-dim);
+}
+
+/* Conveyor strip under the header: the one signature motif. Belt scrolls left, items ride it. */
+.conveyor {
+  position: relative;
+  height: 12px;
+  overflow: hidden;
+  background: var(--color-zinc-950);
+  border-bottom: 2px solid var(--color-seam);
+}
+.conveyor-belt {
+  position: absolute;
+  inset: 0;
+  background-image: repeating-linear-gradient(
+    90deg,
+    var(--color-seam) 0 10px,
+    transparent 10px 22px
+  );
+  animation: belt 1.2s linear infinite;
+}
+@keyframes belt {
+  to {
+    transform: translateX(-22px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .conveyor-belt {
+    animation: none;
+  }
+}
+
+/* Focus: brass outline, visible for keyboard nav */
+:focus-visible {
+  outline: 2px solid var(--color-brass);
+  outline-offset: 2px;
+}
+
+/* Recessed field on the plate */
+.field {
+  width: 100%;
+  border: 2px solid var(--color-seam);
+  background: var(--color-zinc-950);
+  color: var(--color-foreground);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  outline: none;
+}
+.field:focus {
+  border-color: var(--color-brass);
+}
+.field-sm {
+  width: auto;
+  padding: 0.375rem 0.5rem;
+  font-size: 0.75rem;
+}
+
+/* Fault light strip */
+.error-note {
+  margin-bottom: 1rem;
+  border: 2px solid rgba(224, 92, 92, 0.6);
+  background: rgba(224, 92, 92, 0.08);
+  color: var(--color-alert);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
 }
