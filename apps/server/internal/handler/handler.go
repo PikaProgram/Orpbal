@@ -11,6 +11,7 @@ import (
 	"Orpbal/internal/api"
 	"Orpbal/internal/auth"
 	"Orpbal/internal/security/crypto"
+	"Orpbal/internal/target"
 )
 
 // Handler implements the generated OpenAPI server interface.
@@ -20,6 +21,7 @@ type Handler struct {
 	cipher   *crypto.Cipher
 	secure   bool
 	logger   zerolog.Logger
+	viewer   *target.Viewer
 }
 
 var _ api.ServerInterface = (*Handler)(nil)
@@ -32,6 +34,7 @@ func New(client *ent.Client, sessions *auth.Service, cipher *crypto.Cipher, secu
 		cipher:   cipher,
 		secure:   secure,
 		logger:   logger,
+		viewer:   target.NewViewer(nil),
 	}
 }
 

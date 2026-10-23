@@ -510,6 +510,147 @@ paths:
           $ref: "#/components/responses/Conflict"
         "500":
           $ref: "#/components/responses/InternalError"
+  /databases/{id}/schema:
+    get:
+      operationId: getDatabaseSchema
+      tags: [viewer]
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Tables grouped by schema with column counts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatabaseSchema"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "502":
+          $ref: "#/components/responses/TargetError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /databases/{id}/query:
+    post:
+      operationId: executeDatabaseQuery
+      tags: [viewer]
+      parameters:
+        - $ref: "#/components/parameters/Id"
+        - $ref: "#/components/parameters/CsrfToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExecuteQueryRequest"
+      responses:
+        "200":
+          description: Query result set
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QueryResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "502":
+          $ref: "#/components/responses/TargetError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /databases/{id}/migrations:
+    get:
+      operationId: listMigrations
+      tags: [viewer]
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Linear migration history for the database
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Migration"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      operationId: createMigration
+      tags: [viewer]
+      parameters:
+        - $ref: "#/components/parameters/Id"
+        - $ref: "#/components/parameters/CsrfToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMigrationRequest"
+      responses:
+        "201":
+          description: Migration created and pending execution
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Migration"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /databases/{id}/migrations/{migrationId}/execute:
+    post:
+      operationId: executeMigration
+      tags: [viewer]
+      parameters:
+        - $ref: "#/components/parameters/Id"
+        - name: migrationId
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+        - $ref: "#/components/parameters/CsrfToken"
+      responses:
+        "200":
+          description: Migration executed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Migration"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "502":
+          $ref: "#/components/responses/TargetError"
+        "500":
+          $ref: "#/components/responses/InternalError"
   /admin/grants:
     get:
       operationId: listGrants
@@ -655,6 +796,12 @@ components:
             $ref: "#/components/schemas/ErrorResponse"
     InternalError:
       description: Unexpected server error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    TargetError:
+      description: Managed database target unreachable or returned an error
       content:
         application/json:
           schema:
@@ -913,6 +1060,138 @@ components:
           $ref: "#/components/schemas/SSLMode"
         is_enabled:
           type: boolean
+    DatabaseSchema:
+      type: object
+      required: [schemas]
+      properties:
+        schemas:
+          type: array
+          items:
+            $ref: "#/components/schemas/SchemaTables"
+    SchemaTables:
+      type: object
+      required: [schema, tables]
+      properties:
+        schema:
+          type: string
+        tables:
+          type: array
+          items:
+            $ref: "#/components/schemas/SchemaTable"
+    SchemaTable:
+      type: object
+      required: [name, columns]
+      properties:
+        name:
+          type: string
+        columns:
+          type: array
+          items:
+            $ref: "#/components/schemas/SchemaColumn"
+        constraints:
+          type: array
+          items:
+            $ref: "#/components/schemas/SchemaConstraint"
+        indexes:
+          type: array
+          items:
+            $ref: "#/components/schemas/SchemaIndex"
+    SchemaColumn:
+      type: object
+      required: [name, type, is_nullable]
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+        is_nullable:
+          type: boolean
+    SchemaConstraint:
+      type: object
+      required: [name, type, columns]
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          description: "PRIMARY KEY, FOREIGN KEY, UNIQUE, CHECK"
+        columns:
+          type: array
+          items:
+            type: string
+        referenced_table:
+          type: string
+          nullable: true
+        referenced_columns:
+          type: array
+          nullable: true
+          items:
+            type: string
+    SchemaIndex:
+      type: object
+      required: [name, columns, is_unique]
+      properties:
+        name:
+          type: string
+        columns:
+          type: array
+          items:
+            type: string
+        is_unique:
+          type: boolean
+    ExecuteQueryRequest:
+      type: object
+      required: [sql]
+      properties:
+        sql:
+          type: string
+          maxLength: 100000
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 1000
+          default: 100
+    QueryResult:
+      type: object
+      required: [columns, rows]
+      properties:
+        columns:
+          type: array
+          items:
+            type: string
+        rows:
+          type: array
+          items:
+            type: array
+            nullable: true
+            description: Row values; null entries are SQL NULLs.
+    Migration:
+      type: object
+      required: [id, connection_id, version, sql, executor_id, status, executed_at]
+      properties:
+        id:
+          type: integer
+        connection_id:
+          type: integer
+        version:
+          type: integer
+        sql:
+          type: string
+        executor_id:
+          type: integer
+        status:
+          type: string
+          enum: [pending, success, failed]
+        executed_at:
+          type: string
+          format: date-time
+    CreateMigrationRequest:
+      type: object
+      required: [sql]
+      properties:
+        sql:
+          type: string
+          maxLength: 100000
     MyDatabase:
       type: object
       required: [connection_id, name, host, database_name, access_level]

@@ -56,6 +56,18 @@ func (f GroupMembershipFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Va
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.GroupMembershipMutation", m)
 }
 
+// The MigrationFunc type is an adapter to allow the use of ordinary
+// function as Migration mutator.
+type MigrationFunc func(context.Context, *ent.MigrationMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f MigrationFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.MigrationMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.MigrationMutation", m)
+}
+
 // The PlatformUserFunc type is an adapter to allow the use of ordinary
 // function as PlatformUser mutator.
 type PlatformUserFunc func(context.Context, *ent.PlatformUserMutation) (ent.Value, error)

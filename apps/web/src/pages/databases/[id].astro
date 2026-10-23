@@ -1,0 +1,243 @@
+---
+import Layout from "@/layouts/Layout.astro";
+import { api, ApiError, type MyDatabase, type DatabaseSchema, type QueryResult } from "@/lib/api";
+import { requireSession } from "@/lib/session";
+
+const auth = await requireSession(Astro);
+if (auth instanceof Response) return auth;
+
+const connectionId = Astro.params.id;
+const selected = Astro.url.searchParams.get("table") ?? "";
+
+// Fetch the user's access list to resolve the connection and access level.
+const mineResult = await api<MyDatabase[]>("/me/databases", { cookie: auth.cookie });
+const mine = mineResult.status === 200 ? mineResult.data : [];
+const database = mine.find((db) => String(db.connection_id) === connectionId);
+
+let schema: DatabaseSchema | null = null;
+let error: string | null = null;
+if (!database) {
+	error = "Database not found or you do not have access to it.";
+} else {
+	const result = await api<DatabaseSchema>(`/databases/${connectionId}/schema`, { cookie: auth.cookie });
+	if (result.status === 200) {
+		schema = result.data;
+	} else {
+		error = "Failed to load schema: the database may be unreachable or access was denied.";
+	}
+}
+
+// Resolve the selected table against the fetched schema; only schema-listed
+// tables can be browsed, which also keeps the generated SELECT safe.
+let selectedSchema: string | null = null;
+let selectedTable: string | null = null;
+if (schema && selected) {
+	const [schemaName, tableName] = selected.split(".");
+	for (const entry of schema.schemas) {
+		if (entry.schema !== schemaName) continue;
+		if (entry.tables.some((table) => table.name === tableName)) {
+			selectedSchema = schemaName;
+			selectedTable = tableName;
+		}
+	}
+}
+
+let data: QueryResult | null = null;
+let dataError: string | null = null;
+if (selectedSchema && selectedTable) {
+	// Identifiers come from information_schema; double-quote and reject anything
+	// that is not a plain identifier before building the browse query.
+	const safe = (value: string) => /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(value);
+	if (safe(selectedSchema) && safe(selectedTable)) {
+		const sql = `SELECT * FROM "${selectedSchema}"."${selectedTable}" LIMIT 50`;
+		const result = await api<QueryResult>(`/databases/${connectionId}/query`, {
+			method: "POST",
+			cookie: auth.cookie,
+			csrf: auth.session.csrf_token,
+			body: { sql, limit: 50 },
+		});
+		if (result.status === 200) {
+			data = result.data;
+		} else {
+			dataError = "Failed to load rows for this table.";
+		}
+	} else {
+		dataError = "Table identifier is not browsable.";
+	}
+}
+
+const selectedEntry = schema?.schemas.find((entry) => entry.schema === selectedSchema);
+const selectedTableEntry = selectedEntry?.tables.find((table) => table.name === selectedTable);
+const accessLabel = database?.access_level === "view_edit" ? "View + Edit" : "View Only";
+---
+
+<Layout title={`${database?.name ?? "Database"} — Viewer`} user={auth.session.user}>
+	<div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+		<div>
+			<h1 class="text-2xl font-bold tracking-tight">{database?.name ?? "Database"}</h1>
+			<p class="mono text-sm text-dim">
+				{database?.host} / {database?.database_name}
+			</p>
+		</div>
+		<span
+			class={`border px-2 py-1 text-xs ${
+				database?.access_level === "view_edit"
+					? "border-ok/40 bg-ok/10 text-ok"
+					: "border-dim/40 bg-dim/10 text-dim"
+			}`}
+		>
+			{accessLabel}
+		</span>
+	</div>
+
+	{
+		error && (
+			<div class="mb-4 border border-error/40 bg-error/10 px-4 py-3 text-sm text-error">{error}</div>
+		)
+	}
+
+	{
+		schema && (
+			<div class="grid gap-4 lg:grid-cols-[260px_1fr]">
+				<aside class="panel max-h-[70vh] overflow-auto p-3">
+					<div class="nameplate mb-2">Schema tree</div>
+					{schema.schemas.map((entry) => (
+						<div class="mb-3">
+							<div class="mono mb-1 text-xs font-bold text-brass-lit">{entry.schema}</div>
+							<ul class="space-y-1">
+								{entry.tables.map((table) => {
+									const key = `${entry.schema}.${table.name}`;
+									const active = key === selected;
+									return (
+										<li>
+											<a
+												href={`/databases/${connectionId}?table=${encodeURIComponent(key)}`}
+												class={`mono block px-2 py-1 text-xs ${
+													active ? "bg-brass/20 text-brass-lit" : "text-dim hover:text-foreground"
+												}`}
+											>
+												{table.name}
+											</a>
+										</li>
+									);
+								})}
+								{entry.tables.length === 0 && <li class="px-2 py-1 text-xs text-dim">No tables</li>}
+							</ul>
+						</div>
+					))}
+				</aside>
+
+				<main class="min-w-0">
+					{!selectedTableEntry && (
+						<div class="panel p-6 text-sm text-dim">
+							Select a table from the schema tree to inspect its structure and data.
+						</div>
+					)}
+					{selectedTableEntry && (
+						<div class="space-y-4">
+							<section class="panel p-4">
+								<h2 class="mono mb-3 text-sm font-bold text-brass-lit">
+									{selectedSchema}.{selectedTableEntry.name}
+								</h2>
+								<table class="w-full text-left text-xs">
+									<thead class="bg-plate-raised text-dim">
+										<tr>
+											<th class="px-3 py-2 font-semibold">Column</th>
+											<th class="px-3 py-2 font-semibold">Type</th>
+											<th class="px-3 py-2 font-semibold">Nullable</th>
+											<th class="px-3 py-2 font-semibold">Constraints</th>
+										</tr>
+									</thead>
+									<tbody class="divide-y divide-seam">
+										{selectedTableEntry.columns.map((column) => (
+											<tr>
+												<td class="mono px-3 py-2 font-semibold">{column.name}</td>
+												<td class="mono px-3 py-2">{column.type}</td>
+												<td class="px-3 py-2">{column.is_nullable ? "yes" : "no"}</td>
+												<td class="px-3 py-2">
+													{(selectedTableEntry.constraints ?? [])
+														.filter((constraint) => constraint.columns.includes(column.name))
+														.map((constraint) => constraint.type)
+														.join(", ") || "—"}
+												</td>
+											</tr>
+										))}
+									</tbody>
+								</table>
+							</section>
+
+							{(selectedTableEntry.constraints ?? []).length > 0 && (
+								<section class="panel p-4">
+									<h3 class="mb-2 text-sm font-bold">Constraints</h3>
+									<ul class="mono space-y-1 text-xs text-dim">
+										{selectedTableEntry.constraints!.map((constraint) => (
+											<li>
+												<span class="text-foreground">{constraint.type}</span> {constraint.name} (
+												{constraint.columns.join(", ")}){constraint.referenced_table
+													? ` → ${constraint.referenced_table}.${(constraint.referenced_columns ?? []).join(", ")}`
+													: ""}
+											</li>
+										))}
+									</ul>
+								</section>
+							)}
+
+							{(selectedTableEntry.indexes ?? []).length > 0 && (
+								<section class="panel p-4">
+									<h3 class="mb-2 text-sm font-bold">Indexes</h3>
+									<ul class="mono space-y-1 text-xs text-dim">
+										{selectedTableEntry.indexes!.map((index) => (
+											<li>
+												{index.is_unique ? "UNIQUE " : ""}{index.name}
+											</li>
+										))}
+									</ul>
+								</section>
+							)}
+
+							<section class="panel overflow-hidden">
+								<div class="nameplate">Data (first 50 rows)</div>
+								{dataError && (
+									<div class="border-t border-seam bg-error/10 px-4 py-3 text-sm text-error">
+										{dataError}
+									</div>
+								)}
+								{data && (
+									<div class="overflow-x-auto">
+										<table class="w-full text-left text-xs">
+											<thead class="bg-plate-raised text-dim">
+												<tr>
+													{data.columns.map((column) => (
+														<th class="mono px-3 py-2 font-semibold">{column}</th>
+													))}
+												</tr>
+											</thead>
+											<tbody class="divide-y divide-seam">
+												{data.rows.map((row) => (
+													<tr>
+														{row.map((value) => (
+															<td class="mono max-w-xs truncate px-3 py-2">
+																{value === null ? "NULL" : String(value)}
+															</td>
+														))}
+													</tr>
+												))}
+												{data.rows.length === 0 && (
+													<tr>
+														<td class="px-3 py-3 text-dim" colspan={data.columns.length}>
+															No rows.
+														</td>
+													</tr>
+												)}
+											</tbody>
+										</table>
+									</div>
+								)}
+							</section>
+						</div>
+					)}
+				</main>
+			</div>
+		)
+	}
+</Layout>

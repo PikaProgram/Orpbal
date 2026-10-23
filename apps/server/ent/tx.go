@@ -20,6 +20,8 @@ type Tx struct {
 	Group *GroupClient
 	// GroupMembership is the client for interacting with the GroupMembership builders.
 	GroupMembership *GroupMembershipClient
+	// Migration is the client for interacting with the Migration builders.
+	Migration *MigrationClient
 	// PlatformUser is the client for interacting with the PlatformUser builders.
 	PlatformUser *PlatformUserClient
 	// Session is the client for interacting with the Session builders.
@@ -159,6 +161,7 @@ func (tx *Tx) init() {
 	tx.DatabaseGrant = NewDatabaseGrantClient(tx.config)
 	tx.Group = NewGroupClient(tx.config)
 	tx.GroupMembership = NewGroupMembershipClient(tx.config)
+	tx.Migration = NewMigrationClient(tx.config)
 	tx.PlatformUser = NewPlatformUserClient(tx.config)
 	tx.Session = NewSessionClient(tx.config)
 }

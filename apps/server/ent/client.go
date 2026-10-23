@@ -15,6 +15,7 @@ import (
 	"Orpbal/ent/databasegrant"
 	"Orpbal/ent/group"
 	"Orpbal/ent/groupmembership"
+	"Orpbal/ent/migration"
 	"Orpbal/ent/platformuser"
 	"Orpbal/ent/session"
 
@@ -37,6 +38,8 @@ type Client struct {
 	Group *GroupClient
 	// GroupMembership is the client for interacting with the GroupMembership builders.
 	GroupMembership *GroupMembershipClient
+	// Migration is the client for interacting with the Migration builders.
+	Migration *MigrationClient
 	// PlatformUser is the client for interacting with the PlatformUser builders.
 	PlatformUser *PlatformUserClient
 	// Session is the client for interacting with the Session builders.
@@ -56,6 +59,7 @@ func (c *Client) init() {
 	c.DatabaseGrant = NewDatabaseGrantClient(c.config)
 	c.Group = NewGroupClient(c.config)
 	c.GroupMembership = NewGroupMembershipClient(c.config)
+	c.Migration = NewMigrationClient(c.config)
 	c.PlatformUser = NewPlatformUserClient(c.config)
 	c.Session = NewSessionClient(c.config)
 }
@@ -154,6 +158,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		DatabaseGrant:      NewDatabaseGrantClient(cfg),
 		Group:              NewGroupClient(cfg),
 		GroupMembership:    NewGroupMembershipClient(cfg),
+		Migration:          NewMigrationClient(cfg),
 		PlatformUser:       NewPlatformUserClient(cfg),
 		Session:            NewSessionClient(cfg),
 	}, nil
@@ -179,6 +184,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		DatabaseGrant:      NewDatabaseGrantClient(cfg),
 		Group:              NewGroupClient(cfg),
 		GroupMembership:    NewGroupMembershipClient(cfg),
+		Migration:          NewMigrationClient(cfg),
 		PlatformUser:       NewPlatformUserClient(cfg),
 		Session:            NewSessionClient(cfg),
 	}, nil
@@ -210,7 +216,7 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.DatabaseConnection, c.DatabaseGrant, c.Group, c.GroupMembership,
+		c.DatabaseConnection, c.DatabaseGrant, c.Group, c.GroupMembership, c.Migration,
 		c.PlatformUser, c.Session,
 	} {
 		n.Use(hooks...)
@@ -221,7 +227,7 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.DatabaseConnection, c.DatabaseGrant, c.Group, c.GroupMembership,
+		c.DatabaseConnection, c.DatabaseGrant, c.Group, c.GroupMembership, c.Migration,
 		c.PlatformUser, c.Session,
 	} {
 		n.Intercept(interceptors...)
@@ -239,6 +245,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Group.mutate(ctx, m)
 	case *GroupMembershipMutation:
 		return c.GroupMembership.mutate(ctx, m)
+	case *MigrationMutation:
+		return c.Migration.mutate(ctx, m)
 	case *PlatformUserMutation:
 		return c.PlatformUser.mutate(ctx, m)
 	case *SessionMutation:
@@ -892,6 +900,171 @@ func (c *GroupMembershipClient) mutate(ctx context.Context, m *GroupMembershipMu
 	}
 }
 
+// MigrationClient is a client for the Migration schema.
+type MigrationClient struct {
+	config
+}
+
+// NewMigrationClient returns a client for the Migration from the given config.
+func NewMigrationClient(c config) *MigrationClient {
+	return &MigrationClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `migration.Hooks(f(g(h())))`.
+func (c *MigrationClient) Use(hooks ...Hook) {
+	c.hooks.Migration = append(c.hooks.Migration, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `migration.Intercept(f(g(h())))`.
+func (c *MigrationClient) Intercept(interceptors ...Interceptor) {
+	c.inters.Migration = append(c.inters.Migration, interceptors...)
+}
+
+// Create returns a builder for creating a Migration entity.
+func (c *MigrationClient) Create() *MigrationCreate {
+	mutation := newMigrationMutation(c.config, OpCreate)
+	return &MigrationCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of Migration entities.
+func (c *MigrationClient) CreateBulk(builders ...*MigrationCreate) *MigrationCreateBulk {
+	return &MigrationCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *MigrationClient) MapCreateBulk(slice any, setFunc func(*MigrationCreate, int)) *MigrationCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &MigrationCreateBulk{err: fmt.Errorf("calling to MigrationClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*MigrationCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &MigrationCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for Migration.
+func (c *MigrationClient) Update() *MigrationUpdate {
+	mutation := newMigrationMutation(c.config, OpUpdate)
+	return &MigrationUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *MigrationClient) UpdateOne(m *Migration) *MigrationUpdateOne {
+	mutation := newMigrationMutation(c.config, OpUpdateOne, withMigration(m))
+	return &MigrationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *MigrationClient) UpdateOneID(id int) *MigrationUpdateOne {
+	mutation := newMigrationMutation(c.config, OpUpdateOne, withMigrationID(id))
+	return &MigrationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for Migration.
+func (c *MigrationClient) Delete() *MigrationDelete {
+	mutation := newMigrationMutation(c.config, OpDelete)
+	return &MigrationDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *MigrationClient) DeleteOne(m *Migration) *MigrationDeleteOne {
+	return c.DeleteOneID(m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *MigrationClient) DeleteOneID(id int) *MigrationDeleteOne {
+	builder := c.Delete().Where(migration.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &MigrationDeleteOne{builder}
+}
+
+// Query returns a query builder for Migration.
+func (c *MigrationClient) Query() *MigrationQuery {
+	return &MigrationQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeMigration},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a Migration entity by its id.
+func (c *MigrationClient) Get(ctx context.Context, id int) (*Migration, error) {
+	return c.Query().Where(migration.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *MigrationClient) GetX(ctx context.Context, id int) *Migration {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryConnection queries the connection edge of a Migration.
+func (c *MigrationClient) QueryConnection(m *Migration) *DatabaseConnectionQuery {
+	query := (&DatabaseConnectionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(migration.Table, migration.FieldID, id),
+			sqlgraph.To(databaseconnection.Table, databaseconnection.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, migration.ConnectionTable, migration.ConnectionColumn),
+		)
+		fromV = sqlgraph.Neighbors(m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryExecutor queries the executor edge of a Migration.
+func (c *MigrationClient) QueryExecutor(m *Migration) *PlatformUserQuery {
+	query := (&PlatformUserClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(migration.Table, migration.FieldID, id),
+			sqlgraph.To(platformuser.Table, platformuser.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, migration.ExecutorTable, migration.ExecutorColumn),
+		)
+		fromV = sqlgraph.Neighbors(m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *MigrationClient) Hooks() []Hook {
+	return c.hooks.Migration
+}
+
+// Interceptors returns the client interceptors.
+func (c *MigrationClient) Interceptors() []Interceptor {
+	return c.inters.Migration
+}
+
+func (c *MigrationClient) mutate(ctx context.Context, m *MigrationMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&MigrationCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&MigrationUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&MigrationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&MigrationDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown Migration mutation op: %q", m.Op())
+	}
+}
+
 // PlatformUserClient is a client for the PlatformUser schema.
 type PlatformUserClient struct {
 	config
@@ -1209,11 +1382,11 @@ func (c *SessionClient) mutate(ctx context.Context, m *SessionMutation) (Value, 
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		DatabaseConnection, DatabaseGrant, Group, GroupMembership, PlatformUser,
-		Session []ent.Hook
+		DatabaseConnection, DatabaseGrant, Group, GroupMembership, Migration,
+		PlatformUser, Session []ent.Hook
 	}
 	inters struct {
-		DatabaseConnection, DatabaseGrant, Group, GroupMembership, PlatformUser,
-		Session []ent.Interceptor
+		DatabaseConnection, DatabaseGrant, Group, GroupMembership, Migration,
+		PlatformUser, Session []ent.Interceptor
 	}
 )

@@ -7,6 +7,7 @@ import (
 	"Orpbal/ent/databasegrant"
 	"Orpbal/ent/group"
 	"Orpbal/ent/groupmembership"
+	"Orpbal/ent/migration"
 	"Orpbal/ent/platformuser"
 	"Orpbal/ent/session"
 	"context"
@@ -82,6 +83,7 @@ func checkColumn(table, column string) error {
 			databasegrant.Table:      databasegrant.ValidColumn,
 			group.Table:              group.ValidColumn,
 			groupmembership.Table:    groupmembership.ValidColumn,
+			migration.Table:          migration.ValidColumn,
 			platformuser.Table:       platformuser.ValidColumn,
 			session.Table:            session.ValidColumn,
 		})

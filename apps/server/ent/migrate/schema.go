@@ -112,6 +112,43 @@ var (
 			},
 		},
 	}
+	// MigrationsColumns holds the columns for the "migrations" table.
+	MigrationsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "version", Type: field.TypeInt},
+		{Name: "sql", Type: field.TypeString, Size: 2147483647},
+		{Name: "executed_at", Type: field.TypeTime},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"pending", "success", "failed"}},
+		{Name: "connection_id", Type: field.TypeInt},
+		{Name: "executor_id", Type: field.TypeInt},
+	}
+	// MigrationsTable holds the schema information for the "migrations" table.
+	MigrationsTable = &schema.Table{
+		Name:       "migrations",
+		Columns:    MigrationsColumns,
+		PrimaryKey: []*schema.Column{MigrationsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "migrations_database_connections_connection",
+				Columns:    []*schema.Column{MigrationsColumns[5]},
+				RefColumns: []*schema.Column{DatabaseConnectionsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+			{
+				Symbol:     "migrations_platform_users_executor",
+				Columns:    []*schema.Column{MigrationsColumns[6]},
+				RefColumns: []*schema.Column{PlatformUsersColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "migration_connection_id_version",
+				Unique:  true,
+				Columns: []*schema.Column{MigrationsColumns[5], MigrationsColumns[1]},
+			},
+		},
+	}
 	// PlatformUsersColumns holds the columns for the "platform_users" table.
 	PlatformUsersColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
@@ -174,6 +211,7 @@ var (
 		DatabaseGrantsTable,
 		GroupsTable,
 		GroupMembershipsTable,
+		MigrationsTable,
 		PlatformUsersTable,
 		SessionsTable,
 	}
@@ -184,5 +222,7 @@ func init() {
 	DatabaseGrantsTable.ForeignKeys[1].RefTable = GroupsTable
 	GroupMembershipsTable.ForeignKeys[0].RefTable = GroupsTable
 	GroupMembershipsTable.ForeignKeys[1].RefTable = PlatformUsersTable
+	MigrationsTable.ForeignKeys[0].RefTable = DatabaseConnectionsTable
+	MigrationsTable.ForeignKeys[1].RefTable = PlatformUsersTable
 	SessionsTable.ForeignKeys[0].RefTable = PlatformUsersTable
 }

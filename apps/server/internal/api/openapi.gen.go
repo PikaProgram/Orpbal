@@ -34,6 +34,27 @@ func (e AccessLevel) Valid() bool {
 	}
 }
 
+// Defines values for MigrationStatus.
+const (
+	Failed  MigrationStatus = "failed"
+	Pending MigrationStatus = "pending"
+	Success MigrationStatus = "success"
+)
+
+// Valid indicates whether the value is a known member of the MigrationStatus enum.
+func (e MigrationStatus) Valid() bool {
+	switch e {
+	case Failed:
+		return true
+	case Pending:
+		return true
+	case Success:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SSLMode.
 const (
 	Disable    SSLMode = "disable"
@@ -84,6 +105,11 @@ type CreateGroupRequest struct {
 	Name        string  `json:"name"`
 }
 
+// CreateMigrationRequest defines model for CreateMigrationRequest.
+type CreateMigrationRequest struct {
+	Sql string `json:"sql"`
+}
+
 // CreateUserRequest defines model for CreateUserRequest.
 type CreateUserRequest struct {
 	IsPlatformAdmin *bool  `json:"is_platform_admin,omitempty"`
@@ -106,6 +132,11 @@ type DatabaseConnection struct {
 	Username     string    `json:"username"`
 }
 
+// DatabaseSchema defines model for DatabaseSchema.
+type DatabaseSchema struct {
+	Schemas []SchemaTables `json:"schemas"`
+}
+
 // ErrorDetail defines model for ErrorDetail.
 type ErrorDetail struct {
 	Code    string             `json:"code"`
@@ -116,6 +147,12 @@ type ErrorDetail struct {
 // ErrorResponse defines model for ErrorResponse.
 type ErrorResponse struct {
 	Error ErrorDetail `json:"error"`
+}
+
+// ExecuteQueryRequest defines model for ExecuteQueryRequest.
+type ExecuteQueryRequest struct {
+	Limit *int   `json:"limit,omitempty"`
+	Sql   string `json:"sql"`
 }
 
 // Grant defines model for Grant.
@@ -159,6 +196,20 @@ type LoginRequest struct {
 	Username string `json:"username"`
 }
 
+// Migration defines model for Migration.
+type Migration struct {
+	ConnectionId int             `json:"connection_id"`
+	ExecutedAt   time.Time       `json:"executed_at"`
+	ExecutorId   int             `json:"executor_id"`
+	Id           int             `json:"id"`
+	Sql          string          `json:"sql"`
+	Status       MigrationStatus `json:"status"`
+	Version      int             `json:"version"`
+}
+
+// MigrationStatus defines model for Migration.Status.
+type MigrationStatus string
+
 // MyDatabase defines model for MyDatabase.
 type MyDatabase struct {
 	AccessLevel  AccessLevel `json:"access_level"`
@@ -168,6 +219,12 @@ type MyDatabase struct {
 	Name         string      `json:"name"`
 }
 
+// QueryResult defines model for QueryResult.
+type QueryResult struct {
+	Columns []string         `json:"columns"`
+	Rows    []*[]interface{} `json:"rows"`
+}
+
 // ResetPasswordRequest defines model for ResetPasswordRequest.
 type ResetPasswordRequest struct {
 	NewPassword string `json:"new_password"`
@@ -175,6 +232,45 @@ type ResetPasswordRequest struct {
 
 // SSLMode defines model for SSLMode.
 type SSLMode string
+
+// SchemaColumn defines model for SchemaColumn.
+type SchemaColumn struct {
+	IsNullable bool   `json:"is_nullable"`
+	Name       string `json:"name"`
+	Type       string `json:"type"`
+}
+
+// SchemaConstraint defines model for SchemaConstraint.
+type SchemaConstraint struct {
+	Columns           []string  `json:"columns"`
+	Name              string    `json:"name"`
+	ReferencedColumns *[]string `json:"referenced_columns,omitempty"`
+	ReferencedTable   *string   `json:"referenced_table,omitempty"`
+
+	// Type PRIMARY KEY, FOREIGN KEY, UNIQUE, CHECK
+	Type string `json:"type"`
+}
+
+// SchemaIndex defines model for SchemaIndex.
+type SchemaIndex struct {
+	Columns  []string `json:"columns"`
+	IsUnique bool     `json:"is_unique"`
+	Name     string   `json:"name"`
+}
+
+// SchemaTable defines model for SchemaTable.
+type SchemaTable struct {
+	Columns     []SchemaColumn      `json:"columns"`
+	Constraints *[]SchemaConstraint `json:"constraints,omitempty"`
+	Indexes     *[]SchemaIndex      `json:"indexes,omitempty"`
+	Name        string              `json:"name"`
+}
+
+// SchemaTables defines model for SchemaTables.
+type SchemaTables struct {
+	Schema string        `json:"schema"`
+	Tables []SchemaTable `json:"tables"`
+}
 
 // Session defines model for Session.
 type Session struct {
@@ -249,6 +345,9 @@ type InternalError = ErrorResponse
 
 // NotFound defines model for NotFound.
 type NotFound = ErrorResponse
+
+// TargetError defines model for TargetError.
+type TargetError = ErrorResponse
 
 // Unauthorized defines model for Unauthorized.
 type Unauthorized = ErrorResponse
@@ -346,6 +445,24 @@ type ChangePasswordParams struct {
 	XCSRFToken CsrfToken `json:"X-CSRF-Token"`
 }
 
+// CreateMigrationParams defines parameters for CreateMigration.
+type CreateMigrationParams struct {
+	// XCSRFToken Per-session CSRF token from GET /auth/session
+	XCSRFToken CsrfToken `json:"X-CSRF-Token"`
+}
+
+// ExecuteMigrationParams defines parameters for ExecuteMigration.
+type ExecuteMigrationParams struct {
+	// XCSRFToken Per-session CSRF token from GET /auth/session
+	XCSRFToken CsrfToken `json:"X-CSRF-Token"`
+}
+
+// ExecuteDatabaseQueryParams defines parameters for ExecuteDatabaseQuery.
+type ExecuteDatabaseQueryParams struct {
+	// XCSRFToken Per-session CSRF token from GET /auth/session
+	XCSRFToken CsrfToken `json:"X-CSRF-Token"`
+}
+
 // CreateDatabaseConnectionJSONRequestBody defines body for CreateDatabaseConnection for application/json ContentType.
 type CreateDatabaseConnectionJSONRequestBody = CreateConnectionRequest
 
@@ -375,6 +492,12 @@ type LoginJSONRequestBody = LoginRequest
 
 // ChangePasswordJSONRequestBody defines body for ChangePassword for application/json ContentType.
 type ChangePasswordJSONRequestBody = ChangePasswordRequest
+
+// CreateMigrationJSONRequestBody defines body for CreateMigration for application/json ContentType.
+type CreateMigrationJSONRequestBody = CreateMigrationRequest
+
+// ExecuteDatabaseQueryJSONRequestBody defines body for ExecuteDatabaseQuery for application/json ContentType.
+type ExecuteDatabaseQueryJSONRequestBody = ExecuteQueryRequest
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -447,6 +570,21 @@ type ServerInterface interface {
 
 	// (GET /auth/session)
 	GetSession(c *gin.Context)
+
+	// (GET /databases/{id}/migrations)
+	ListMigrations(c *gin.Context, id Id)
+
+	// (POST /databases/{id}/migrations)
+	CreateMigration(c *gin.Context, id Id, params CreateMigrationParams)
+
+	// (POST /databases/{id}/migrations/{migrationId}/execute)
+	ExecuteMigration(c *gin.Context, id Id, migrationId int, params ExecuteMigrationParams)
+
+	// (POST /databases/{id}/query)
+	ExecuteDatabaseQuery(c *gin.Context, id Id, params ExecuteDatabaseQueryParams)
+
+	// (GET /databases/{id}/schema)
+	GetDatabaseSchema(c *gin.Context, id Id)
 
 	// (GET /health)
 	GetHealth(c *gin.Context)
@@ -1402,6 +1540,231 @@ func (siw *ServerInterfaceWrapper) GetSession(c *gin.Context) {
 	siw.Handler.GetSession(c)
 }
 
+// ListMigrations operation middleware
+func (siw *ServerInterfaceWrapper) ListMigrations(c *gin.Context) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", c.Param("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter id: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	c.Set(string(CookieAuthScopes), []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.ListMigrations(c, id)
+}
+
+// CreateMigration operation middleware
+func (siw *ServerInterfaceWrapper) CreateMigration(c *gin.Context) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", c.Param("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter id: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	c.Set(string(CookieAuthScopes), []string{})
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateMigrationParams
+
+	headers := c.Request.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandler(c, fmt.Errorf("Expected one value for X-CSRF-Token, got %d", n), http.StatusBadRequest)
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter X-CSRF-Token: %w", err), http.StatusBadRequest)
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		siw.ErrorHandler(c, fmt.Errorf("Header parameter X-CSRF-Token is required, but not found"), http.StatusBadRequest)
+		return
+	}
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.CreateMigration(c, id, params)
+}
+
+// ExecuteMigration operation middleware
+func (siw *ServerInterfaceWrapper) ExecuteMigration(c *gin.Context) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", c.Param("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter id: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	// ------------- Path parameter "migrationId" -------------
+	var migrationId int
+
+	err = runtime.BindStyledParameterWithOptions("simple", "migrationId", c.Param("migrationId"), &migrationId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter migrationId: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	c.Set(string(CookieAuthScopes), []string{})
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ExecuteMigrationParams
+
+	headers := c.Request.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandler(c, fmt.Errorf("Expected one value for X-CSRF-Token, got %d", n), http.StatusBadRequest)
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter X-CSRF-Token: %w", err), http.StatusBadRequest)
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		siw.ErrorHandler(c, fmt.Errorf("Header parameter X-CSRF-Token is required, but not found"), http.StatusBadRequest)
+		return
+	}
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.ExecuteMigration(c, id, migrationId, params)
+}
+
+// ExecuteDatabaseQuery operation middleware
+func (siw *ServerInterfaceWrapper) ExecuteDatabaseQuery(c *gin.Context) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", c.Param("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter id: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	c.Set(string(CookieAuthScopes), []string{})
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ExecuteDatabaseQueryParams
+
+	headers := c.Request.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandler(c, fmt.Errorf("Expected one value for X-CSRF-Token, got %d", n), http.StatusBadRequest)
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter X-CSRF-Token: %w", err), http.StatusBadRequest)
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		siw.ErrorHandler(c, fmt.Errorf("Header parameter X-CSRF-Token is required, but not found"), http.StatusBadRequest)
+		return
+	}
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.ExecuteDatabaseQuery(c, id, params)
+}
+
+// GetDatabaseSchema operation middleware
+func (siw *ServerInterfaceWrapper) GetDatabaseSchema(c *gin.Context) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", c.Param("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter id: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	c.Set(string(CookieAuthScopes), []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.GetDatabaseSchema(c, id)
+}
+
 // GetHealth operation middleware
 func (siw *ServerInterfaceWrapper) GetHealth(c *gin.Context) {
 
@@ -1480,6 +1843,11 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 	router.POST(options.BaseURL+"/auth/logout", wrapper.Logout)
 	router.POST(options.BaseURL+"/auth/password", wrapper.ChangePassword)
 	router.GET(options.BaseURL+"/auth/session", wrapper.GetSession)
+	router.GET(options.BaseURL+"/databases/:id/migrations", wrapper.ListMigrations)
+	router.POST(options.BaseURL+"/databases/:id/migrations", wrapper.CreateMigration)
+	router.POST(options.BaseURL+"/databases/:id/migrations/:migrationId/execute", wrapper.ExecuteMigration)
+	router.POST(options.BaseURL+"/databases/:id/query", wrapper.ExecuteDatabaseQuery)
+	router.GET(options.BaseURL+"/databases/:id/schema", wrapper.GetDatabaseSchema)
 	router.GET(options.BaseURL+"/health", wrapper.GetHealth)
 	router.GET(options.BaseURL+"/me/databases", wrapper.ListMyDatabases)
 }

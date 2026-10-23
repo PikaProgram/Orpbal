@@ -18,6 +18,9 @@ type Group func(*sql.Selector)
 // GroupMembership is the predicate function for groupmembership builders.
 type GroupMembership func(*sql.Selector)
 
+// Migration is the predicate function for migration builders.
+type Migration func(*sql.Selector)
+
 // PlatformUser is the predicate function for platformuser builders.
 type PlatformUser func(*sql.Selector)
 

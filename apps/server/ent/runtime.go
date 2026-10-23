@@ -7,6 +7,7 @@ import (
 	"Orpbal/ent/databasegrant"
 	"Orpbal/ent/group"
 	"Orpbal/ent/groupmembership"
+	"Orpbal/ent/migration"
 	"Orpbal/ent/platformuser"
 	"Orpbal/ent/schema"
 	"Orpbal/ent/session"
@@ -93,6 +94,24 @@ func init() {
 	groupmembershipDescCreatedAt := groupmembershipFields[2].Descriptor()
 	// groupmembership.DefaultCreatedAt holds the default value on creation for the created_at field.
 	groupmembership.DefaultCreatedAt = groupmembershipDescCreatedAt.Default.(func() time.Time)
+	migrationFields := schema.Migration{}.Fields()
+	_ = migrationFields
+	// migrationDescConnectionID is the schema descriptor for connection_id field.
+	migrationDescConnectionID := migrationFields[0].Descriptor()
+	// migration.ConnectionIDValidator is a validator for the "connection_id" field. It is called by the builders before save.
+	migration.ConnectionIDValidator = migrationDescConnectionID.Validators[0].(func(int) error)
+	// migrationDescVersion is the schema descriptor for version field.
+	migrationDescVersion := migrationFields[1].Descriptor()
+	// migration.VersionValidator is a validator for the "version" field. It is called by the builders before save.
+	migration.VersionValidator = migrationDescVersion.Validators[0].(func(int) error)
+	// migrationDescExecutorID is the schema descriptor for executor_id field.
+	migrationDescExecutorID := migrationFields[3].Descriptor()
+	// migration.ExecutorIDValidator is a validator for the "executor_id" field. It is called by the builders before save.
+	migration.ExecutorIDValidator = migrationDescExecutorID.Validators[0].(func(int) error)
+	// migrationDescExecutedAt is the schema descriptor for executed_at field.
+	migrationDescExecutedAt := migrationFields[4].Descriptor()
+	// migration.DefaultExecutedAt holds the default value on creation for the executed_at field.
+	migration.DefaultExecutedAt = migrationDescExecutedAt.Default.(func() time.Time)
 	platformuserFields := schema.PlatformUser{}.Fields()
 	_ = platformuserFields
 	// platformuserDescUsername is the schema descriptor for username field.

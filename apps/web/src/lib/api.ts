@@ -129,3 +129,63 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<Ap
 
 	return { status: response.status, data: parsed as T, setCookies };
 }
+
+export interface SchemaColumn {
+	name: string;
+	type: string;
+	is_nullable: boolean;
+}
+
+export interface SchemaConstraint {
+	name: string;
+	type: string;
+	columns: string[];
+	referenced_table?: string | null;
+	referenced_columns?: string[] | null;
+}
+
+export interface SchemaIndex {
+	name: string;
+	columns: string[];
+	is_unique: boolean;
+}
+
+export interface SchemaTable {
+	name: string;
+	columns: SchemaColumn[];
+	constraints?: SchemaConstraint[];
+	indexes?: SchemaIndex[];
+}
+
+export interface SchemaTables {
+	schema: string;
+	tables: SchemaTable[];
+}
+
+export interface DatabaseSchema {
+	schemas: SchemaTables[];
+}
+
+export interface QueryResult {
+	columns: string[];
+	rows: (unknown | null)[][];
+}
+
+export interface Migration {
+	id: number;
+	connection_id: number;
+	version: number;
+	sql: string;
+	executor_id: number;
+	status: "pending" | "success" | "failed";
+	executed_at: string;
+}
+
+export interface CreateMigrationRequest {
+	sql: string;
+}
+
+export interface ExecuteQueryRequest {
+	sql: string;
+	limit?: number;
+}
