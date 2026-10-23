@@ -284,12 +284,13 @@ func TestConnectionVerificationAndSecrets(t *testing.T) {
 		t.Fatalf("bad update status = %d, body = %s", rec.Code, rec.Body.String())
 	}
 
-	// The failed update must not have persisted the bad host.
+	// The failed update must not have persisted the bad host. The test database
+	// itself runs on 127.0.0.1, so port is the field that distinguishes the bad values.
 	stored, err := e.client.DatabaseConnection.Get(context.Background(), connection.Id)
 	if err != nil {
 		t.Fatalf("get stored connection: %v", err)
 	}
-	if stored.Host == "127.0.0.1" {
+	if stored.Port == 1 {
 		t.Fatal("failed verification persisted the new host")
 	}
 }

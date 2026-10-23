@@ -22,6 +22,7 @@
     "setup:server": "bash scripts/native/task-2.sh",
     "check:server": "bash scripts/native/task-3.sh",
     "test:server": "bash scripts/native/task-3.sh",
+    "test:integration": "bash scripts/test-integration.sh",
     "setup:part:backend:go:gin": "bash scripts/native/task-2.sh",
     "dev:part:backend:go:gin": "bash scripts/native/task-1.sh",
     "check:part:backend:go:gin": "bash scripts/native/task-3.sh",

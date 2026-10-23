@@ -348,4 +348,42 @@ export const server = {
 				);
 			}),
 	}),
+
+	createMigration: defineAction({
+		accept: "form",
+		input: z.object({
+			id,
+			sql: z.string().min(1).max(100000),
+			csrf_token: csrf,
+		}),
+		handler: (input, context) =>
+			run(async () => {
+				await call(
+					context,
+					`/databases/${input.id}/migrations`,
+					"POST",
+					{ sql: input.sql },
+					input.csrf_token,
+				);
+			}),
+	}),
+
+	executeMigration: defineAction({
+		accept: "form",
+		input: z.object({
+			id,
+			migration_id: id,
+			csrf_token: csrf,
+		}),
+		handler: (input, context) =>
+			run(async () => {
+				await call(
+					context,
+					`/databases/${input.id}/migrations/${input.migration_id}/execute`,
+					"POST",
+					undefined,
+					input.csrf_token,
+				);
+			}),
+	}),
 };

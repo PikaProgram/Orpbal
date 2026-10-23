@@ -191,7 +191,8 @@ func buildSchema(cols []string, colRows, constraintRows, indexRows [][]any) api.
 			bySchema[schemaName] = st
 			order = append(order, schemaName)
 		}
-		table := findTable(st.Tables, tableName)
+		var table *api.SchemaTable
+		table, st.Tables = findTable(st.Tables, tableName)
 		table.Columns = append(table.Columns, api.SchemaColumn{
 			Name:       toString(row[2]),
 			Type:       toString(row[3]),
@@ -205,13 +206,16 @@ func buildSchema(cols []string, colRows, constraintRows, indexRows [][]any) api.
 		if !ok {
 			continue
 		}
-		table := findTable(st.Tables, tableName)
+		var table *api.SchemaTable
+		table, st.Tables = findTable(st.Tables, tableName)
 		if table.Constraints == nil {
 			empty := []api.SchemaConstraint{}
 			table.Constraints = &empty
 		}
 		constraints := *table.Constraints
-		constraint := findConstraint(constraints, toString(row[3]))
+		var constraint *api.SchemaConstraint
+		constraint, constraints = findConstraint(constraints, toString(row[3]))
+		constraint.Type = toString(row[2])
 		if len(constraint.Columns) == 0 || constraint.Columns[len(constraint.Columns)-1] != toString(row[4]) {
 			constraint.Columns = append(constraint.Columns, toString(row[4]))
 		}
@@ -228,7 +232,8 @@ func buildSchema(cols []string, colRows, constraintRows, indexRows [][]any) api.
 		if !ok {
 			continue
 		}
-		table := findTable(st.Tables, tableName)
+		var table *api.SchemaTable
+		table, st.Tables = findTable(st.Tables, tableName)
 		if table.Indexes == nil {
 			empty := []api.SchemaIndex{}
 			table.Indexes = &empty
@@ -246,10 +251,12 @@ func buildSchema(cols []string, colRows, constraintRows, indexRows [][]any) api.
 	return api.DatabaseSchema{Schemas: schemas}
 }
 
-func findConstraint(constraints []api.SchemaConstraint, name string) *api.SchemaConstraint {
+// findConstraint returns the constraint with name, appending an empty one if
+// absent. The caller must use the returned slice (append may reallocate).
+func findConstraint(constraints []api.SchemaConstraint, name string) (*api.SchemaConstraint, []api.SchemaConstraint) {
 	for i := range constraints {
 		if constraints[i].Name == name {
-			return &constraints[i]
+			return &constraints[i], constraints
 		}
 	}
 	constraints = append(constraints, api.SchemaConstraint{
@@ -257,17 +264,19 @@ func findConstraint(constraints []api.SchemaConstraint, name string) *api.Schema
 		Type:    "UNKNOWN",
 		Columns: []string{},
 	})
-	return &constraints[len(constraints)-1]
+	return &constraints[len(constraints)-1], constraints
 }
 
-func findTable(tables []api.SchemaTable, name string) *api.SchemaTable {
+// findTable returns the table with name, appending an empty one if absent.
+// The caller must use the returned slice (append may reallocate).
+func findTable(tables []api.SchemaTable, name string) (*api.SchemaTable, []api.SchemaTable) {
 	for i := range tables {
 		if tables[i].Name == name {
-			return &tables[i]
+			return &tables[i], tables
 		}
 	}
 	tables = append(tables, api.SchemaTable{Name: name, Columns: []api.SchemaColumn{}})
-	return &tables[len(tables)-1]
+	return &tables[len(tables)-1], tables
 }
 
 func toString(v any) string {
