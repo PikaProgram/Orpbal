@@ -36,7 +36,11 @@ const databases = result.data;
 					<tbody class="divide-y-2 divide-seam bg-zinc-950">
 						{databases.map((database) => (
 							<tr>
-								<td class="px-4 py-3 font-semibold">{database.name}</td>
+								<td class="px-4 py-3 font-semibold">
+								<a class="text-accent hover:underline" href={`/databases/${database.connection_id}`}>
+									{database.name}
+								</a>
+							</td>
 								<td class="mono px-4 py-3">{database.host}</td>
 								<td class="mono px-4 py-3">{database.database_name}</td>
 								<td class="px-4 py-3">
