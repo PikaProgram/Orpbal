@@ -151,8 +151,9 @@ type ErrorResponse struct {
 
 // ExecuteQueryRequest defines model for ExecuteQueryRequest.
 type ExecuteQueryRequest struct {
-	Limit *int   `json:"limit,omitempty"`
-	Sql   string `json:"sql"`
+	Limit  *int   `json:"limit,omitempty"`
+	Offset *int   `json:"offset,omitempty"`
+	Sql    string `json:"sql"`
 }
 
 // Grant defines model for Grant.
@@ -198,13 +199,14 @@ type LoginRequest struct {
 
 // Migration defines model for Migration.
 type Migration struct {
-	ConnectionId int             `json:"connection_id"`
-	ExecutedAt   time.Time       `json:"executed_at"`
-	ExecutorId   int             `json:"executor_id"`
-	Id           int             `json:"id"`
-	Sql          string          `json:"sql"`
-	Status       MigrationStatus `json:"status"`
-	Version      int             `json:"version"`
+	ConnectionId     int             `json:"connection_id"`
+	ExecutedAt       time.Time       `json:"executed_at"`
+	ExecutorId       int             `json:"executor_id"`
+	ExecutorUsername string          `json:"executor_username"`
+	Id               int             `json:"id"`
+	Sql              string          `json:"sql"`
+	Status           MigrationStatus `json:"status"`
+	Version          int             `json:"version"`
 }
 
 // MigrationStatus defines model for Migration.Status.
@@ -451,6 +453,12 @@ type CreateMigrationParams struct {
 	XCSRFToken CsrfToken `json:"X-CSRF-Token"`
 }
 
+// UpdateMigrationParams defines parameters for UpdateMigration.
+type UpdateMigrationParams struct {
+	// XCSRFToken Per-session CSRF token from GET /auth/session
+	XCSRFToken CsrfToken `json:"X-CSRF-Token"`
+}
+
 // ExecuteMigrationParams defines parameters for ExecuteMigration.
 type ExecuteMigrationParams struct {
 	// XCSRFToken Per-session CSRF token from GET /auth/session
@@ -495,6 +503,9 @@ type ChangePasswordJSONRequestBody = ChangePasswordRequest
 
 // CreateMigrationJSONRequestBody defines body for CreateMigration for application/json ContentType.
 type CreateMigrationJSONRequestBody = CreateMigrationRequest
+
+// UpdateMigrationJSONRequestBody defines body for UpdateMigration for application/json ContentType.
+type UpdateMigrationJSONRequestBody = CreateMigrationRequest
 
 // ExecuteDatabaseQueryJSONRequestBody defines body for ExecuteDatabaseQuery for application/json ContentType.
 type ExecuteDatabaseQueryJSONRequestBody = ExecuteQueryRequest
@@ -576,6 +587,9 @@ type ServerInterface interface {
 
 	// (POST /databases/{id}/migrations)
 	CreateMigration(c *gin.Context, id Id, params CreateMigrationParams)
+
+	// (PATCH /databases/{id}/migrations/{migrationId})
+	UpdateMigration(c *gin.Context, id Id, migrationId int, params UpdateMigrationParams)
 
 	// (POST /databases/{id}/migrations/{migrationId}/execute)
 	ExecuteMigration(c *gin.Context, id Id, migrationId int, params ExecuteMigrationParams)
@@ -1621,6 +1635,69 @@ func (siw *ServerInterfaceWrapper) CreateMigration(c *gin.Context) {
 	siw.Handler.CreateMigration(c, id, params)
 }
 
+// UpdateMigration operation middleware
+func (siw *ServerInterfaceWrapper) UpdateMigration(c *gin.Context) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", c.Param("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter id: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	// ------------- Path parameter "migrationId" -------------
+	var migrationId int
+
+	err = runtime.BindStyledParameterWithOptions("simple", "migrationId", c.Param("migrationId"), &migrationId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter migrationId: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	c.Set(string(CookieAuthScopes), []string{})
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateMigrationParams
+
+	headers := c.Request.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandler(c, fmt.Errorf("Expected one value for X-CSRF-Token, got %d", n), http.StatusBadRequest)
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter X-CSRF-Token: %w", err), http.StatusBadRequest)
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		siw.ErrorHandler(c, fmt.Errorf("Header parameter X-CSRF-Token is required, but not found"), http.StatusBadRequest)
+		return
+	}
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.UpdateMigration(c, id, migrationId, params)
+}
+
 // ExecuteMigration operation middleware
 func (siw *ServerInterfaceWrapper) ExecuteMigration(c *gin.Context) {
 
@@ -1845,6 +1922,7 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 	router.GET(options.BaseURL+"/auth/session", wrapper.GetSession)
 	router.GET(options.BaseURL+"/databases/:id/migrations", wrapper.ListMigrations)
 	router.POST(options.BaseURL+"/databases/:id/migrations", wrapper.CreateMigration)
+	router.PATCH(options.BaseURL+"/databases/:id/migrations/:migrationId", wrapper.UpdateMigration)
 	router.POST(options.BaseURL+"/databases/:id/migrations/:migrationId/execute", wrapper.ExecuteMigration)
 	router.POST(options.BaseURL+"/databases/:id/query", wrapper.ExecuteDatabaseQuery)
 	router.GET(options.BaseURL+"/databases/:id/schema", wrapper.GetDatabaseSchema)

@@ -79,7 +79,20 @@ func (h *Handler) ExecuteDatabaseQuery(c *gin.Context, id api.Id, params api.Exe
 	if body.Limit != nil {
 		limit = *body.Limit
 	}
-	columns, rows, err := h.viewer.Query(c.Request.Context(), dsnStr, body.Sql, limit)
+	// Offset is applied in Go while scanning, so any SQL statement paginates
+	// without the handler having to wrap user SQL.
+	offset := 0
+	if body.Offset != nil && *body.Offset > 0 {
+		offset = *body.Offset
+	}
+	columns, rows, err := h.viewer.Query(c.Request.Context(), dsnStr, body.Sql, limit+offset)
+	if err == nil && offset > 0 {
+		if offset >= len(rows) {
+			rows = nil
+		} else {
+			rows = rows[offset:]
+		}
+	}
 	if err != nil {
 		writeError(c, http.StatusBadGateway, "target_unreachable", err.Error())
 		return

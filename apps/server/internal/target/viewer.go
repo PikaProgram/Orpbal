@@ -27,6 +27,16 @@ func NewViewer(open func(dsn string) (*sql.DB, error)) *Viewer {
 	return &Viewer{open: open}
 }
 
+// Invalidate closes and forgets the cached pool for dsn so the next use
+// reconnects with the connection's current settings.
+func (v *Viewer) Invalidate(dsn string) {
+	if db, ok := v.pools.LoadAndDelete(dsn); ok {
+		if closer, ok := db.(interface{ Close() error }); ok {
+			_ = closer.Close()
+		}
+	}
+}
+
 // pool returns the cached connection for dsn, opening and caching it on first use.
 func (v *Viewer) pool(dsn string) (*sql.DB, error) {
 	if db, ok := v.pools.Load(dsn); ok {

@@ -651,6 +651,44 @@ paths:
           $ref: "#/components/responses/TargetError"
         "500":
           $ref: "#/components/responses/InternalError"
+  /databases/{id}/migrations/{migrationId}:
+    patch:
+      operationId: updateMigration
+      tags: [viewer]
+      parameters:
+        - $ref: "#/components/parameters/Id"
+        - name: migrationId
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+        - $ref: "#/components/parameters/CsrfToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMigrationRequest"
+      responses:
+        "200":
+          description: Pending migration updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Migration"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
   /admin/grants:
     get:
       operationId: listGrants
@@ -1151,6 +1189,11 @@ components:
           minimum: 1
           maximum: 1000
           default: 100
+        offset:
+          type: integer
+          minimum: 0
+          maximum: 1000000
+          default: 0
     QueryResult:
       type: object
       required: [columns, rows]
@@ -1167,7 +1210,7 @@ components:
             description: Row values; null entries are SQL NULLs.
     Migration:
       type: object
-      required: [id, connection_id, version, sql, executor_id, status, executed_at]
+      required: [id, connection_id, version, sql, executor_id, executor_username, status, executed_at]
       properties:
         id:
           type: integer
@@ -1179,6 +1222,8 @@ components:
           type: string
         executor_id:
           type: integer
+        executor_username:
+          type: string
         status:
           type: string
           enum: [pending, success, failed]

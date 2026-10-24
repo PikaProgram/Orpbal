@@ -1,9 +1,8 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import url("https://fonts.googleapis.com/css2?family=Titillium+Web:wght@400;600;700&display=swap");
 
 @custom-variant dark (&:is(.dark *));
-
-@import url("https://fonts.googleapis.com/css2?family=Titillium+Web:wght@400;600;700&display=swap");
 
 @theme {
   --color-background: #171a21;
@@ -96,48 +95,11 @@
   background: #343c4d;
 }
 
-/* Conveyor rows: brass sweep on hover, like a belt moving */
-table tbody tr {
-  transition: background-color 120ms;
-}
-table tbody tr:hover {
-  background: rgba(241, 161, 60, 0.06);
-}
-
 /* Machine identifiers: hosts, db names */
 .mono {
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
   font-size: 0.8125rem;
   color: var(--color-dim);
-}
-
-/* Conveyor strip under the header: the one signature motif. Belt scrolls left, items ride it. */
-.conveyor {
-  position: relative;
-  height: 12px;
-  overflow: hidden;
-  background: var(--color-zinc-950);
-  border-bottom: 2px solid var(--color-seam);
-}
-.conveyor-belt {
-  position: absolute;
-  inset: 0;
-  background-image: repeating-linear-gradient(
-    90deg,
-    var(--color-seam) 0 10px,
-    transparent 10px 22px
-  );
-  animation: belt 1.2s linear infinite;
-}
-@keyframes belt {
-  to {
-    transform: translateX(-22px);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .conveyor-belt {
-    animation: none;
-  }
 }
 
 /* Focus: brass outline, visible for keyboard nav */

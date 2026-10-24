@@ -89,6 +89,19 @@ TEST_DATABASE_URL='postgres://postgres:postgres@localhost:5432/Orpbal?sslmode=di
 
 Integration tests create isolated schemas and drop them afterwards. CI runs the same checks with a `postgres:16` service.
 
+## Sessions
+
+Session policy lives in `apps/server/internal/security/session/policy.go`:
+
+| Setting | Value | Meaning |
+|---|---|---|
+| Idle timeout | 30 min | Session ends after 30 minutes without a request |
+| Absolute expiration | 8 h | Session ends 8 hours after login, even if active |
+| Rotation interval | 15 min | Session ID rotates every 15 minutes of activity |
+| Grace period | 30 s | The previous session ID stays valid for 30 s after rotation |
+
+Rotation never extends absolute expiration. Logout and access revocation delete the session server-side; after absolute expiration the user must log in again.
+
 ## Connections
 
 - **Go Gin** (default client connection): `http://localhost:8080`, health endpoint `http://localhost:8080/health`.

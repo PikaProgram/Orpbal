@@ -177,6 +177,7 @@ export interface Migration {
 	version: number;
 	sql: string;
 	executor_id: number;
+	executor_username: string;
 	status: "pending" | "success" | "failed";
 	executed_at: string;
 }
@@ -188,4 +189,5 @@ export interface CreateMigrationRequest {
 export interface ExecuteQueryRequest {
 	sql: string;
 	limit?: number;
+	offset?: number;
 }

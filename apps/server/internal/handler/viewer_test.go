@@ -107,7 +107,6 @@ func TestViewerSchemaDataAndDenial(t *testing.T) {
 		t.Fatalf("fixture table %q missing from schema response: %+v", table, schema)
 	}
 
-	// Data browse returns the seeded rows in a read-only query.
 	// Empty SQL is rejected.
 	rec = env.do(http.MethodPost, fmt.Sprintf("/api/databases/%d/query", connectionID),
 		map[string]any{"sql": "  "}, userCookie, userCSRF)
@@ -115,6 +114,8 @@ func TestViewerSchemaDataAndDenial(t *testing.T) {
 		t.Fatalf("empty query sql status = %d, want 400", rec.Code)
 	}
 
+	// Data browse returns the seeded rows in a read-only query, and offset
+	// paginates past the first row.
 	rec = env.do(http.MethodPost, fmt.Sprintf("/api/databases/%d/query", connectionID),
 		map[string]any{"sql": fmt.Sprintf("SELECT * FROM %s", table), "limit": 10}, userCookie, userCSRF)
 	if rec.Code != http.StatusOK {
@@ -123,6 +124,15 @@ func TestViewerSchemaDataAndDenial(t *testing.T) {
 	result := decode[api.QueryResult](t, rec)
 	if len(result.Rows) != 3 {
 		t.Fatalf("query returned %d rows, want 3", len(result.Rows))
+	}
+	rec = env.do(http.MethodPost, fmt.Sprintf("/api/databases/%d/query", connectionID),
+		map[string]any{"sql": fmt.Sprintf("SELECT * FROM %s", table), "limit": 10, "offset": 1}, userCookie, userCSRF)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("offset query status = %d", rec.Code)
+	}
+	offsetRows := decode[api.QueryResult](t, rec)
+	if len(offsetRows.Rows) != 2 {
+		t.Fatalf("offset query returned %d rows, want 2", len(offsetRows.Rows))
 	}
 
 	// Writes are rejected by the read-only transaction.
@@ -241,6 +251,17 @@ func TestMigrationLifecycle(t *testing.T) {
 	if failedStatus != "failed" {
 		t.Fatalf("failed migration status = %q, want failed", failedStatus)
 	}
+
+	// A failed migration can be fixed: editing resets it to pending.
+	rec = env.do(http.MethodPatch, fmt.Sprintf("/api/databases/%d/migrations/%d", connectionID, bad.Id),
+		map[string]any{"sql": "SELECT 1"}, userCookie, userCSRF)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("fix failed migration status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	reopened := decode[api.Migration](t, rec)
+	if reopened.Status != "pending" {
+		t.Fatalf("reopened migration status = %s, want pending", reopened.Status)
+	}
 	var exists int
 	if err := env.adminDB.QueryRow(
 		fmt.Sprintf("SELECT count(*) FROM information_schema.tables WHERE table_name = '%s'", badTable),
@@ -251,6 +272,22 @@ func TestMigrationLifecycle(t *testing.T) {
 		t.Fatalf("failed migration rolled back but table %s exists", badTable)
 	}
 
+	// A pending migration can be edited; executed ones cannot.
+	rec = env.do(http.MethodPatch, fmt.Sprintf("/api/databases/%d/migrations/%d", connectionID, second.Id),
+		map[string]any{"sql": "SELECT 1"}, userCookie, userCSRF)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("update pending migration status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	updated := decode[api.Migration](t, rec)
+	if updated.Sql != "SELECT 1" {
+		t.Fatalf("updated sql = %q, want SELECT 1", updated.Sql)
+	}
+	rec = env.do(http.MethodPatch, fmt.Sprintf("/api/databases/%d/migrations/%d", connectionID, first.Id),
+		map[string]any{"sql": "SELECT 1"}, userCookie, userCSRF)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("update executed migration status = %d, want 409", rec.Code)
+	}
+
 	// History is visible to the granted user (view_edit) and lists all versions.
 	rec = env.do(http.MethodGet, fmt.Sprintf("/api/databases/%d/migrations", connectionID), nil, userCookie, "")
 	if rec.Code != http.StatusOK {
@@ -259,6 +296,11 @@ func TestMigrationLifecycle(t *testing.T) {
 	history = decode[[]api.Migration](t, rec)
 	if len(history) != 3 {
 		t.Fatalf("migration history has %d entries, want 3", len(history))
+	}
+	for _, entry := range history {
+		if entry.ExecutorUsername == "" {
+			t.Fatalf("migration %d has no executor username", entry.Id)
+		}
 	}
 
 	// A view_only user can read history but cannot create or execute.
@@ -279,5 +321,10 @@ func TestMigrationLifecycle(t *testing.T) {
 		nil, viewOnlyCookie, viewOnlyCSRF)
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("view_only execute migration status = %d, want 403", rec.Code)
+	}
+	rec = env.do(http.MethodPatch, fmt.Sprintf("/api/databases/%d/migrations/%d", connectionID, second.Id),
+		map[string]any{"sql": "SELECT 1"}, viewOnlyCookie, viewOnlyCSRF)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("view_only update migration status = %d, want 403", rec.Code)
 	}
 }

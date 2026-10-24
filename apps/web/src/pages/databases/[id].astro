@@ -9,11 +9,13 @@ import { requireSession } from "@/lib/session";
 const auth = await requireSession(Astro);
 if (auth instanceof Response) return auth;
 
-const outcome = actionResults(Astro, [actions.createMigration, actions.executeMigration]);
+const outcome = actionResults(Astro, [actions.createMigration, actions.updateMigration, actions.executeMigration]);
 if (outcome.succeeded) return Astro.redirect(Astro.url.pathname + Astro.url.search);
 
 const connectionId = Astro.params.id;
 const selected = Astro.url.searchParams.get("table") ?? "";
+const editMigrationId = Number(Astro.url.searchParams.get("edit") ?? "");
+const dataOffset = Math.max(0, Number(Astro.url.searchParams.get("offset") ?? "") || 0);
 
 // Fetch the user's access list to resolve the connection and access level.
 const mineResult = await api<MyDatabase[]>("/me/databases", { cookie: auth.cookie });
@@ -55,12 +57,12 @@ if (selectedSchema && selectedTable) {
 	// that is not a plain identifier before building the browse query.
 	const safe = (value: string) => /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(value);
 	if (safe(selectedSchema) && safe(selectedTable)) {
-		const sql = `SELECT * FROM "${selectedSchema}"."${selectedTable}" LIMIT 50`;
+		const sql = `SELECT * FROM "${selectedSchema}"."${selectedTable}"`;
 		const result = await api<QueryResult>(`/databases/${connectionId}/query`, {
 			method: "POST",
 			cookie: auth.cookie,
 			csrf: auth.session.csrf_token,
-			body: { sql, limit: 50 },
+			body: { sql, limit: 50, offset: dataOffset },
 		});
 		if (result.status === 200) {
 			data = result.data;
@@ -217,7 +219,8 @@ if (database) {
 									</div>
 								)}
 								{data && (
-									<div class="overflow-x-auto">
+									<>
+										<div class="overflow-x-auto">
 										<table class="w-full text-left text-xs">
 											<thead class="bg-plate-raised text-dim">
 												<tr>
@@ -246,6 +249,26 @@ if (database) {
 											</tbody>
 										</table>
 									</div>
+										{(dataOffset > 0 || data.rows.length === 50) && (
+											<div class="flex items-center justify-between border-t border-seam px-3 py-2 text-xs">
+												{dataOffset > 0 ? (
+													<a
+														href={`?table=${encodeURIComponent(selected)}&offset=${Math.max(0, dataOffset - 50)}`}
+														class="text-dim underline"
+													>
+														Previous
+													</a>
+												) : (
+													<span />
+												)}
+												{data.rows.length === 50 && (
+													<a href={`?table=${encodeURIComponent(selected)}&offset=${dataOffset + 50}`} class="text-dim underline">
+														Next
+													</a>
+												)}
+											</div>
+										)}
+									</>
 								)}
 							</section>
 						</div>
@@ -293,6 +316,7 @@ if (database) {
 								<tr>
 									<th class="px-3 py-2 font-semibold">Version</th>
 									<th class="px-3 py-2 font-semibold">SQL</th>
+									<th class="px-3 py-2 font-semibold">Executor</th>
 									<th class="px-3 py-2 font-semibold">Status</th>
 									<th class="px-3 py-2 font-semibold">Executed at</th>
 									{canEdit && <th class="px-3 py-2 font-semibold">Actions</th>}
@@ -302,9 +326,25 @@ if (database) {
 								{migrations.map((migration) => (
 									<tr>
 										<td class="mono px-3 py-2 font-semibold">{migration.version}</td>
-										<td class="mono max-w-md truncate px-3 py-2" title={migration.sql}>
-											{migration.sql}
-										</td>
+										{migration.status !== "success" && canEdit && editMigrationId === migration.id ? (
+											<td class="px-3 py-2">
+												<form method="POST" action={actions.updateMigration} class="grid gap-2">
+													<input type="hidden" name="csrf_token" value={csrf} />
+													<input type="hidden" name="id" value={connectionId} />
+													<input type="hidden" name="migration_id" value={migration.id} />
+													<textarea name="sql" required rows="4" class="mono field w-full">{migration.sql}</textarea>
+													<div class="flex items-center gap-2">
+														<button type="submit" class="btn-brass px-2 py-1 text-xs">Save</button>
+														<a href={`?table=${encodeURIComponent(selected)}`} class="px-2 py-1 text-xs text-dim underline">Cancel</a>
+													</div>
+												</form>
+											</td>
+										) : (
+											<td class="mono max-w-md truncate px-3 py-2" title={migration.sql}>
+												{migration.sql}
+											</td>
+										)}
+										<td class="mono px-3 py-2 text-dim">{migration.executor_username || `#${migration.executor_id}`}</td>
 										<td class="px-3 py-2">
 											<span
 												class={`border px-2 py-1 text-xs ${
@@ -323,15 +363,25 @@ if (database) {
 										</td>
 										{canEdit && (
 											<td class="px-3 py-2">
-												{migration.status === "pending" && (
-													<form method="POST" action={actions.executeMigration}>
-														<input type="hidden" name="csrf_token" value={csrf} />
-														<input type="hidden" name="id" value={connectionId} />
-														<input type="hidden" name="migration_id" value={migration.id} />
-														<button type="submit" class="btn-brass px-2 py-1 text-xs">
-															Execute
-														</button>
-													</form>
+												{migration.status !== "success" && (
+													<div class="flex items-center gap-2">
+														{migration.status === "pending" && (
+															<form method="POST" action={actions.executeMigration}>
+																<input type="hidden" name="csrf_token" value={csrf} />
+																<input type="hidden" name="id" value={connectionId} />
+																<input type="hidden" name="migration_id" value={migration.id} />
+																<button type="submit" class="btn-brass px-2 py-1 text-xs">
+																	Execute
+																</button>
+															</form>
+														)}
+														<a
+															href={`?table=${encodeURIComponent(selected)}&edit=${migration.id}`}
+															class="px-2 py-1 text-xs text-dim underline"
+														>
+															{migration.status === "failed" ? "Fix" : "Edit"}
+														</a>
+													</div>
 												)}
 											</td>
 										)}

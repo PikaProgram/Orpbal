@@ -50,3 +50,26 @@ func TestExecuteRejectsEmpty(t *testing.T) {
 		t.Fatal("expected empty statement to be rejected")
 	}
 }
+
+func TestInvalidate(t *testing.T) {
+	v := NewViewer(func(string) (*sql.DB, error) { return nil, nil })
+	if v.Invalidate("missing-dsn"); false {
+		t.Fatal("unreachable")
+	}
+	closed := false
+	v.pools.Store("dsn", closedDB{closed: &closed})
+	v.Invalidate("dsn")
+	if !closed {
+		t.Fatal("Invalidate did not close the cached pool")
+	}
+	if _, ok := v.pools.Load("dsn"); ok {
+		t.Fatal("Invalidate did not forget the cached pool")
+	}
+}
+
+type closedDB struct {
+	*sql.DB
+	closed *bool
+}
+
+func (c closedDB) Close() error { *c.closed = true; return nil }
