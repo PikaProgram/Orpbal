@@ -565,6 +565,90 @@ paths:
           $ref: "#/components/responses/TargetError"
         "500":
           $ref: "#/components/responses/InternalError"
+  /databases/{id}/table-counts:
+    get:
+      operationId: listTableCounts
+      tags: [viewer]
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Exact and estimated row counts per table
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TableCount"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "502":
+          $ref: "#/components/responses/TargetError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /databases/{id}/rows:
+    post:
+      operationId: mutateRows
+      tags: [viewer]
+      parameters:
+        - $ref: "#/components/parameters/Id"
+        - $ref: "#/components/parameters/CsrfToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MutateRowsRequest"
+      responses:
+        "200":
+          description: Mutation applied; returns the affected table's fresh rows is not provided, only the count
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MutationResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "502":
+          $ref: "#/components/responses/TargetError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /databases/{id}/migrations/{migrationId}/diff:
+    get:
+      operationId: getMigrationDiff
+      tags: [viewer]
+      parameters:
+        - $ref: "#/components/parameters/Id"
+        - name: migrationId
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: Schema changes recorded for a successful migration; empty changes for pending or failed migrations
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MigrationDiff"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
   /databases/{id}/migrations:
     get:
       operationId: listMigrations
@@ -1187,7 +1271,7 @@ components:
         limit:
           type: integer
           minimum: 1
-          maximum: 1000
+          maximum: 10000
           default: 100
         offset:
           type: integer
@@ -1230,6 +1314,77 @@ components:
         executed_at:
           type: string
           format: date-time
+    TableCount:
+      type: object
+      required: [schema, table, columns, estimate]
+      properties:
+        schema:
+          type: string
+        table:
+          type: string
+        columns:
+          type: integer
+        estimate:
+          type: integer
+          nullable: true
+          description: Estimated row count from pg_class.reltuples; null when the planner has no stats yet.
+    MutateRowsRequest:
+      type: object
+      required: [schema, table, op]
+      properties:
+        schema:
+          type: string
+        table:
+          type: string
+        op:
+          type: string
+          enum: [insert, update, delete]
+        values:
+          type: object
+          description: Column values for insert, or changed columns for update.
+          additionalProperties: true
+        pk:
+          type: object
+          description: Primary key column values identifying the target row; required for update and delete.
+          additionalProperties: true
+    MutationResult:
+      type: object
+      required: [affected]
+      properties:
+        affected:
+          type: integer
+    MigrationDiff:
+      type: object
+      required: [migration_id, status, changes]
+      properties:
+        migration_id:
+          type: integer
+        status:
+          type: string
+          enum: [pending, success, failed]
+        changes:
+          type: array
+          items:
+            $ref: "#/components/schemas/SchemaChange"
+    SchemaChange:
+      type: object
+      required: [kind, object_type, object_id, action]
+      properties:
+        kind:
+          type: string
+          description: Free-form grouping label shown in the UI (e.g. the schema name).
+        object_type:
+          type: string
+          enum: [table, column, constraint, index]
+        object_id:
+          type: string
+          description: Qualified object name, e.g. public.notes.body
+        action:
+          type: string
+          enum: [added, removed, changed]
+        detail:
+          type: string
+          description: Human-readable rendering of the change, e.g. "text NOT NULL → integer NULL".
     CreateMigrationRequest:
       type: object
       required: [sql]

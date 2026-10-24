@@ -186,6 +186,30 @@ export interface CreateMigrationRequest {
 	sql: string;
 }
 
+export interface TableCount {
+	schema: string;
+	table: string;
+	columns: number;
+	estimate: number | null;
+}
+
+export interface MutationResult {
+	affected: number;
+}
+
+export interface SchemaChange {
+	object_type: "table" | "column" | "constraint" | "index";
+	object_id: string;
+	action: "added" | "removed" | "changed";
+	detail?: string | null;
+}
+
+export interface MigrationDiff {
+	migration_id: number;
+	status: "pending" | "success" | "failed";
+	changes: SchemaChange[];
+}
+
 export interface ExecuteQueryRequest {
 	sql: string;
 	limit?: number;

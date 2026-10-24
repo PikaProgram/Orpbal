@@ -36,19 +36,61 @@ func (e AccessLevel) Valid() bool {
 
 // Defines values for MigrationStatus.
 const (
-	Failed  MigrationStatus = "failed"
-	Pending MigrationStatus = "pending"
-	Success MigrationStatus = "success"
+	MigrationStatusFailed  MigrationStatus = "failed"
+	MigrationStatusPending MigrationStatus = "pending"
+	MigrationStatusSuccess MigrationStatus = "success"
 )
 
 // Valid indicates whether the value is a known member of the MigrationStatus enum.
 func (e MigrationStatus) Valid() bool {
 	switch e {
-	case Failed:
+	case MigrationStatusFailed:
 		return true
-	case Pending:
+	case MigrationStatusPending:
 		return true
-	case Success:
+	case MigrationStatusSuccess:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MigrationDiffStatus.
+const (
+	MigrationDiffStatusFailed  MigrationDiffStatus = "failed"
+	MigrationDiffStatusPending MigrationDiffStatus = "pending"
+	MigrationDiffStatusSuccess MigrationDiffStatus = "success"
+)
+
+// Valid indicates whether the value is a known member of the MigrationDiffStatus enum.
+func (e MigrationDiffStatus) Valid() bool {
+	switch e {
+	case MigrationDiffStatusFailed:
+		return true
+	case MigrationDiffStatusPending:
+		return true
+	case MigrationDiffStatusSuccess:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MutateRowsRequestOp.
+const (
+	Delete MutateRowsRequestOp = "delete"
+	Insert MutateRowsRequestOp = "insert"
+	Update MutateRowsRequestOp = "update"
+)
+
+// Valid indicates whether the value is a known member of the MutateRowsRequestOp enum.
+func (e MutateRowsRequestOp) Valid() bool {
+	switch e {
+	case Delete:
+		return true
+	case Insert:
+		return true
+	case Update:
 		return true
 	default:
 		return false
@@ -73,6 +115,51 @@ func (e SSLMode) Valid() bool {
 	case VerifyCa:
 		return true
 	case VerifyFull:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SchemaChangeAction.
+const (
+	Added   SchemaChangeAction = "added"
+	Changed SchemaChangeAction = "changed"
+	Removed SchemaChangeAction = "removed"
+)
+
+// Valid indicates whether the value is a known member of the SchemaChangeAction enum.
+func (e SchemaChangeAction) Valid() bool {
+	switch e {
+	case Added:
+		return true
+	case Changed:
+		return true
+	case Removed:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SchemaChangeObjectType.
+const (
+	Column     SchemaChangeObjectType = "column"
+	Constraint SchemaChangeObjectType = "constraint"
+	Index      SchemaChangeObjectType = "index"
+	Table      SchemaChangeObjectType = "table"
+)
+
+// Valid indicates whether the value is a known member of the SchemaChangeObjectType enum.
+func (e SchemaChangeObjectType) Valid() bool {
+	switch e {
+	case Column:
+		return true
+	case Constraint:
+		return true
+	case Index:
+		return true
+	case Table:
 		return true
 	default:
 		return false
@@ -212,6 +299,37 @@ type Migration struct {
 // MigrationStatus defines model for Migration.Status.
 type MigrationStatus string
 
+// MigrationDiff defines model for MigrationDiff.
+type MigrationDiff struct {
+	Changes     []SchemaChange      `json:"changes"`
+	MigrationId int                 `json:"migration_id"`
+	Status      MigrationDiffStatus `json:"status"`
+}
+
+// MigrationDiffStatus defines model for MigrationDiff.Status.
+type MigrationDiffStatus string
+
+// MutateRowsRequest defines model for MutateRowsRequest.
+type MutateRowsRequest struct {
+	Op MutateRowsRequestOp `json:"op"`
+
+	// Pk Primary key column values identifying the target row; required for update and delete.
+	Pk     *map[string]interface{} `json:"pk,omitempty"`
+	Schema string                  `json:"schema"`
+	Table  string                  `json:"table"`
+
+	// Values Column values for insert, or changed columns for update.
+	Values *map[string]interface{} `json:"values,omitempty"`
+}
+
+// MutateRowsRequestOp defines model for MutateRowsRequest.Op.
+type MutateRowsRequestOp string
+
+// MutationResult defines model for MutationResult.
+type MutationResult struct {
+	Affected int `json:"affected"`
+}
+
 // MyDatabase defines model for MyDatabase.
 type MyDatabase struct {
 	AccessLevel  AccessLevel `json:"access_level"`
@@ -234,6 +352,27 @@ type ResetPasswordRequest struct {
 
 // SSLMode defines model for SSLMode.
 type SSLMode string
+
+// SchemaChange defines model for SchemaChange.
+type SchemaChange struct {
+	Action SchemaChangeAction `json:"action"`
+
+	// Detail Human-readable rendering of the change, e.g. "text NOT NULL → integer NULL".
+	Detail *string `json:"detail,omitempty"`
+
+	// Kind Free-form grouping label shown in the UI (e.g. the schema name).
+	Kind string `json:"kind"`
+
+	// ObjectId Qualified object name, e.g. public.notes.body
+	ObjectId   string                 `json:"object_id"`
+	ObjectType SchemaChangeObjectType `json:"object_type"`
+}
+
+// SchemaChangeAction defines model for SchemaChange.Action.
+type SchemaChangeAction string
+
+// SchemaChangeObjectType defines model for SchemaChange.ObjectType.
+type SchemaChangeObjectType string
 
 // SchemaColumn defines model for SchemaColumn.
 type SchemaColumn struct {
@@ -283,6 +422,16 @@ type Session struct {
 // SetGrantRequest defines model for SetGrantRequest.
 type SetGrantRequest struct {
 	AccessLevel AccessLevel `json:"access_level"`
+}
+
+// TableCount defines model for TableCount.
+type TableCount struct {
+	Columns int `json:"columns"`
+
+	// Estimate Estimated row count from pg_class.reltuples; null when the planner has no stats yet.
+	Estimate *int   `json:"estimate"`
+	Schema   string `json:"schema"`
+	Table    string `json:"table"`
 }
 
 // UpdateConnectionRequest defines model for UpdateConnectionRequest.
@@ -471,6 +620,12 @@ type ExecuteDatabaseQueryParams struct {
 	XCSRFToken CsrfToken `json:"X-CSRF-Token"`
 }
 
+// MutateRowsParams defines parameters for MutateRows.
+type MutateRowsParams struct {
+	// XCSRFToken Per-session CSRF token from GET /auth/session
+	XCSRFToken CsrfToken `json:"X-CSRF-Token"`
+}
+
 // CreateDatabaseConnectionJSONRequestBody defines body for CreateDatabaseConnection for application/json ContentType.
 type CreateDatabaseConnectionJSONRequestBody = CreateConnectionRequest
 
@@ -509,6 +664,9 @@ type UpdateMigrationJSONRequestBody = CreateMigrationRequest
 
 // ExecuteDatabaseQueryJSONRequestBody defines body for ExecuteDatabaseQuery for application/json ContentType.
 type ExecuteDatabaseQueryJSONRequestBody = ExecuteQueryRequest
+
+// MutateRowsJSONRequestBody defines body for MutateRows for application/json ContentType.
+type MutateRowsJSONRequestBody = MutateRowsRequest
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -591,14 +749,23 @@ type ServerInterface interface {
 	// (PATCH /databases/{id}/migrations/{migrationId})
 	UpdateMigration(c *gin.Context, id Id, migrationId int, params UpdateMigrationParams)
 
+	// (GET /databases/{id}/migrations/{migrationId}/diff)
+	GetMigrationDiff(c *gin.Context, id Id, migrationId int)
+
 	// (POST /databases/{id}/migrations/{migrationId}/execute)
 	ExecuteMigration(c *gin.Context, id Id, migrationId int, params ExecuteMigrationParams)
 
 	// (POST /databases/{id}/query)
 	ExecuteDatabaseQuery(c *gin.Context, id Id, params ExecuteDatabaseQueryParams)
 
+	// (POST /databases/{id}/rows)
+	MutateRows(c *gin.Context, id Id, params MutateRowsParams)
+
 	// (GET /databases/{id}/schema)
 	GetDatabaseSchema(c *gin.Context, id Id)
+
+	// (GET /databases/{id}/table-counts)
+	ListTableCounts(c *gin.Context, id Id)
 
 	// (GET /health)
 	GetHealth(c *gin.Context)
@@ -1698,6 +1865,42 @@ func (siw *ServerInterfaceWrapper) UpdateMigration(c *gin.Context) {
 	siw.Handler.UpdateMigration(c, id, migrationId, params)
 }
 
+// GetMigrationDiff operation middleware
+func (siw *ServerInterfaceWrapper) GetMigrationDiff(c *gin.Context) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", c.Param("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter id: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	// ------------- Path parameter "migrationId" -------------
+	var migrationId int
+
+	err = runtime.BindStyledParameterWithOptions("simple", "migrationId", c.Param("migrationId"), &migrationId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter migrationId: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	c.Set(string(CookieAuthScopes), []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.GetMigrationDiff(c, id, migrationId)
+}
+
 // ExecuteMigration operation middleware
 func (siw *ServerInterfaceWrapper) ExecuteMigration(c *gin.Context) {
 
@@ -1815,6 +2018,60 @@ func (siw *ServerInterfaceWrapper) ExecuteDatabaseQuery(c *gin.Context) {
 	siw.Handler.ExecuteDatabaseQuery(c, id, params)
 }
 
+// MutateRows operation middleware
+func (siw *ServerInterfaceWrapper) MutateRows(c *gin.Context) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", c.Param("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter id: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	c.Set(string(CookieAuthScopes), []string{})
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params MutateRowsParams
+
+	headers := c.Request.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandler(c, fmt.Errorf("Expected one value for X-CSRF-Token, got %d", n), http.StatusBadRequest)
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter X-CSRF-Token: %w", err), http.StatusBadRequest)
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		siw.ErrorHandler(c, fmt.Errorf("Header parameter X-CSRF-Token is required, but not found"), http.StatusBadRequest)
+		return
+	}
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.MutateRows(c, id, params)
+}
+
 // GetDatabaseSchema operation middleware
 func (siw *ServerInterfaceWrapper) GetDatabaseSchema(c *gin.Context) {
 
@@ -1840,6 +2097,33 @@ func (siw *ServerInterfaceWrapper) GetDatabaseSchema(c *gin.Context) {
 	}
 
 	siw.Handler.GetDatabaseSchema(c, id)
+}
+
+// ListTableCounts operation middleware
+func (siw *ServerInterfaceWrapper) ListTableCounts(c *gin.Context) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", c.Param("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter id: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	c.Set(string(CookieAuthScopes), []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.ListTableCounts(c, id)
 }
 
 // GetHealth operation middleware
@@ -1923,9 +2207,12 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 	router.GET(options.BaseURL+"/databases/:id/migrations", wrapper.ListMigrations)
 	router.POST(options.BaseURL+"/databases/:id/migrations", wrapper.CreateMigration)
 	router.PATCH(options.BaseURL+"/databases/:id/migrations/:migrationId", wrapper.UpdateMigration)
+	router.GET(options.BaseURL+"/databases/:id/migrations/:migrationId/diff", wrapper.GetMigrationDiff)
 	router.POST(options.BaseURL+"/databases/:id/migrations/:migrationId/execute", wrapper.ExecuteMigration)
 	router.POST(options.BaseURL+"/databases/:id/query", wrapper.ExecuteDatabaseQuery)
+	router.POST(options.BaseURL+"/databases/:id/rows", wrapper.MutateRows)
 	router.GET(options.BaseURL+"/databases/:id/schema", wrapper.GetDatabaseSchema)
+	router.GET(options.BaseURL+"/databases/:id/table-counts", wrapper.ListTableCounts)
 	router.GET(options.BaseURL+"/health", wrapper.GetHealth)
 	router.GET(options.BaseURL+"/me/databases", wrapper.ListMyDatabases)
 }

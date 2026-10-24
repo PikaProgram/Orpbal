@@ -81,7 +81,9 @@ func (h *Handler) CreateDatabaseConnection(c *gin.Context, _ api.CreateDatabaseC
 	}
 	if err := dsn.Ping(c.Request.Context(), targetDSN); err != nil {
 		h.logger.Warn().Err(err).Str("connection", name).Msg("Target connection verification failed")
-		writeError(c, http.StatusBadRequest, "connection_failed", "could not connect to the target database")
+		// Admins creating a connection need the real cause (unknown database,
+		// bad credentials, unreachable host) to fix their input.
+		writeError(c, http.StatusBadRequest, "connection_failed", "could not connect to the target database: "+err.Error())
 		return
 	}
 
@@ -211,7 +213,7 @@ func (h *Handler) UpdateDatabaseConnection(c *gin.Context, id api.Id, _ api.Upda
 		}
 		if err := dsn.Ping(ctx, targetDSN); err != nil {
 			h.logger.Warn().Err(err).Str("connection", name).Msg("Target connection verification failed")
-			writeError(c, http.StatusBadRequest, "connection_failed", "could not connect to the target database")
+			writeError(c, http.StatusBadRequest, "connection_failed", "could not connect to the target database: "+err.Error())
 			return
 		}
 	}

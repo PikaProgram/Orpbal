@@ -7,7 +7,9 @@ import (
 	"Orpbal/ent/migration"
 	"Orpbal/ent/platformuser"
 	"Orpbal/ent/predicate"
+	"Orpbal/ent/schemasnapshot"
 	"context"
+	"database/sql/driver"
 	"fmt"
 	"math"
 
@@ -26,6 +28,7 @@ type MigrationQuery struct {
 	predicates     []predicate.Migration
 	withConnection *DatabaseConnectionQuery
 	withExecutor   *PlatformUserQuery
+	withSnapshots  *SchemaSnapshotQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -99,6 +102,28 @@ func (mq *MigrationQuery) QueryExecutor() *PlatformUserQuery {
 			sqlgraph.From(migration.Table, migration.FieldID, selector),
 			sqlgraph.To(platformuser.Table, platformuser.FieldID),
 			sqlgraph.Edge(sqlgraph.M2O, false, migration.ExecutorTable, migration.ExecutorColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(mq.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QuerySnapshots chains the current query on the "snapshots" edge.
+func (mq *MigrationQuery) QuerySnapshots() *SchemaSnapshotQuery {
+	query := (&SchemaSnapshotClient{config: mq.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := mq.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := mq.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(migration.Table, migration.FieldID, selector),
+			sqlgraph.To(schemasnapshot.Table, schemasnapshot.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, migration.SnapshotsTable, migration.SnapshotsColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(mq.driver.Dialect(), step)
 		return fromU, nil
@@ -300,6 +325,7 @@ func (mq *MigrationQuery) Clone() *MigrationQuery {
 		predicates:     append([]predicate.Migration{}, mq.predicates...),
 		withConnection: mq.withConnection.Clone(),
 		withExecutor:   mq.withExecutor.Clone(),
+		withSnapshots:  mq.withSnapshots.Clone(),
 		// clone intermediate query.
 		sql:  mq.sql.Clone(),
 		path: mq.path,
@@ -325,6 +351,17 @@ func (mq *MigrationQuery) WithExecutor(opts ...func(*PlatformUserQuery)) *Migrat
 		opt(query)
 	}
 	mq.withExecutor = query
+	return mq
+}
+
+// WithSnapshots tells the query-builder to eager-load the nodes that are connected to
+// the "snapshots" edge. The optional arguments are used to configure the query builder of the edge.
+func (mq *MigrationQuery) WithSnapshots(opts ...func(*SchemaSnapshotQuery)) *MigrationQuery {
+	query := (&SchemaSnapshotClient{config: mq.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	mq.withSnapshots = query
 	return mq
 }
 
@@ -406,9 +443,10 @@ func (mq *MigrationQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Mi
 	var (
 		nodes       = []*Migration{}
 		_spec       = mq.querySpec()
-		loadedTypes = [2]bool{
+		loadedTypes = [3]bool{
 			mq.withConnection != nil,
 			mq.withExecutor != nil,
+			mq.withSnapshots != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
@@ -438,6 +476,13 @@ func (mq *MigrationQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Mi
 	if query := mq.withExecutor; query != nil {
 		if err := mq.loadExecutor(ctx, query, nodes, nil,
 			func(n *Migration, e *PlatformUser) { n.Edges.Executor = e }); err != nil {
+			return nil, err
+		}
+	}
+	if query := mq.withSnapshots; query != nil {
+		if err := mq.loadSnapshots(ctx, query, nodes,
+			func(n *Migration) { n.Edges.Snapshots = []*SchemaSnapshot{} },
+			func(n *Migration, e *SchemaSnapshot) { n.Edges.Snapshots = append(n.Edges.Snapshots, e) }); err != nil {
 			return nil, err
 		}
 	}
@@ -499,6 +544,36 @@ func (mq *MigrationQuery) loadExecutor(ctx context.Context, query *PlatformUserQ
 		for i := range nodes {
 			assign(nodes[i], n)
 		}
+	}
+	return nil
+}
+func (mq *MigrationQuery) loadSnapshots(ctx context.Context, query *SchemaSnapshotQuery, nodes []*Migration, init func(*Migration), assign func(*Migration, *SchemaSnapshot)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int]*Migration)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(schemasnapshot.FieldMigrationID)
+	}
+	query.Where(predicate.SchemaSnapshot(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(migration.SnapshotsColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.MigrationID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "migration_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
 	}
 	return nil
 }

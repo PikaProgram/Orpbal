@@ -17,6 +17,7 @@ import (
 	"Orpbal/ent/groupmembership"
 	"Orpbal/ent/migration"
 	"Orpbal/ent/platformuser"
+	"Orpbal/ent/schemasnapshot"
 	"Orpbal/ent/session"
 
 	"entgo.io/ent"
@@ -42,6 +43,8 @@ type Client struct {
 	Migration *MigrationClient
 	// PlatformUser is the client for interacting with the PlatformUser builders.
 	PlatformUser *PlatformUserClient
+	// SchemaSnapshot is the client for interacting with the SchemaSnapshot builders.
+	SchemaSnapshot *SchemaSnapshotClient
 	// Session is the client for interacting with the Session builders.
 	Session *SessionClient
 }
@@ -61,6 +64,7 @@ func (c *Client) init() {
 	c.GroupMembership = NewGroupMembershipClient(c.config)
 	c.Migration = NewMigrationClient(c.config)
 	c.PlatformUser = NewPlatformUserClient(c.config)
+	c.SchemaSnapshot = NewSchemaSnapshotClient(c.config)
 	c.Session = NewSessionClient(c.config)
 }
 
@@ -160,6 +164,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		GroupMembership:    NewGroupMembershipClient(cfg),
 		Migration:          NewMigrationClient(cfg),
 		PlatformUser:       NewPlatformUserClient(cfg),
+		SchemaSnapshot:     NewSchemaSnapshotClient(cfg),
 		Session:            NewSessionClient(cfg),
 	}, nil
 }
@@ -186,6 +191,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		GroupMembership:    NewGroupMembershipClient(cfg),
 		Migration:          NewMigrationClient(cfg),
 		PlatformUser:       NewPlatformUserClient(cfg),
+		SchemaSnapshot:     NewSchemaSnapshotClient(cfg),
 		Session:            NewSessionClient(cfg),
 	}, nil
 }
@@ -217,7 +223,7 @@ func (c *Client) Close() error {
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.DatabaseConnection, c.DatabaseGrant, c.Group, c.GroupMembership, c.Migration,
-		c.PlatformUser, c.Session,
+		c.PlatformUser, c.SchemaSnapshot, c.Session,
 	} {
 		n.Use(hooks...)
 	}
@@ -228,7 +234,7 @@ func (c *Client) Use(hooks ...Hook) {
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.DatabaseConnection, c.DatabaseGrant, c.Group, c.GroupMembership, c.Migration,
-		c.PlatformUser, c.Session,
+		c.PlatformUser, c.SchemaSnapshot, c.Session,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -249,6 +255,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Migration.mutate(ctx, m)
 	case *PlatformUserMutation:
 		return c.PlatformUser.mutate(ctx, m)
+	case *SchemaSnapshotMutation:
+		return c.SchemaSnapshot.mutate(ctx, m)
 	case *SessionMutation:
 		return c.Session.mutate(ctx, m)
 	default:
@@ -1040,6 +1048,22 @@ func (c *MigrationClient) QueryExecutor(m *Migration) *PlatformUserQuery {
 	return query
 }
 
+// QuerySnapshots queries the snapshots edge of a Migration.
+func (c *MigrationClient) QuerySnapshots(m *Migration) *SchemaSnapshotQuery {
+	query := (&SchemaSnapshotClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(migration.Table, migration.FieldID, id),
+			sqlgraph.To(schemasnapshot.Table, schemasnapshot.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, migration.SnapshotsTable, migration.SnapshotsColumn),
+		)
+		fromV = sqlgraph.Neighbors(m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // Hooks returns the client hooks.
 func (c *MigrationClient) Hooks() []Hook {
 	return c.hooks.Migration
@@ -1230,6 +1254,155 @@ func (c *PlatformUserClient) mutate(ctx context.Context, m *PlatformUserMutation
 	}
 }
 
+// SchemaSnapshotClient is a client for the SchemaSnapshot schema.
+type SchemaSnapshotClient struct {
+	config
+}
+
+// NewSchemaSnapshotClient returns a client for the SchemaSnapshot from the given config.
+func NewSchemaSnapshotClient(c config) *SchemaSnapshotClient {
+	return &SchemaSnapshotClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `schemasnapshot.Hooks(f(g(h())))`.
+func (c *SchemaSnapshotClient) Use(hooks ...Hook) {
+	c.hooks.SchemaSnapshot = append(c.hooks.SchemaSnapshot, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `schemasnapshot.Intercept(f(g(h())))`.
+func (c *SchemaSnapshotClient) Intercept(interceptors ...Interceptor) {
+	c.inters.SchemaSnapshot = append(c.inters.SchemaSnapshot, interceptors...)
+}
+
+// Create returns a builder for creating a SchemaSnapshot entity.
+func (c *SchemaSnapshotClient) Create() *SchemaSnapshotCreate {
+	mutation := newSchemaSnapshotMutation(c.config, OpCreate)
+	return &SchemaSnapshotCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of SchemaSnapshot entities.
+func (c *SchemaSnapshotClient) CreateBulk(builders ...*SchemaSnapshotCreate) *SchemaSnapshotCreateBulk {
+	return &SchemaSnapshotCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *SchemaSnapshotClient) MapCreateBulk(slice any, setFunc func(*SchemaSnapshotCreate, int)) *SchemaSnapshotCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &SchemaSnapshotCreateBulk{err: fmt.Errorf("calling to SchemaSnapshotClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*SchemaSnapshotCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &SchemaSnapshotCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for SchemaSnapshot.
+func (c *SchemaSnapshotClient) Update() *SchemaSnapshotUpdate {
+	mutation := newSchemaSnapshotMutation(c.config, OpUpdate)
+	return &SchemaSnapshotUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *SchemaSnapshotClient) UpdateOne(ss *SchemaSnapshot) *SchemaSnapshotUpdateOne {
+	mutation := newSchemaSnapshotMutation(c.config, OpUpdateOne, withSchemaSnapshot(ss))
+	return &SchemaSnapshotUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *SchemaSnapshotClient) UpdateOneID(id int) *SchemaSnapshotUpdateOne {
+	mutation := newSchemaSnapshotMutation(c.config, OpUpdateOne, withSchemaSnapshotID(id))
+	return &SchemaSnapshotUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for SchemaSnapshot.
+func (c *SchemaSnapshotClient) Delete() *SchemaSnapshotDelete {
+	mutation := newSchemaSnapshotMutation(c.config, OpDelete)
+	return &SchemaSnapshotDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *SchemaSnapshotClient) DeleteOne(ss *SchemaSnapshot) *SchemaSnapshotDeleteOne {
+	return c.DeleteOneID(ss.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *SchemaSnapshotClient) DeleteOneID(id int) *SchemaSnapshotDeleteOne {
+	builder := c.Delete().Where(schemasnapshot.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &SchemaSnapshotDeleteOne{builder}
+}
+
+// Query returns a query builder for SchemaSnapshot.
+func (c *SchemaSnapshotClient) Query() *SchemaSnapshotQuery {
+	return &SchemaSnapshotQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeSchemaSnapshot},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a SchemaSnapshot entity by its id.
+func (c *SchemaSnapshotClient) Get(ctx context.Context, id int) (*SchemaSnapshot, error) {
+	return c.Query().Where(schemasnapshot.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *SchemaSnapshotClient) GetX(ctx context.Context, id int) *SchemaSnapshot {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryMigration queries the migration edge of a SchemaSnapshot.
+func (c *SchemaSnapshotClient) QueryMigration(ss *SchemaSnapshot) *MigrationQuery {
+	query := (&MigrationClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := ss.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(schemasnapshot.Table, schemasnapshot.FieldID, id),
+			sqlgraph.To(migration.Table, migration.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, schemasnapshot.MigrationTable, schemasnapshot.MigrationColumn),
+		)
+		fromV = sqlgraph.Neighbors(ss.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *SchemaSnapshotClient) Hooks() []Hook {
+	return c.hooks.SchemaSnapshot
+}
+
+// Interceptors returns the client interceptors.
+func (c *SchemaSnapshotClient) Interceptors() []Interceptor {
+	return c.inters.SchemaSnapshot
+}
+
+func (c *SchemaSnapshotClient) mutate(ctx context.Context, m *SchemaSnapshotMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&SchemaSnapshotCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&SchemaSnapshotUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&SchemaSnapshotUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&SchemaSnapshotDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown SchemaSnapshot mutation op: %q", m.Op())
+	}
+}
+
 // SessionClient is a client for the Session schema.
 type SessionClient struct {
 	config
@@ -1383,10 +1556,10 @@ func (c *SessionClient) mutate(ctx context.Context, m *SessionMutation) (Value, 
 type (
 	hooks struct {
 		DatabaseConnection, DatabaseGrant, Group, GroupMembership, Migration,
-		PlatformUser, Session []ent.Hook
+		PlatformUser, SchemaSnapshot, Session []ent.Hook
 	}
 	inters struct {
 		DatabaseConnection, DatabaseGrant, Group, GroupMembership, Migration,
-		PlatformUser, Session []ent.Interceptor
+		PlatformUser, SchemaSnapshot, Session []ent.Interceptor
 	}
 )

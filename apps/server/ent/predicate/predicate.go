@@ -24,5 +24,8 @@ type Migration func(*sql.Selector)
 // PlatformUser is the predicate function for platformuser builders.
 type PlatformUser func(*sql.Selector)
 
+// SchemaSnapshot is the predicate function for schemasnapshot builders.
+type SchemaSnapshot func(*sql.Selector)
+
 // Session is the predicate function for session builders.
 type Session func(*sql.Selector)

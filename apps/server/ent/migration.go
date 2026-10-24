@@ -43,9 +43,11 @@ type MigrationEdges struct {
 	Connection *DatabaseConnection `json:"connection,omitempty"`
 	// Executor holds the value of the executor edge.
 	Executor *PlatformUser `json:"executor,omitempty"`
+	// Snapshots holds the value of the snapshots edge.
+	Snapshots []*SchemaSnapshot `json:"snapshots,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [2]bool
+	loadedTypes [3]bool
 }
 
 // ConnectionOrErr returns the Connection value or an error if the edge
@@ -68,6 +70,15 @@ func (e MigrationEdges) ExecutorOrErr() (*PlatformUser, error) {
 		return nil, &NotFoundError{label: platformuser.Label}
 	}
 	return nil, &NotLoadedError{edge: "executor"}
+}
+
+// SnapshotsOrErr returns the Snapshots value or an error if the edge
+// was not loaded in eager-loading.
+func (e MigrationEdges) SnapshotsOrErr() ([]*SchemaSnapshot, error) {
+	if e.loadedTypes[2] {
+		return e.Snapshots, nil
+	}
+	return nil, &NotLoadedError{edge: "snapshots"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -159,6 +170,11 @@ func (m *Migration) QueryConnection() *DatabaseConnectionQuery {
 // QueryExecutor queries the "executor" edge of the Migration entity.
 func (m *Migration) QueryExecutor() *PlatformUserQuery {
 	return NewMigrationClient(m.config).QueryExecutor(m)
+}
+
+// QuerySnapshots queries the "snapshots" edge of the Migration entity.
+func (m *Migration) QuerySnapshots() *SchemaSnapshotQuery {
+	return NewMigrationClient(m.config).QuerySnapshots(m)
 }
 
 // Update returns a builder for updating this Migration.

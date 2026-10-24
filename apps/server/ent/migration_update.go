@@ -7,6 +7,7 @@ import (
 	"Orpbal/ent/migration"
 	"Orpbal/ent/platformuser"
 	"Orpbal/ent/predicate"
+	"Orpbal/ent/schemasnapshot"
 	"context"
 	"errors"
 	"fmt"
@@ -131,6 +132,21 @@ func (mu *MigrationUpdate) SetExecutor(p *PlatformUser) *MigrationUpdate {
 	return mu.SetExecutorID(p.ID)
 }
 
+// AddSnapshotIDs adds the "snapshots" edge to the SchemaSnapshot entity by IDs.
+func (mu *MigrationUpdate) AddSnapshotIDs(ids ...int) *MigrationUpdate {
+	mu.mutation.AddSnapshotIDs(ids...)
+	return mu
+}
+
+// AddSnapshots adds the "snapshots" edges to the SchemaSnapshot entity.
+func (mu *MigrationUpdate) AddSnapshots(s ...*SchemaSnapshot) *MigrationUpdate {
+	ids := make([]int, len(s))
+	for i := range s {
+		ids[i] = s[i].ID
+	}
+	return mu.AddSnapshotIDs(ids...)
+}
+
 // Mutation returns the MigrationMutation object of the builder.
 func (mu *MigrationUpdate) Mutation() *MigrationMutation {
 	return mu.mutation
@@ -146,6 +162,27 @@ func (mu *MigrationUpdate) ClearConnection() *MigrationUpdate {
 func (mu *MigrationUpdate) ClearExecutor() *MigrationUpdate {
 	mu.mutation.ClearExecutor()
 	return mu
+}
+
+// ClearSnapshots clears all "snapshots" edges to the SchemaSnapshot entity.
+func (mu *MigrationUpdate) ClearSnapshots() *MigrationUpdate {
+	mu.mutation.ClearSnapshots()
+	return mu
+}
+
+// RemoveSnapshotIDs removes the "snapshots" edge to SchemaSnapshot entities by IDs.
+func (mu *MigrationUpdate) RemoveSnapshotIDs(ids ...int) *MigrationUpdate {
+	mu.mutation.RemoveSnapshotIDs(ids...)
+	return mu
+}
+
+// RemoveSnapshots removes "snapshots" edges to SchemaSnapshot entities.
+func (mu *MigrationUpdate) RemoveSnapshots(s ...*SchemaSnapshot) *MigrationUpdate {
+	ids := make([]int, len(s))
+	for i := range s {
+		ids[i] = s[i].ID
+	}
+	return mu.RemoveSnapshotIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -291,6 +328,51 @@ func (mu *MigrationUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
+	if mu.mutation.SnapshotsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   migration.SnapshotsTable,
+			Columns: []string{migration.SnapshotsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(schemasnapshot.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := mu.mutation.RemovedSnapshotsIDs(); len(nodes) > 0 && !mu.mutation.SnapshotsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   migration.SnapshotsTable,
+			Columns: []string{migration.SnapshotsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(schemasnapshot.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := mu.mutation.SnapshotsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   migration.SnapshotsTable,
+			Columns: []string{migration.SnapshotsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(schemasnapshot.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
 	if n, err = sqlgraph.UpdateNodes(ctx, mu.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{migration.Label}
@@ -412,6 +494,21 @@ func (muo *MigrationUpdateOne) SetExecutor(p *PlatformUser) *MigrationUpdateOne 
 	return muo.SetExecutorID(p.ID)
 }
 
+// AddSnapshotIDs adds the "snapshots" edge to the SchemaSnapshot entity by IDs.
+func (muo *MigrationUpdateOne) AddSnapshotIDs(ids ...int) *MigrationUpdateOne {
+	muo.mutation.AddSnapshotIDs(ids...)
+	return muo
+}
+
+// AddSnapshots adds the "snapshots" edges to the SchemaSnapshot entity.
+func (muo *MigrationUpdateOne) AddSnapshots(s ...*SchemaSnapshot) *MigrationUpdateOne {
+	ids := make([]int, len(s))
+	for i := range s {
+		ids[i] = s[i].ID
+	}
+	return muo.AddSnapshotIDs(ids...)
+}
+
 // Mutation returns the MigrationMutation object of the builder.
 func (muo *MigrationUpdateOne) Mutation() *MigrationMutation {
 	return muo.mutation
@@ -427,6 +524,27 @@ func (muo *MigrationUpdateOne) ClearConnection() *MigrationUpdateOne {
 func (muo *MigrationUpdateOne) ClearExecutor() *MigrationUpdateOne {
 	muo.mutation.ClearExecutor()
 	return muo
+}
+
+// ClearSnapshots clears all "snapshots" edges to the SchemaSnapshot entity.
+func (muo *MigrationUpdateOne) ClearSnapshots() *MigrationUpdateOne {
+	muo.mutation.ClearSnapshots()
+	return muo
+}
+
+// RemoveSnapshotIDs removes the "snapshots" edge to SchemaSnapshot entities by IDs.
+func (muo *MigrationUpdateOne) RemoveSnapshotIDs(ids ...int) *MigrationUpdateOne {
+	muo.mutation.RemoveSnapshotIDs(ids...)
+	return muo
+}
+
+// RemoveSnapshots removes "snapshots" edges to SchemaSnapshot entities.
+func (muo *MigrationUpdateOne) RemoveSnapshots(s ...*SchemaSnapshot) *MigrationUpdateOne {
+	ids := make([]int, len(s))
+	for i := range s {
+		ids[i] = s[i].ID
+	}
+	return muo.RemoveSnapshotIDs(ids...)
 }
 
 // Where appends a list predicates to the MigrationUpdate builder.
@@ -595,6 +713,51 @@ func (muo *MigrationUpdateOne) sqlSave(ctx context.Context) (_node *Migration, e
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(platformuser.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if muo.mutation.SnapshotsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   migration.SnapshotsTable,
+			Columns: []string{migration.SnapshotsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(schemasnapshot.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := muo.mutation.RemovedSnapshotsIDs(); len(nodes) > 0 && !muo.mutation.SnapshotsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   migration.SnapshotsTable,
+			Columns: []string{migration.SnapshotsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(schemasnapshot.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := muo.mutation.SnapshotsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   migration.SnapshotsTable,
+			Columns: []string{migration.SnapshotsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(schemasnapshot.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {

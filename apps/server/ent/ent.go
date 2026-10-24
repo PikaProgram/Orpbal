@@ -9,6 +9,7 @@ import (
 	"Orpbal/ent/groupmembership"
 	"Orpbal/ent/migration"
 	"Orpbal/ent/platformuser"
+	"Orpbal/ent/schemasnapshot"
 	"Orpbal/ent/session"
 	"context"
 	"errors"
@@ -85,6 +86,7 @@ func checkColumn(table, column string) error {
 			groupmembership.Table:    groupmembership.ValidColumn,
 			migration.Table:          migration.ValidColumn,
 			platformuser.Table:       platformuser.ValidColumn,
+			schemasnapshot.Table:     schemasnapshot.ValidColumn,
 			session.Table:            session.ValidColumn,
 		})
 	})

@@ -6,6 +6,7 @@ import (
 	"Orpbal/ent/databaseconnection"
 	"Orpbal/ent/migration"
 	"Orpbal/ent/platformuser"
+	"Orpbal/ent/schemasnapshot"
 	"context"
 	"errors"
 	"fmt"
@@ -74,6 +75,21 @@ func (mc *MigrationCreate) SetConnection(d *DatabaseConnection) *MigrationCreate
 // SetExecutor sets the "executor" edge to the PlatformUser entity.
 func (mc *MigrationCreate) SetExecutor(p *PlatformUser) *MigrationCreate {
 	return mc.SetExecutorID(p.ID)
+}
+
+// AddSnapshotIDs adds the "snapshots" edge to the SchemaSnapshot entity by IDs.
+func (mc *MigrationCreate) AddSnapshotIDs(ids ...int) *MigrationCreate {
+	mc.mutation.AddSnapshotIDs(ids...)
+	return mc
+}
+
+// AddSnapshots adds the "snapshots" edges to the SchemaSnapshot entity.
+func (mc *MigrationCreate) AddSnapshots(s ...*SchemaSnapshot) *MigrationCreate {
+	ids := make([]int, len(s))
+	for i := range s {
+		ids[i] = s[i].ID
+	}
+	return mc.AddSnapshotIDs(ids...)
 }
 
 // Mutation returns the MigrationMutation object of the builder.
@@ -237,6 +253,22 @@ func (mc *MigrationCreate) createSpec() (*Migration, *sqlgraph.CreateSpec) {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
 		_node.ExecutorID = nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := mc.mutation.SnapshotsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   migration.SnapshotsTable,
+			Columns: []string{migration.SnapshotsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(schemasnapshot.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec

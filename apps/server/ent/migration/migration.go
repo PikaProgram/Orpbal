@@ -31,6 +31,8 @@ const (
 	EdgeConnection = "connection"
 	// EdgeExecutor holds the string denoting the executor edge name in mutations.
 	EdgeExecutor = "executor"
+	// EdgeSnapshots holds the string denoting the snapshots edge name in mutations.
+	EdgeSnapshots = "snapshots"
 	// Table holds the table name of the migration in the database.
 	Table = "migrations"
 	// ConnectionTable is the table that holds the connection relation/edge.
@@ -47,6 +49,13 @@ const (
 	ExecutorInverseTable = "platform_users"
 	// ExecutorColumn is the table column denoting the executor relation/edge.
 	ExecutorColumn = "executor_id"
+	// SnapshotsTable is the table that holds the snapshots relation/edge.
+	SnapshotsTable = "schema_snapshots"
+	// SnapshotsInverseTable is the table name for the SchemaSnapshot entity.
+	// It exists in this package in order to avoid circular dependency with the "schemasnapshot" package.
+	SnapshotsInverseTable = "schema_snapshots"
+	// SnapshotsColumn is the table column denoting the snapshots relation/edge.
+	SnapshotsColumn = "migration_id"
 )
 
 // Columns holds all SQL columns for migration fields.
@@ -156,6 +165,20 @@ func ByExecutorField(field string, opts ...sql.OrderTermOption) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newExecutorStep(), sql.OrderByField(field, opts...))
 	}
 }
+
+// BySnapshotsCount orders the results by snapshots count.
+func BySnapshotsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newSnapshotsStep(), opts...)
+	}
+}
+
+// BySnapshots orders the results by snapshots terms.
+func BySnapshots(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newSnapshotsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
 func newConnectionStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
@@ -168,5 +191,12 @@ func newExecutorStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(ExecutorInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.M2O, false, ExecutorTable, ExecutorColumn),
+	)
+}
+func newSnapshotsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(SnapshotsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, SnapshotsTable, SnapshotsColumn),
 	)
 }

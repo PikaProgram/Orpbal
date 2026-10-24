@@ -11,6 +11,7 @@ import (
 	"Orpbal/ent/databasegrant"
 	"Orpbal/ent/migration"
 	"Orpbal/ent/platformuser"
+	"Orpbal/ent/schemasnapshot"
 	"Orpbal/internal/api"
 	"Orpbal/internal/target"
 )
@@ -125,6 +126,12 @@ func (h *Handler) ExecuteMigration(c *gin.Context, id api.Id, migrationId int, p
 	if !ok {
 		return
 	}
+	// Capture the schema before the migration runs so the UI can diff what
+	// the execution changed.
+	if err := h.captureSnapshot(c, dsnStr, migrationId, schemasnapshot.PhaseBefore); err != nil {
+		h.fail(c, err, "capture before snapshot")
+		return
+	}
 	err = h.viewer.Execute(c.Request.Context(), dsnStr, entry.SQL)
 	now := time.Now().UTC()
 	status := migration.StatusSuccess
@@ -141,6 +148,10 @@ func (h *Handler) ExecuteMigration(c *gin.Context, id api.Id, migrationId int, p
 	}
 	if status == migration.StatusFailed {
 		writeError(c, http.StatusBadGateway, "target_unreachable", "migration failed")
+		return
+	}
+	if err := h.captureSnapshot(c, dsnStr, migrationId, schemasnapshot.PhaseAfter); err != nil {
+		h.fail(c, err, "capture after snapshot")
 		return
 	}
 	c.JSON(http.StatusOK, toAPIMigration(entry, h.executorUsernames(c.Request.Context(), []*ent.Migration{entry})[entry.ExecutorID]))

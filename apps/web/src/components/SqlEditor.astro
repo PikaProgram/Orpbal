@@ -1,0 +1,213 @@
+---
+import type { Migration, MigrationDiff } from "@/lib/api";
+
+interface Props {
+	connectionId: string;
+	canEdit: boolean;
+	csrf: string;
+	migrations: Migration[];
+	migrationsError: string | null;
+	editMigrationId: number;
+	diffId: number;
+	diff: MigrationDiff | null;
+	diffError: string | null;
+	tableKey: string;
+}
+
+const { connectionId, canEdit, csrf, migrations, migrationsError, editMigrationId, diffId, diff, diffError, tableKey } =
+	Astro.props;
+
+const link = (extra: Record<string, string>) => {
+	const params = new URLSearchParams({ tab: "sql", table: tableKey, ...extra });
+	return `/databases/${connectionId}?${params.toString()}`;
+};
+// Astro action posts drop the current query string; re-attach it so the
+// POST lands back on the SQL tab (and any open editor/diff) preserved.
+const actionUrl = (name: string) => {
+	const params = new URLSearchParams({ tab: "sql", table: tableKey });
+	params.set("_action", name);
+	return `?${params.toString()}`;
+};
+const statusClass = (status: string) =>
+	status === "success"
+		? "border-ok/40 bg-ok/10 text-ok"
+		: status === "failed"
+			? "border-error/40 bg-error/10 text-error"
+			: "border-warning/40 bg-warning/10 text-warning";
+---
+
+<script>
+	import "@/scripts/sql-editor";
+
+	// Ad-hoc read-only runner: submits the CodeMirror-backed textarea through
+	// the existing read-only query endpoint and renders the result table.
+	const runnerForm = document.getElementById("runner-form") as HTMLFormElement | null;
+	const runnerOutput = document.getElementById("runner-output");
+	runnerForm?.addEventListener("submit", async (event) => {
+		event.preventDefault();
+		if (!runnerOutput) return;
+		const sql = (runnerForm.elements.namedItem("sql") as HTMLTextAreaElement).value;
+		const connection = runnerForm.dataset.connection ?? "";
+		const csrfToken = runnerForm.dataset.csrf ?? "";
+		runnerOutput.innerHTML = "<p class='text-sm text-dim'>Running…</p>";
+		try {
+			const response = await fetch(`/api/databases/${connection}/query`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken },
+				body: JSON.stringify({ sql, limit: 10000 }),
+			});
+			const body = await response.json();
+			if (!response.ok) {
+				runnerOutput.innerHTML = `<div class='border border-error/40 bg-error/10 px-4 py-3 text-sm text-error'>${body?.error?.message ?? "Query failed"}</div>`;
+				return;
+			}
+			const columns: string[] = body.columns ?? [];
+			const rows: unknown[][] = body.rows ?? [];
+			if (columns.length === 0) {
+				runnerOutput.innerHTML = "<p class='text-sm text-dim'>No result set.</p>";
+				return;
+			}
+			const head = columns.map((name) => `<th class="mono px-3 py-2 font-semibold">${name}</th>`).join("");
+			const bodyRows = rows
+				.map(
+					(row) =>
+						`<tr>${row
+							.map((value) => `<td class="mono max-w-xs truncate px-3 py-2">${value === null ? "NULL" : String(value)}</td>`)
+							.join("")}</tr>`,
+				)
+				.join("");
+			runnerOutput.innerHTML = `<table class="w-full text-left text-xs"><thead class="bg-plate-raised text-dim"><tr>${head}</tr></thead><tbody class="divide-y divide-seam">${bodyRows}</tbody></table>`;
+		} catch {
+			runnerOutput.innerHTML = "<div class='text-sm text-error'>Query failed.</div>";
+		}
+	});
+
+	// Delete confirmations on destructive migration actions.
+	document.querySelectorAll<HTMLFormElement>("form[data-confirm]").forEach((form) => {
+		form.addEventListener("submit", (event) => {
+			if (!confirm(form.dataset.confirm ?? "Are you sure?")) event.preventDefault();
+		});
+	});
+</script>
+
+<div class="space-y-4">
+	{migrationsError && (
+		<div class="border border-error/40 bg-error/10 px-4 py-3 text-sm text-error">{migrationsError}</div>
+	)}
+
+	{canEdit && (
+		<form method="POST" action={actionUrl("createMigration")} class="panel p-4">
+			<input type="hidden" name="csrf_token" value={csrf} />
+			<input type="hidden" name="id" value={connectionId} />
+			<label class="block">
+				<span class="mb-1 block text-sm text-dim">New migration SQL</span>
+				<textarea name="sql" required rows="6" class="mono field w-full sql-editor" placeholder="CREATE TABLE notes (id serial PRIMARY KEY, body text);"></textarea>
+			</label>
+			<button type="submit" class="btn-brass mt-3 px-3 py-2 text-xs">Create migration</button>
+		</form>
+	)}
+
+	<section class="panel">
+		<div class="nameplate">Runner (read-only)</div>
+		<div class="p-4">
+			<form id="runner-form" data-connection={connectionId} data-csrf={csrf} class="grid gap-3">
+				<textarea name="sql" rows="4" required class="mono field w-full sql-editor" placeholder="SELECT * FROM notes LIMIT 5;"></textarea>
+				<button type="submit" class="btn-brass px-3 py-2 text-xs">Run query</button>
+			</form>
+			<div id="runner-output" class="mt-3 overflow-x-auto"></div>
+		</div>
+	</section>
+
+	<section class="panel overflow-hidden">
+		<div class="nameplate">Migrations</div>
+		<div class="p-4">
+			{migrations.length === 0 ? (
+				<p class="text-sm text-dim">No migrations recorded for this database.</p>
+			) : (
+				<div class="space-y-2">
+					{migrations.map((migration) => (
+						<div class="border border-seam bg-zinc-950">
+							<div class="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
+								<div class="flex items-center gap-2 text-xs">
+									<span class="mono font-bold">v{migration.version}</span>
+									<span class={`border px-2 py-1 ${statusClass(migration.status)}`}>{migration.status}</span>
+									<span class="text-dim">{migration.executor_username || `#${migration.executor_id}`}</span>
+									{migration.status !== "pending" && <span class="mono text-dim">{migration.executed_at}</span>}
+								</div>
+								<div class="flex items-center gap-2">
+									{migration.status === "success" && (
+										<a href={link({ diff: String(migration.id) })} class="text-xs text-dim underline hover:text-foreground">
+											View diff
+										</a>
+									)}
+									{canEdit && migration.status !== "success" && (
+										<>
+											{migration.status === "pending" && (
+												<form method="POST" action={actionUrl("executeMigration")} class="inline">
+													<input type="hidden" name="csrf_token" value={csrf} />
+													<input type="hidden" name="id" value={connectionId} />
+													<input type="hidden" name="migration_id" value={migration.id} />
+													<button type="submit" class="text-xs text-brass-lit hover:underline">Execute</button>
+												</form>
+											)}
+											<a href={editMigrationId === migration.id ? link({}) : link({ edit: String(migration.id) })} class="text-xs text-dim underline hover:text-foreground">
+												{editMigrationId === migration.id ? "Close editor" : migration.status === "failed" ? "Fix" : "Edit"}
+											</a>
+										</>
+									)}
+								</div>
+							</div>
+							<div class="px-3 pb-3">
+								{canEdit && editMigrationId === migration.id && migration.status !== "success" ? (
+									<form method="POST" action={actionUrl("updateMigration")} class="grid gap-2">
+										<input type="hidden" name="csrf_token" value={csrf} />
+										<input type="hidden" name="id" value={connectionId} />
+										<input type="hidden" name="migration_id" value={migration.id} />
+										<textarea name="sql" required rows="6" class="mono field w-full sql-editor">{migration.sql}</textarea>
+										<div class="flex items-center gap-2">
+											<button type="submit" class="btn-brass px-2 py-1 text-xs">Save</button>
+											<a href={link({})} class="px-2 py-1 text-xs text-dim underline">Cancel</a>
+										</div>
+									</form>
+								) : (
+									<pre class="mono max-h-40 overflow-auto whitespace-pre-wrap text-xs text-dim">{migration.sql}</pre>
+								)}
+							</div>
+							{diffId === migration.id && (
+								<div class="border-t border-seam px-3 py-3">
+									<div class="mb-2 text-xs font-bold">Schema diff {migration.status === "success" ? "(before → after)" : ""}</div>
+									{diffError && <div class="text-sm text-error">{diffError}</div>}
+									{diff && diff.changes.length === 0 && <p class="text-sm text-dim">No schema changes recorded.</p>}
+									{diff && diff.changes.length > 0 && (
+										<ul class="mono space-y-1 text-xs">
+											{diff.changes.map((change) => (
+												<li>
+													<span
+														class={`mr-2 inline-block w-14 text-center ${
+															change.action === "added"
+																? "text-ok"
+																: change.action === "removed"
+																	? "text-error"
+																	: "text-warning"
+														}`}
+													>
+														{change.action}
+													</span>
+													<span class="text-foreground">{change.object_type}</span> {change.object_id}
+													{change.detail && <span class="text-dim"> — {change.detail}</span>}
+												</li>
+											))}
+										</ul>
+									)}
+									{diff && diff.status !== "success" && (
+										<p class="text-sm text-dim">Diff is only available for executed migrations.</p>
+									)}
+								</div>
+							)}
+						</div>
+					))}
+				</div>
+			)}
+		</div>
+	</section>
+</div>

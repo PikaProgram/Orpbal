@@ -1,0 +1,185 @@
+---
+import type { DatabaseSchema, SchemaTable, QueryResult } from "@/lib/api";
+
+interface Props {
+	schema: DatabaseSchema;
+	connectionId: string;
+	tableKey: string;
+	canEdit: boolean;
+	csrf: string;
+	rows: QueryResult | null;
+	rowsError: string | null;
+	offset: number;
+}
+
+const { schema, connectionId, tableKey, canEdit, csrf, rows, rowsError, offset } = Astro.props;
+
+const [schemaName, tableName] = tableKey.split(".");
+const entry = schema.schemas.find((s) => s.schema === schemaName);
+const table: SchemaTable | undefined = entry?.tables.find((t) => t.name === tableName);
+// Astro action posts drop the current query string; re-attach it so the
+// POST lands back on the editor tab with the same table selected.
+const search = Astro.url.searchParams.toString();
+const actionUrl = (name: string) => `?_action=${name}${search ? `&${search}` : ""}`;
+
+// Editing needs a primary key so every affected row is unambiguous.
+const pkColumns =
+	table?.constraints
+		?.filter((c) => c.type === "PRIMARY KEY")
+		.flatMap((c) => c.columns) ?? [];
+const editable = canEdit && table !== undefined && pkColumns.length > 0;
+
+const link = (extra: Record<string, string>) => {
+	const params = new URLSearchParams({ tab: "editor", table: tableKey, ...extra });
+	return `/databases/${connectionId}?${params.toString()}`;
+};
+const safeValue = (value: unknown) => (value === null || value === undefined ? "" : String(value));
+---
+
+<div class="space-y-4">
+	{!table && (
+		<div class="panel p-6 text-sm text-dim">Pick a table to browse its rows.</div>
+	)}
+
+	{table && (
+		<>
+			<div class="flex flex-wrap items-center justify-between gap-3">
+				<h2 class="mono text-lg font-bold">{tableKey}</h2>
+				{canEdit && !editable && (
+					<span class="border border-warning/40 bg-warning/10 px-2 py-1 text-xs text-warning">
+						No primary key — editing disabled, view only
+					</span>
+				)}
+			</div>
+
+			{editable && (
+				<details class="panel">
+					<summary class="cursor-pointer px-4 py-2 text-sm font-semibold hover:bg-plate-raised/60">
+						+ Add row
+					</summary>
+					<form method="POST" action={actionUrl("insertRow")} class="grid gap-3 border-t border-seam p-4 sm:grid-cols-[repeat(auto-fill,minmax(220px,1fr))]">
+						<input type="hidden" name="csrf_token" value={csrf} />
+						<input type="hidden" name="id" value={connectionId} />
+						<input type="hidden" name="schema" value={schemaName} />
+						<input type="hidden" name="table" value={tableName} />
+						{table.columns.map((column) => (
+							<label class="block">
+								<span class="mono mb-1 block text-xs text-dim">
+									{column.name} · {column.type}{column.is_nullable ? "" : " · required"}
+								</span>
+								<input type="text" name={`col.${column.name}`} class="field w-full" />
+							</label>
+						))}
+						<div class="sm:col-span-full">
+							<button type="submit" class="btn-brass px-3 py-2 text-xs">Insert row</button>
+						</div>
+					</form>
+				</details>
+			)}
+
+			<div class="panel overflow-hidden">
+				<div class="nameplate">Rows ({rows?.rows.length ?? 0})</div>
+				{rowsError && (
+					<div class="border-t border-seam bg-error/10 px-4 py-3 text-sm text-error">{rowsError}</div>
+				)}
+				{rows && (
+					<>
+						<div class="overflow-x-auto">
+							<table class="w-full text-left text-xs">
+								<thead class="bg-plate-raised text-dim">
+									<tr>
+										{rows.columns.map((column) => (
+											<th class="mono px-3 py-2 font-semibold">{column}</th>
+										))}
+										{editable && <th class="px-3 py-2 font-semibold">Actions</th>}
+									</tr>
+								</thead>
+								<tbody class="divide-y divide-seam">
+									{rows.rows.map((row) => {
+										const pk: Record<string, string> = {};
+										pkColumns.forEach((name) => {
+											pk[name] = safeValue(rows.columns.includes(name) ? row[rows.columns.indexOf(name)] : null);
+										});
+										return (
+											<tr>
+												{row.map((value) => (
+													<td class="mono max-w-xs truncate px-3 py-2">
+														{value === null ? <span class="text-dim">NULL</span> : String(value)}
+													</td>
+												))}
+												{editable && (
+													<td class="px-3 py-2">
+														<details class="inline">
+															<summary class="cursor-pointer text-dim hover:text-foreground">Edit</summary>
+															<form
+																method="POST"
+																action={actionUrl("updateRow")}
+																class="mt-2 grid gap-2 rounded border border-seam bg-plate p-2 sm:w-96"
+															>
+																<input type="hidden" name="csrf_token" value={csrf} />
+																<input type="hidden" name="id" value={connectionId} />
+																<input type="hidden" name="schema" value={schemaName} />
+																<input type="hidden" name="table" value={tableName} />
+																{Object.entries(pk).map(([name, value]) => (
+																	<input type="hidden" name={`pk.${name}`} value={value} />
+																))}
+																{rows.columns.map((name, index) =>
+																	pkColumns.includes(name) ? null : (
+																		<label class="block">
+																			<span class="mono block text-xs text-dim">{name}</span>
+																			<input type="text" name={`col.${name}`} value={safeValue(row[index])} class="field w-full" />
+																		</label>
+																	),
+																)}
+																<button type="submit" class="btn-brass px-2 py-1 text-xs">Save</button>
+															</form>
+														</details>
+														<form
+															method="POST"
+															action={actionUrl("deleteRow")}
+															class="ml-2 inline"
+															onsubmit="return confirm('Delete this row?')"
+														>
+															<input type="hidden" name="csrf_token" value={csrf} />
+															<input type="hidden" name="id" value={connectionId} />
+															<input type="hidden" name="schema" value={schemaName} />
+															<input type="hidden" name="table" value={tableName} />
+															{Object.entries(pk).map(([name, value]) => (
+																<input type="hidden" name={`pk.${name}`} value={value} />
+															))}
+															<button type="submit" class="text-xs text-error hover:underline">Delete</button>
+														</form>
+													</td>
+												)}
+											</tr>
+										);
+									})}
+									{rows.rows.length === 0 && (
+										<tr>
+											<td class="px-3 py-3 text-dim" colspan={rows.columns.length + (editable ? 1 : 0)}>
+												No rows.
+											</td>
+										</tr>
+									)}
+								</tbody>
+							</table>
+						</div>
+						{(offset > 0 || rows.rows.length === 50) && (
+							<div class="flex items-center justify-between border-t border-seam px-3 py-2 text-xs">
+								{offset > 0 ? (
+									<a href={link({ offset: String(Math.max(0, offset - 50)) })} class="text-dim underline">Previous</a>
+								) : (
+									<span />
+								)}
+								{rows.rows.length === 50 && (
+									<a href={link({ offset: String(offset + 50) })} class="text-dim underline">Next</a>
+								)}
+							</div>
+						)}
+					</>
+				)}
+			</div>
+		</>
+	)}
+</div>
+

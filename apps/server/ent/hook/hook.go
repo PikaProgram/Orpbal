@@ -80,6 +80,18 @@ func (f PlatformUserFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.PlatformUserMutation", m)
 }
 
+// The SchemaSnapshotFunc type is an adapter to allow the use of ordinary
+// function as SchemaSnapshot mutator.
+type SchemaSnapshotFunc func(context.Context, *ent.SchemaSnapshotMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f SchemaSnapshotFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.SchemaSnapshotMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SchemaSnapshotMutation", m)
+}
+
 // The SessionFunc type is an adapter to allow the use of ordinary
 // function as Session mutator.
 type SessionFunc func(context.Context, *ent.SessionMutation) (ent.Value, error)

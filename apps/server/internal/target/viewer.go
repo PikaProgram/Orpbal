@@ -104,28 +104,41 @@ func (v *Viewer) Query(ctx context.Context, dsn, statement string, limit int) (c
 // Execute runs one statement in a writable transaction: commit on success,
 // rollback on failure. Used by migrations, not the read-only viewer.
 func (v *Viewer) Execute(ctx context.Context, dsn, statement string) error {
+	_, err := v.ExecuteArgs(ctx, dsn, statement, nil)
+	return err
+}
+
+// ExecuteArgs runs one parameterized statement in a writable transaction and
+// returns the number of affected rows. Used by row mutations and migrations.
+func (v *Viewer) ExecuteArgs(ctx context.Context, dsn, statement string, args []any) (int64, error) {
 	if err := ReadableStatement(statement); err != nil {
-		return err
+		return 0, err
 	}
 	db, err := v.pool(dsn)
 	if err != nil {
-		return fmt.Errorf("open target database: %w", err)
+		return 0, fmt.Errorf("open target database: %w", err)
 	}
 	ctx, cancel := context.WithTimeout(ctx, QueryTimeout)
 	defer cancel()
 
 	tx, err := db.BeginTx(ctx, &sql.TxOptions{ReadOnly: false})
 	if err != nil {
-		return fmt.Errorf("begin transaction: %w", err)
+		return 0, fmt.Errorf("begin transaction: %w", err)
 	}
-	if _, err := tx.ExecContext(ctx, statement); err != nil {
+	result, err := tx.ExecContext(ctx, statement, args...)
+	if err != nil {
 		tx.Rollback()
-		return fmt.Errorf("execute statement: %w", err)
+		return 0, fmt.Errorf("execute statement: %w", err)
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		tx.Rollback()
+		return 0, fmt.Errorf("read affected rows: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit transaction: %w", err)
+		return 0, fmt.Errorf("commit transaction: %w", err)
 	}
-	return nil
+	return affected, nil
 }
 
 // FormatValue renders a SQL value for the JSON API; nil stays nil (SQL NULL).

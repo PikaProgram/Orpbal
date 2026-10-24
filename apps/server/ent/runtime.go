@@ -10,6 +10,7 @@ import (
 	"Orpbal/ent/migration"
 	"Orpbal/ent/platformuser"
 	"Orpbal/ent/schema"
+	"Orpbal/ent/schemasnapshot"
 	"Orpbal/ent/session"
 	"time"
 )
@@ -140,6 +141,12 @@ func init() {
 	platformuser.DefaultUpdatedAt = platformuserDescUpdatedAt.Default.(func() time.Time)
 	// platformuser.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	platformuser.UpdateDefaultUpdatedAt = platformuserDescUpdatedAt.UpdateDefault.(func() time.Time)
+	schemasnapshotFields := schema.SchemaSnapshot{}.Fields()
+	_ = schemasnapshotFields
+	// schemasnapshotDescMigrationID is the schema descriptor for migration_id field.
+	schemasnapshotDescMigrationID := schemasnapshotFields[0].Descriptor()
+	// schemasnapshot.MigrationIDValidator is a validator for the "migration_id" field. It is called by the builders before save.
+	schemasnapshot.MigrationIDValidator = schemasnapshotDescMigrationID.Validators[0].(func(int) error)
 	sessionFields := schema.Session{}.Fields()
 	_ = sessionFields
 	// sessionDescTokenHash is the schema descriptor for token_hash field.

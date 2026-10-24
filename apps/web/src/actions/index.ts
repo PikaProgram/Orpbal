@@ -33,6 +33,31 @@ const id = z.coerce.number().int().positive();
 const sslMode = z.enum(["disable", "require", "verify-ca", "verify-full"]).default("disable");
 const accessLevel = z.enum(["view_only", "view_edit"]);
 
+const schemaName = z.string().regex(/^[a-zA-Z_][a-zA-Z0-9_]*$/);
+const tableName = z.string().regex(/^[a-zA-Z_][a-zA-Z0-9_]*$/);
+const rowInput = z.looseObject({
+		id,
+		schema: schemaName,
+		table: tableName,
+		csrf_token: csrf,
+	});
+
+// Row mutation forms post per-column fields: `col.<name>` are the new
+// values, `pk.<name>` identify the target row. Empty inputs are omitted:
+// inserts fall back to column defaults, updates leave the column unchanged.
+function splitRowFields(input: Record<string, unknown>) {
+	const values: Record<string, string> = {};
+	const pk: Record<string, string> = {};
+	for (const [key, value] of Object.entries(input)) {
+		if (key.startsWith("col.")) {
+			const v = String(value);
+			if (v !== "") values[key.slice(4)] = v;
+		}
+		if (key.startsWith("pk.")) pk[key.slice(3)] = String(value);
+	}
+	return { values, pk };
+}
+
 export const server = {
 	login: defineAction({
 		accept: "form",
@@ -347,6 +372,84 @@ export const server = {
 					input.csrf_token,
 				);
 			}),
+	}),
+
+	insertRow: defineAction({
+		accept: "form",
+		input: rowInput,
+		handler: (rawInput, context) => {
+			const input = rawInput as z.infer<typeof rowInput> & Record<string, unknown>;
+			const { values } = splitRowFields(input);
+			return run(async () => {
+				if (Object.keys(values).length === 0) throw new Error("no values");
+				await call(
+					context,
+					`/databases/${input.id}/rows`,
+					"POST",
+					{ schema: input.schema, table: input.table, op: "insert", values },
+					input.csrf_token,
+				);
+			});
+		},
+	}),
+
+	updateRow: defineAction({
+		accept: "form",
+		input: rowInput,
+		handler: (rawInput, context) => {
+			const input = rawInput as z.infer<typeof rowInput> & Record<string, unknown>;
+			const { values, pk } = splitRowFields(input);
+			return run(async () => {
+				if (Object.keys(values).length === 0 || Object.keys(pk).length === 0) {
+					throw new Error("missing values or pk");
+				}
+				await call(
+					context,
+					`/databases/${input.id}/rows`,
+					"POST",
+					{ schema: input.schema, table: input.table, op: "update", pk, values },
+					input.csrf_token,
+				);
+			});
+		},
+	}),
+
+	deleteRow: defineAction({
+		accept: "form",
+		input: rowInput,
+		handler: (rawInput, context) => {
+			const input = rawInput as z.infer<typeof rowInput> & Record<string, unknown>;
+			const { pk } = splitRowFields(input);
+			return run(async () => {
+				if (Object.keys(pk).length === 0) throw new Error("missing pk");
+				await call(
+					context,
+					`/databases/${input.id}/rows`,
+					"POST",
+					{ schema: input.schema, table: input.table, op: "delete", pk },
+					input.csrf_token,
+				);
+			});
+		},
+	}),
+
+	// Exact COUNT(*) for one table, fetched on demand from the tables list.
+	countRows: defineAction({
+		accept: "json",
+		input: z.object({ id, schema: schemaName, table: tableName, csrf_token: csrf }),
+		handler: async (input, context) => {
+			const result = await call<{ columns: string[]; rows: (unknown | null)[][] }>(
+				context,
+				`/databases/${input.id}/query`,
+				"POST",
+				{ sql: `SELECT COUNT(*) FROM "${input.schema}"."${input.table}"`, limit: 1 },
+				input.csrf_token,
+			);
+			if (result.status !== 200 || !result.data.rows[0]) {
+				throw new Error("count failed");
+			}
+			return { count: Number(result.data.rows[0][0]) };
+		},
 	}),
 
 	createMigration: defineAction({

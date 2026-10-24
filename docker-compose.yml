@@ -65,5 +65,24 @@ services:
       retries: 5
     restart: unless-stopped
 
+  db-user:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${USER_DB_NAME:-userdb}
+      POSTGRES_USER: ${USER_DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${USER_DB_PASSWORD:-postgres}
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_user_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+
 volumes:
   postgres_data:
+  postgres_user_data:

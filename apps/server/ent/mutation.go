@@ -10,6 +10,7 @@ import (
 	"Orpbal/ent/migration"
 	"Orpbal/ent/platformuser"
 	"Orpbal/ent/predicate"
+	"Orpbal/ent/schemasnapshot"
 	"Orpbal/ent/session"
 	"context"
 	"errors"
@@ -36,6 +37,7 @@ const (
 	TypeGroupMembership    = "GroupMembership"
 	TypeMigration          = "Migration"
 	TypePlatformUser       = "PlatformUser"
+	TypeSchemaSnapshot     = "SchemaSnapshot"
 	TypeSession            = "Session"
 )
 
@@ -2864,6 +2866,9 @@ type MigrationMutation struct {
 	clearedconnection bool
 	executor          *int
 	clearedexecutor   bool
+	snapshots         map[int]struct{}
+	removedsnapshots  map[int]struct{}
+	clearedsnapshots  bool
 	done              bool
 	oldValue          func(context.Context) (*Migration, error)
 	predicates        []predicate.Migration
@@ -3257,6 +3262,60 @@ func (m *MigrationMutation) ResetExecutor() {
 	m.clearedexecutor = false
 }
 
+// AddSnapshotIDs adds the "snapshots" edge to the SchemaSnapshot entity by ids.
+func (m *MigrationMutation) AddSnapshotIDs(ids ...int) {
+	if m.snapshots == nil {
+		m.snapshots = make(map[int]struct{})
+	}
+	for i := range ids {
+		m.snapshots[ids[i]] = struct{}{}
+	}
+}
+
+// ClearSnapshots clears the "snapshots" edge to the SchemaSnapshot entity.
+func (m *MigrationMutation) ClearSnapshots() {
+	m.clearedsnapshots = true
+}
+
+// SnapshotsCleared reports if the "snapshots" edge to the SchemaSnapshot entity was cleared.
+func (m *MigrationMutation) SnapshotsCleared() bool {
+	return m.clearedsnapshots
+}
+
+// RemoveSnapshotIDs removes the "snapshots" edge to the SchemaSnapshot entity by IDs.
+func (m *MigrationMutation) RemoveSnapshotIDs(ids ...int) {
+	if m.removedsnapshots == nil {
+		m.removedsnapshots = make(map[int]struct{})
+	}
+	for i := range ids {
+		delete(m.snapshots, ids[i])
+		m.removedsnapshots[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedSnapshots returns the removed IDs of the "snapshots" edge to the SchemaSnapshot entity.
+func (m *MigrationMutation) RemovedSnapshotsIDs() (ids []int) {
+	for id := range m.removedsnapshots {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// SnapshotsIDs returns the "snapshots" edge IDs in the mutation.
+func (m *MigrationMutation) SnapshotsIDs() (ids []int) {
+	for id := range m.snapshots {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetSnapshots resets all changes to the "snapshots" edge.
+func (m *MigrationMutation) ResetSnapshots() {
+	m.snapshots = nil
+	m.clearedsnapshots = false
+	m.removedsnapshots = nil
+}
+
 // Where appends a list predicates to the MigrationMutation builder.
 func (m *MigrationMutation) Where(ps ...predicate.Migration) {
 	m.predicates = append(m.predicates, ps...)
@@ -3490,12 +3549,15 @@ func (m *MigrationMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *MigrationMutation) AddedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 3)
 	if m.connection != nil {
 		edges = append(edges, migration.EdgeConnection)
 	}
 	if m.executor != nil {
 		edges = append(edges, migration.EdgeExecutor)
+	}
+	if m.snapshots != nil {
+		edges = append(edges, migration.EdgeSnapshots)
 	}
 	return edges
 }
@@ -3512,30 +3574,50 @@ func (m *MigrationMutation) AddedIDs(name string) []ent.Value {
 		if id := m.executor; id != nil {
 			return []ent.Value{*id}
 		}
+	case migration.EdgeSnapshots:
+		ids := make([]ent.Value, 0, len(m.snapshots))
+		for id := range m.snapshots {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *MigrationMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 3)
+	if m.removedsnapshots != nil {
+		edges = append(edges, migration.EdgeSnapshots)
+	}
 	return edges
 }
 
 // RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
 // the given name in this mutation.
 func (m *MigrationMutation) RemovedIDs(name string) []ent.Value {
+	switch name {
+	case migration.EdgeSnapshots:
+		ids := make([]ent.Value, 0, len(m.removedsnapshots))
+		for id := range m.removedsnapshots {
+			ids = append(ids, id)
+		}
+		return ids
+	}
 	return nil
 }
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *MigrationMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 3)
 	if m.clearedconnection {
 		edges = append(edges, migration.EdgeConnection)
 	}
 	if m.clearedexecutor {
 		edges = append(edges, migration.EdgeExecutor)
+	}
+	if m.clearedsnapshots {
+		edges = append(edges, migration.EdgeSnapshots)
 	}
 	return edges
 }
@@ -3548,6 +3630,8 @@ func (m *MigrationMutation) EdgeCleared(name string) bool {
 		return m.clearedconnection
 	case migration.EdgeExecutor:
 		return m.clearedexecutor
+	case migration.EdgeSnapshots:
+		return m.clearedsnapshots
 	}
 	return false
 }
@@ -3575,6 +3659,9 @@ func (m *MigrationMutation) ResetEdge(name string) error {
 		return nil
 	case migration.EdgeExecutor:
 		m.ResetExecutor()
+		return nil
+	case migration.EdgeSnapshots:
+		m.ResetSnapshots()
 		return nil
 	}
 	return fmt.Errorf("unknown Migration edge %s", name)
@@ -4350,6 +4437,497 @@ func (m *PlatformUserMutation) ResetEdge(name string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown PlatformUser edge %s", name)
+}
+
+// SchemaSnapshotMutation represents an operation that mutates the SchemaSnapshot nodes in the graph.
+type SchemaSnapshotMutation struct {
+	config
+	op               Op
+	typ              string
+	id               *int
+	phase            *schemasnapshot.Phase
+	json             *string
+	clearedFields    map[string]struct{}
+	migration        *int
+	clearedmigration bool
+	done             bool
+	oldValue         func(context.Context) (*SchemaSnapshot, error)
+	predicates       []predicate.SchemaSnapshot
+}
+
+var _ ent.Mutation = (*SchemaSnapshotMutation)(nil)
+
+// schemasnapshotOption allows management of the mutation configuration using functional options.
+type schemasnapshotOption func(*SchemaSnapshotMutation)
+
+// newSchemaSnapshotMutation creates new mutation for the SchemaSnapshot entity.
+func newSchemaSnapshotMutation(c config, op Op, opts ...schemasnapshotOption) *SchemaSnapshotMutation {
+	m := &SchemaSnapshotMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeSchemaSnapshot,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withSchemaSnapshotID sets the ID field of the mutation.
+func withSchemaSnapshotID(id int) schemasnapshotOption {
+	return func(m *SchemaSnapshotMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *SchemaSnapshot
+		)
+		m.oldValue = func(ctx context.Context) (*SchemaSnapshot, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().SchemaSnapshot.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withSchemaSnapshot sets the old SchemaSnapshot of the mutation.
+func withSchemaSnapshot(node *SchemaSnapshot) schemasnapshotOption {
+	return func(m *SchemaSnapshotMutation) {
+		m.oldValue = func(context.Context) (*SchemaSnapshot, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m SchemaSnapshotMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m SchemaSnapshotMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *SchemaSnapshotMutation) ID() (id int, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *SchemaSnapshotMutation) IDs(ctx context.Context) ([]int, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().SchemaSnapshot.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetMigrationID sets the "migration_id" field.
+func (m *SchemaSnapshotMutation) SetMigrationID(i int) {
+	m.migration = &i
+}
+
+// MigrationID returns the value of the "migration_id" field in the mutation.
+func (m *SchemaSnapshotMutation) MigrationID() (r int, exists bool) {
+	v := m.migration
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMigrationID returns the old "migration_id" field's value of the SchemaSnapshot entity.
+// If the SchemaSnapshot object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SchemaSnapshotMutation) OldMigrationID(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMigrationID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMigrationID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMigrationID: %w", err)
+	}
+	return oldValue.MigrationID, nil
+}
+
+// ResetMigrationID resets all changes to the "migration_id" field.
+func (m *SchemaSnapshotMutation) ResetMigrationID() {
+	m.migration = nil
+}
+
+// SetPhase sets the "phase" field.
+func (m *SchemaSnapshotMutation) SetPhase(s schemasnapshot.Phase) {
+	m.phase = &s
+}
+
+// Phase returns the value of the "phase" field in the mutation.
+func (m *SchemaSnapshotMutation) Phase() (r schemasnapshot.Phase, exists bool) {
+	v := m.phase
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPhase returns the old "phase" field's value of the SchemaSnapshot entity.
+// If the SchemaSnapshot object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SchemaSnapshotMutation) OldPhase(ctx context.Context) (v schemasnapshot.Phase, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPhase is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPhase requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPhase: %w", err)
+	}
+	return oldValue.Phase, nil
+}
+
+// ResetPhase resets all changes to the "phase" field.
+func (m *SchemaSnapshotMutation) ResetPhase() {
+	m.phase = nil
+}
+
+// SetJSON sets the "json" field.
+func (m *SchemaSnapshotMutation) SetJSON(s string) {
+	m.json = &s
+}
+
+// JSON returns the value of the "json" field in the mutation.
+func (m *SchemaSnapshotMutation) JSON() (r string, exists bool) {
+	v := m.json
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldJSON returns the old "json" field's value of the SchemaSnapshot entity.
+// If the SchemaSnapshot object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SchemaSnapshotMutation) OldJSON(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldJSON is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldJSON requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldJSON: %w", err)
+	}
+	return oldValue.JSON, nil
+}
+
+// ResetJSON resets all changes to the "json" field.
+func (m *SchemaSnapshotMutation) ResetJSON() {
+	m.json = nil
+}
+
+// ClearMigration clears the "migration" edge to the Migration entity.
+func (m *SchemaSnapshotMutation) ClearMigration() {
+	m.clearedmigration = true
+	m.clearedFields[schemasnapshot.FieldMigrationID] = struct{}{}
+}
+
+// MigrationCleared reports if the "migration" edge to the Migration entity was cleared.
+func (m *SchemaSnapshotMutation) MigrationCleared() bool {
+	return m.clearedmigration
+}
+
+// MigrationIDs returns the "migration" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// MigrationID instead. It exists only for internal usage by the builders.
+func (m *SchemaSnapshotMutation) MigrationIDs() (ids []int) {
+	if id := m.migration; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetMigration resets all changes to the "migration" edge.
+func (m *SchemaSnapshotMutation) ResetMigration() {
+	m.migration = nil
+	m.clearedmigration = false
+}
+
+// Where appends a list predicates to the SchemaSnapshotMutation builder.
+func (m *SchemaSnapshotMutation) Where(ps ...predicate.SchemaSnapshot) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the SchemaSnapshotMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *SchemaSnapshotMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.SchemaSnapshot, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *SchemaSnapshotMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *SchemaSnapshotMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (SchemaSnapshot).
+func (m *SchemaSnapshotMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *SchemaSnapshotMutation) Fields() []string {
+	fields := make([]string, 0, 3)
+	if m.migration != nil {
+		fields = append(fields, schemasnapshot.FieldMigrationID)
+	}
+	if m.phase != nil {
+		fields = append(fields, schemasnapshot.FieldPhase)
+	}
+	if m.json != nil {
+		fields = append(fields, schemasnapshot.FieldJSON)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *SchemaSnapshotMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case schemasnapshot.FieldMigrationID:
+		return m.MigrationID()
+	case schemasnapshot.FieldPhase:
+		return m.Phase()
+	case schemasnapshot.FieldJSON:
+		return m.JSON()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *SchemaSnapshotMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case schemasnapshot.FieldMigrationID:
+		return m.OldMigrationID(ctx)
+	case schemasnapshot.FieldPhase:
+		return m.OldPhase(ctx)
+	case schemasnapshot.FieldJSON:
+		return m.OldJSON(ctx)
+	}
+	return nil, fmt.Errorf("unknown SchemaSnapshot field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *SchemaSnapshotMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case schemasnapshot.FieldMigrationID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMigrationID(v)
+		return nil
+	case schemasnapshot.FieldPhase:
+		v, ok := value.(schemasnapshot.Phase)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPhase(v)
+		return nil
+	case schemasnapshot.FieldJSON:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetJSON(v)
+		return nil
+	}
+	return fmt.Errorf("unknown SchemaSnapshot field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *SchemaSnapshotMutation) AddedFields() []string {
+	var fields []string
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *SchemaSnapshotMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *SchemaSnapshotMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown SchemaSnapshot numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *SchemaSnapshotMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *SchemaSnapshotMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *SchemaSnapshotMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown SchemaSnapshot nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *SchemaSnapshotMutation) ResetField(name string) error {
+	switch name {
+	case schemasnapshot.FieldMigrationID:
+		m.ResetMigrationID()
+		return nil
+	case schemasnapshot.FieldPhase:
+		m.ResetPhase()
+		return nil
+	case schemasnapshot.FieldJSON:
+		m.ResetJSON()
+		return nil
+	}
+	return fmt.Errorf("unknown SchemaSnapshot field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *SchemaSnapshotMutation) AddedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.migration != nil {
+		edges = append(edges, schemasnapshot.EdgeMigration)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *SchemaSnapshotMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case schemasnapshot.EdgeMigration:
+		if id := m.migration; id != nil {
+			return []ent.Value{*id}
+		}
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *SchemaSnapshotMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 1)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *SchemaSnapshotMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *SchemaSnapshotMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.clearedmigration {
+		edges = append(edges, schemasnapshot.EdgeMigration)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *SchemaSnapshotMutation) EdgeCleared(name string) bool {
+	switch name {
+	case schemasnapshot.EdgeMigration:
+		return m.clearedmigration
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *SchemaSnapshotMutation) ClearEdge(name string) error {
+	switch name {
+	case schemasnapshot.EdgeMigration:
+		m.ClearMigration()
+		return nil
+	}
+	return fmt.Errorf("unknown SchemaSnapshot unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *SchemaSnapshotMutation) ResetEdge(name string) error {
+	switch name {
+	case schemasnapshot.EdgeMigration:
+		m.ResetMigration()
+		return nil
+	}
+	return fmt.Errorf("unknown SchemaSnapshot edge %s", name)
 }
 
 // SessionMutation represents an operation that mutates the Session nodes in the graph.

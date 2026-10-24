@@ -14,8 +14,10 @@
   "dependencies": {
     "@astrojs/node": "^11.1.9",
     "@astrojs/solid-js": "^7.1.0",
+    "@codemirror/lang-sql": "^6.10.0",
     "@tanstack/solid-table": "^9.3.1",
     "astro": "^7.4.1",
+    "codemirror": "^6.0.2",
     "dotenv": "catalog:",
     "mobx": "^7.0.6",
     "solid-js": "^1.9.17",

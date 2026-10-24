@@ -165,6 +165,34 @@ var (
 		Columns:    PlatformUsersColumns,
 		PrimaryKey: []*schema.Column{PlatformUsersColumns[0]},
 	}
+	// SchemaSnapshotsColumns holds the columns for the "schema_snapshots" table.
+	SchemaSnapshotsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "phase", Type: field.TypeEnum, Enums: []string{"before", "after"}},
+		{Name: "json", Type: field.TypeString, Size: 2147483647},
+		{Name: "migration_id", Type: field.TypeInt},
+	}
+	// SchemaSnapshotsTable holds the schema information for the "schema_snapshots" table.
+	SchemaSnapshotsTable = &schema.Table{
+		Name:       "schema_snapshots",
+		Columns:    SchemaSnapshotsColumns,
+		PrimaryKey: []*schema.Column{SchemaSnapshotsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "schema_snapshots_migrations_snapshots",
+				Columns:    []*schema.Column{SchemaSnapshotsColumns[3]},
+				RefColumns: []*schema.Column{MigrationsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "schemasnapshot_migration_id_phase",
+				Unique:  true,
+				Columns: []*schema.Column{SchemaSnapshotsColumns[3], SchemaSnapshotsColumns[1]},
+			},
+		},
+	}
 	// SessionsColumns holds the columns for the "sessions" table.
 	SessionsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
@@ -213,6 +241,7 @@ var (
 		GroupMembershipsTable,
 		MigrationsTable,
 		PlatformUsersTable,
+		SchemaSnapshotsTable,
 		SessionsTable,
 	}
 )
@@ -224,5 +253,6 @@ func init() {
 	GroupMembershipsTable.ForeignKeys[1].RefTable = PlatformUsersTable
 	MigrationsTable.ForeignKeys[0].RefTable = DatabaseConnectionsTable
 	MigrationsTable.ForeignKeys[1].RefTable = PlatformUsersTable
+	SchemaSnapshotsTable.ForeignKeys[0].RefTable = MigrationsTable
 	SessionsTable.ForeignKeys[0].RefTable = PlatformUsersTable
 }

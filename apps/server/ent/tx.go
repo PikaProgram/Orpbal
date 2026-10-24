@@ -24,6 +24,8 @@ type Tx struct {
 	Migration *MigrationClient
 	// PlatformUser is the client for interacting with the PlatformUser builders.
 	PlatformUser *PlatformUserClient
+	// SchemaSnapshot is the client for interacting with the SchemaSnapshot builders.
+	SchemaSnapshot *SchemaSnapshotClient
 	// Session is the client for interacting with the Session builders.
 	Session *SessionClient
 
@@ -163,6 +165,7 @@ func (tx *Tx) init() {
 	tx.GroupMembership = NewGroupMembershipClient(tx.config)
 	tx.Migration = NewMigrationClient(tx.config)
 	tx.PlatformUser = NewPlatformUserClient(tx.config)
+	tx.SchemaSnapshot = NewSchemaSnapshotClient(tx.config)
 	tx.Session = NewSessionClient(tx.config)
 }
 

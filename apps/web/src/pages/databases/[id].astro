@@ -3,24 +3,51 @@ import { actions } from "astro:actions";
 
 import Layout from "@/layouts/Layout.astro";
 import { actionResults } from "@/lib/forms";
-import { api, type MyDatabase, type DatabaseSchema, type QueryResult, type Migration } from "@/lib/api";
+import { api, type MyDatabase, type DatabaseSchema, type QueryResult, type Migration, type TableCount, type MigrationDiff } from "@/lib/api";
 import { requireSession } from "@/lib/session";
+
+import SchemaVisualizer from "@/components/SchemaVisualizer.astro";
+import TablesList from "@/components/TablesList.astro";
+import TableEditor from "@/components/TableEditor.astro";
+import SqlEditor from "@/components/SqlEditor.astro";
 
 const auth = await requireSession(Astro);
 if (auth instanceof Response) return auth;
 
-const outcome = actionResults(Astro, [actions.createMigration, actions.updateMigration, actions.executeMigration]);
-if (outcome.succeeded) return Astro.redirect(Astro.url.pathname + Astro.url.search);
+const outcome = actionResults(Astro, [
+	actions.createMigration,
+	actions.updateMigration,
+	actions.executeMigration,
+	actions.insertRow,
+	actions.updateRow,
+	actions.deleteRow,
+]);
+if (outcome.succeeded) {
+	const redirect = new URL(Astro.url);
+	redirect.searchParams.delete("_action");
+	return Astro.redirect(redirect.pathname + redirect.search);
+}
 
-const connectionId = Astro.params.id;
-const selected = Astro.url.searchParams.get("table") ?? "";
+const connectionId = Astro.params.id ?? "";
+const tab = Astro.url.searchParams.get("tab") ?? "schema";
+const tableKey = Astro.url.searchParams.get("table") ?? "";
 const editMigrationId = Number(Astro.url.searchParams.get("edit") ?? "");
+const diffId = Number(Astro.url.searchParams.get("diff") ?? "");
 const dataOffset = Math.max(0, Number(Astro.url.searchParams.get("offset") ?? "") || 0);
+const tabs = [
+	{ id: "schema", label: "Schema Visualizer" },
+	{ id: "tables", label: "Tables" },
+	{ id: "editor", label: "Table Editor" },
+	{ id: "sql", label: "SQL Editor" },
+];
+const tabLink = (id: string) => `/databases/${connectionId}?tab=${id}`;
 
 // Fetch the user's access list to resolve the connection and access level.
 const mineResult = await api<MyDatabase[]>("/me/databases", { cookie: auth.cookie });
 const mine = mineResult.status === 200 ? mineResult.data : [];
 const database = mine.find((db) => String(db.connection_id) === connectionId);
+const canEdit = database?.access_level === "view_edit";
+const csrf = auth.session.csrf_token;
 
 let schema: DatabaseSchema | null = null;
 let error: string | null = null;
@@ -35,56 +62,63 @@ if (!database) {
 	}
 }
 
-// Resolve the selected table against the fetched schema; only schema-listed
-// tables can be browsed, which also keeps the generated SELECT safe.
-let selectedSchema: string | null = null;
-let selectedTable: string | null = null;
-if (schema && selected) {
-	const [schemaName, tableName] = selected.split(".");
-	for (const entry of schema.schemas) {
-		if (entry.schema !== schemaName) continue;
-		if (entry.tables.some((table) => table.name === tableName)) {
-			selectedSchema = schemaName;
-			selectedTable = tableName;
-		}
-	}
+// Tables tab: planner estimates for the list (exact counts are on-demand).
+let counts: TableCount[] | null = null;
+if (schema && tab === "tables") {
+	const result = await api<TableCount[]>(`/databases/${connectionId}/table-counts`, { cookie: auth.cookie });
+	counts = result.status === 200 ? result.data : null;
 }
 
-let data: QueryResult | null = null;
-let dataError: string | null = null;
-if (selectedSchema && selectedTable) {
-	// Identifiers come from information_schema; double-quote and reject anything
-	// that is not a plain identifier before building the browse query.
-	const safe = (value: string) => /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(value);
-	if (safe(selectedSchema) && safe(selectedTable)) {
-		const sql = `SELECT * FROM "${selectedSchema}"."${selectedTable}"`;
-		const result = await api<QueryResult>(`/databases/${connectionId}/query`, {
-			method: "POST",
-			cookie: auth.cookie,
-			csrf: auth.session.csrf_token,
-			body: { sql, limit: 50, offset: dataOffset },
-		});
-		if (result.status === 200) {
-			data = result.data;
-		} else {
-			dataError = "Failed to load rows for this table.";
-		}
+// Editor tab: resolve the selected table and fetch one page of rows.
+const safe = (value: string) => /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(value);
+const [editorSchema, editorTable] = tableKey.split(".");
+const editorKnown =
+	schema !== null &&
+	editorSchema !== undefined &&
+	editorTable !== undefined &&
+	safe(editorSchema) &&
+	safe(editorTable) &&
+	schema.schemas.some((s) => s.schema === editorSchema && s.tables.some((t) => t.name === editorTable));
+
+let rows: QueryResult | null = null;
+let rowsError: string | null = null;
+if (tab === "editor" && editorKnown) {
+	const result = await api<QueryResult>(`/databases/${connectionId}/query`, {
+		method: "POST",
+		cookie: auth.cookie,
+		csrf,
+		body: { sql: `SELECT * FROM "${editorSchema}"."${editorTable}"`, limit: 50, offset: dataOffset },
+	});
+	if (result.status === 200) {
+		rows = result.data;
 	} else {
-		dataError = "Table identifier is not browsable.";
+		rowsError = "Failed to load rows for this table.";
 	}
 }
 
-const selectedEntry = schema?.schemas.find((entry) => entry.schema === selectedSchema);
-const selectedTableEntry = selectedEntry?.tables.find((table) => table.name === selectedTable);
-const accessLabel = database?.access_level === "view_edit" ? "View + Edit" : "View Only";
-const canEdit = database?.access_level === "view_edit";
-const csrf = auth.session.csrf_token;
-
+// SQL tab: migration history plus the requested diff.
 let migrations: Migration[] = [];
-if (database) {
+let migrationsError: string | null = null;
+let diff: MigrationDiff | null = null;
+let diffError: string | null = null;
+if (database && tab === "sql") {
 	const result = await api<Migration[]>(`/databases/${connectionId}/migrations`, { cookie: auth.cookie });
-	if (result.status === 200) migrations = result.data;
+	if (result.status === 200) {
+		migrations = result.data;
+	} else {
+		migrationsError = "Failed to load migration history.";
+	}
+	if (diffId) {
+		const diffResult = await api<MigrationDiff>(`/databases/${connectionId}/migrations/${diffId}/diff`, { cookie: auth.cookie });
+		if (diffResult.status === 200) {
+			diff = diffResult.data;
+		} else {
+			diffError = "Failed to load the schema diff for this migration.";
+		}
+	}
 }
+
+const accessLabel = database?.access_level === "view_edit" ? "View + Edit" : "View Only";
 ---
 
 <Layout title={`${database?.name ?? "Database"} — Viewer`} user={auth.session.user}>
@@ -106,292 +140,96 @@ if (database) {
 		</span>
 	</div>
 
+	{error && (
+		<div class="mb-4 border border-error/40 bg-error/10 px-4 py-3 text-sm text-error">{error}</div>
+	)}
+
+	{outcome.error && (
+		<div class="mb-4 border border-error/40 bg-error/10 px-4 py-3 text-sm text-error">{outcome.error}</div>
+	)}
+
+	{database && (
+		<nav class="mb-4 flex flex-wrap gap-1 border-b border-seam">
+			{tabs.map((entry) => (
+				<a
+					href={tabLink(entry.id)}
+					class={`-mb-px border-b-2 px-3 py-2 text-sm ${
+						tab === entry.id
+							? "border-brass font-semibold text-brass-lit"
+							: "border-transparent text-dim hover:text-foreground"
+					}`}
+				>
+					{entry.label}
+				</a>
+			))}
+		</nav>
+	)}
+
 	{
-		error && (
-			<div class="mb-4 border border-error/40 bg-error/10 px-4 py-3 text-sm text-error">{error}</div>
-		)
+		database && schema && tab === "schema" && <SchemaVisualizer schema={schema} />
 	}
 
-	{
-		schema && (
-			<div class="grid gap-4 lg:grid-cols-[260px_1fr]">
-				<aside class="panel max-h-[70vh] overflow-auto p-3">
-					<div class="nameplate mb-2">Schema tree</div>
-					{schema.schemas.map((entry) => (
-						<div class="mb-3">
-							<div class="mono mb-1 text-xs font-bold text-brass-lit">{entry.schema}</div>
-							<ul class="space-y-1">
-								{entry.tables.map((table) => {
-									const key = `${entry.schema}.${table.name}`;
-									const active = key === selected;
-									return (
-										<li>
-											<a
-												href={`/databases/${connectionId}?table=${encodeURIComponent(key)}`}
-												class={`mono block px-2 py-1 text-xs ${
-													active ? "bg-brass/20 text-brass-lit" : "text-dim hover:text-foreground"
-												}`}
-											>
-												{table.name}
-											</a>
-										</li>
-									);
-								})}
-								{entry.tables.length === 0 && <li class="px-2 py-1 text-xs text-dim">No tables</li>}
-							</ul>
-						</div>
-					))}
-				</aside>
+	{database && schema && tab === "tables" && <TablesList schema={schema} connectionId={connectionId} counts={counts} csrf={csrf} />}
 
-				<main class="min-w-0">
-					{!selectedTableEntry && (
-						<div class="panel p-6 text-sm text-dim">
-							Select a table from the schema tree to inspect its structure and data.
-						</div>
-					)}
-					{selectedTableEntry && (
-						<div class="space-y-4">
-							<section class="panel p-4">
-								<h2 class="mono mb-3 text-sm font-bold text-brass-lit">
-									{selectedSchema}.{selectedTableEntry.name}
-								</h2>
-								<table class="w-full text-left text-xs">
-									<thead class="bg-plate-raised text-dim">
-										<tr>
-											<th class="px-3 py-2 font-semibold">Column</th>
-											<th class="px-3 py-2 font-semibold">Type</th>
-											<th class="px-3 py-2 font-semibold">Nullable</th>
-											<th class="px-3 py-2 font-semibold">Constraints</th>
-										</tr>
-									</thead>
-									<tbody class="divide-y divide-seam">
-										{selectedTableEntry.columns.map((column) => (
-											<tr>
-												<td class="mono px-3 py-2 font-semibold">{column.name}</td>
-												<td class="mono px-3 py-2">{column.type}</td>
-												<td class="px-3 py-2">{column.is_nullable ? "yes" : "no"}</td>
-												<td class="px-3 py-2">
-													{(selectedTableEntry.constraints ?? [])
-														.filter((constraint) => constraint.columns.includes(column.name))
-														.map((constraint) => constraint.type)
-														.join(", ") || "—"}
-												</td>
-											</tr>
-										))}
-									</tbody>
-								</table>
-							</section>
-
-							{(selectedTableEntry.constraints ?? []).length > 0 && (
-								<section class="panel p-4">
-									<h3 class="mb-2 text-sm font-bold">Constraints</h3>
-									<ul class="mono space-y-1 text-xs text-dim">
-										{selectedTableEntry.constraints!.map((constraint) => (
-											<li>
-												<span class="text-foreground">{constraint.type}</span> {constraint.name} (
-												{constraint.columns.join(", ")}){constraint.referenced_table
-													? ` → ${constraint.referenced_table}.${(constraint.referenced_columns ?? []).join(", ")}`
-													: ""}
-											</li>
-										))}
-									</ul>
-								</section>
-							)}
-
-							{(selectedTableEntry.indexes ?? []).length > 0 && (
-								<section class="panel p-4">
-									<h3 class="mb-2 text-sm font-bold">Indexes</h3>
-									<ul class="mono space-y-1 text-xs text-dim">
-										{selectedTableEntry.indexes!.map((index) => (
-											<li>
-												{index.is_unique ? "UNIQUE " : ""}{index.name}
-											</li>
-										))}
-									</ul>
-								</section>
-							)}
-
-							<section class="panel overflow-hidden">
-								<div class="nameplate">Data (first 50 rows)</div>
-								{dataError && (
-									<div class="border-t border-seam bg-error/10 px-4 py-3 text-sm text-error">
-										{dataError}
-									</div>
-								)}
-								{data && (
-									<>
-										<div class="overflow-x-auto">
-										<table class="w-full text-left text-xs">
-											<thead class="bg-plate-raised text-dim">
-												<tr>
-													{data.columns.map((column) => (
-														<th class="mono px-3 py-2 font-semibold">{column}</th>
-													))}
-												</tr>
-											</thead>
-											<tbody class="divide-y divide-seam">
-												{data.rows.map((row) => (
-													<tr>
-														{row.map((value) => (
-															<td class="mono max-w-xs truncate px-3 py-2">
-																{value === null ? "NULL" : String(value)}
-															</td>
-														))}
-													</tr>
-												))}
-												{data.rows.length === 0 && (
-													<tr>
-														<td class="px-3 py-3 text-dim" colspan={data.columns.length}>
-															No rows.
-														</td>
-													</tr>
-												)}
-											</tbody>
-										</table>
-									</div>
-										{(dataOffset > 0 || data.rows.length === 50) && (
-											<div class="flex items-center justify-between border-t border-seam px-3 py-2 text-xs">
-												{dataOffset > 0 ? (
-													<a
-														href={`?table=${encodeURIComponent(selected)}&offset=${Math.max(0, dataOffset - 50)}`}
-														class="text-dim underline"
-													>
-														Previous
-													</a>
-												) : (
-													<span />
-												)}
-												{data.rows.length === 50 && (
-													<a href={`?table=${encodeURIComponent(selected)}&offset=${dataOffset + 50}`} class="text-dim underline">
-														Next
-													</a>
-												)}
-											</div>
-										)}
-									</>
-								)}
-							</section>
-						</div>
-					)}
-				</main>
-			</div>
-		)
-	}
-
-	{
-		database && (
-			<section class="panel mt-4 overflow-hidden">
-				<div class="nameplate">Migrations</div>
-				{outcome.error && (
-					<div class="border-t border-seam bg-error/10 px-4 py-3 text-sm text-error">{outcome.error}</div>
+	{database && schema && tab === "editor" && (
+		<div class="grid gap-4 lg:grid-cols-[260px_1fr]">
+			<aside class="panel max-h-[70vh] overflow-auto p-3">
+				<div class="nameplate mb-2">Tables</div>
+				{schema.schemas.map((entry) => (
+					<div class="mb-3">
+						<div class="mono mb-1 text-xs font-bold text-brass-lit">{entry.schema}</div>
+						<ul class="space-y-1">
+							{entry.tables.map((table) => {
+								const key = `${entry.schema}.${table.name}`;
+								const active = key === tableKey;
+								return (
+									<li>
+										<a
+											href={`/databases/${connectionId}?tab=editor&table=${encodeURIComponent(key)}`}
+											class={`mono block px-2 py-1 text-xs ${
+												active ? "bg-brass/20 text-brass-lit" : "text-dim hover:text-foreground"
+											}`}
+										>
+											{table.name}
+										</a>
+									</li>
+								);
+							})}
+							{entry.tables.length === 0 && <li class="px-2 py-1 text-xs text-dim">No tables</li>}
+						</ul>
+					</div>
+				))}
+			</aside>
+			<main class="min-w-0">
+				{!editorKnown && <div class="panel p-6 text-sm text-dim">Pick a table from the list to browse its rows.</div>}
+				{editorKnown && (
+					<TableEditor
+						schema={schema}
+						connectionId={connectionId}
+						tableKey={tableKey}
+						canEdit={canEdit}
+						csrf={csrf}
+						rows={rows}
+						rowsError={rowsError}
+						offset={dataOffset}
+					/>
 				)}
-				<div class="p-4">
-					{canEdit && (
-						<form
-							method="POST"
-							action={actions.createMigration}
-							class="mb-4 grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end"
-						>
-							<input type="hidden" name="csrf_token" value={csrf} />
-							<input type="hidden" name="id" value={connectionId} />
-							<label class="block">
-								<span class="mb-1 block text-sm text-dim">New migration SQL</span>
-								<textarea
-									name="sql"
-									required
-									rows="4"
-									class="mono field w-full"
-									placeholder="CREATE TABLE notes (id serial PRIMARY KEY, body text);"
-								></textarea>
-							</label>
-							<button type="submit" class="btn-brass px-3 py-2 text-xs">Create migration</button>
-						</form>
-					)}
+			</main>
+		</div>
+	)}
 
-					{migrations.length === 0 ? (
-						<p class="text-sm text-dim">No migrations recorded for this database.</p>
-					) : (
-						<table class="w-full text-left text-xs">
-							<thead class="bg-plate-raised text-dim">
-								<tr>
-									<th class="px-3 py-2 font-semibold">Version</th>
-									<th class="px-3 py-2 font-semibold">SQL</th>
-									<th class="px-3 py-2 font-semibold">Executor</th>
-									<th class="px-3 py-2 font-semibold">Status</th>
-									<th class="px-3 py-2 font-semibold">Executed at</th>
-									{canEdit && <th class="px-3 py-2 font-semibold">Actions</th>}
-								</tr>
-							</thead>
-							<tbody class="divide-y divide-seam">
-								{migrations.map((migration) => (
-									<tr>
-										<td class="mono px-3 py-2 font-semibold">{migration.version}</td>
-										{migration.status !== "success" && canEdit && editMigrationId === migration.id ? (
-											<td class="px-3 py-2">
-												<form method="POST" action={actions.updateMigration} class="grid gap-2">
-													<input type="hidden" name="csrf_token" value={csrf} />
-													<input type="hidden" name="id" value={connectionId} />
-													<input type="hidden" name="migration_id" value={migration.id} />
-													<textarea name="sql" required rows="4" class="mono field w-full">{migration.sql}</textarea>
-													<div class="flex items-center gap-2">
-														<button type="submit" class="btn-brass px-2 py-1 text-xs">Save</button>
-														<a href={`?table=${encodeURIComponent(selected)}`} class="px-2 py-1 text-xs text-dim underline">Cancel</a>
-													</div>
-												</form>
-											</td>
-										) : (
-											<td class="mono max-w-md truncate px-3 py-2" title={migration.sql}>
-												{migration.sql}
-											</td>
-										)}
-										<td class="mono px-3 py-2 text-dim">{migration.executor_username || `#${migration.executor_id}`}</td>
-										<td class="px-3 py-2">
-											<span
-												class={`border px-2 py-1 text-xs ${
-													migration.status === "success"
-														? "border-ok/40 bg-ok/10 text-ok"
-														: migration.status === "failed"
-														? "border-error/40 bg-error/10 text-error"
-														: "border-warning/40 bg-warning/10 text-warning"
-												}`}
-											>
-												{migration.status}
-											</span>
-										</td>
-										<td class="mono px-3 py-2 text-dim">
-											{migration.status === "pending" ? "—" : migration.executed_at}
-										</td>
-										{canEdit && (
-											<td class="px-3 py-2">
-												{migration.status !== "success" && (
-													<div class="flex items-center gap-2">
-														{migration.status === "pending" && (
-															<form method="POST" action={actions.executeMigration}>
-																<input type="hidden" name="csrf_token" value={csrf} />
-																<input type="hidden" name="id" value={connectionId} />
-																<input type="hidden" name="migration_id" value={migration.id} />
-																<button type="submit" class="btn-brass px-2 py-1 text-xs">
-																	Execute
-																</button>
-															</form>
-														)}
-														<a
-															href={`?table=${encodeURIComponent(selected)}&edit=${migration.id}`}
-															class="px-2 py-1 text-xs text-dim underline"
-														>
-															{migration.status === "failed" ? "Fix" : "Edit"}
-														</a>
-													</div>
-												)}
-											</td>
-										)}
-									</tr>
-								))}
-							</tbody>
-						</table>
-					)}
-				</div>
-			</section>
-		)
-	}
+	{database && tab === "sql" && (
+		<SqlEditor
+			connectionId={connectionId}
+			canEdit={canEdit}
+			csrf={csrf}
+			migrations={migrations}
+			migrationsError={migrationsError}
+			editMigrationId={editMigrationId}
+			diffId={diffId}
+			diff={diff}
+			diffError={diffError}
+			tableKey={tableKey}
+		/>
+	)}
 </Layout>

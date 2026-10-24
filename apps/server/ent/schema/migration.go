@@ -47,6 +47,8 @@ func (Migration) Edges() []ent.Edge {
 			Field("executor_id").
 			Unique().
 			Required(),
+		edge.
+			To("snapshots", SchemaSnapshot.Type),
 	}
 }
 

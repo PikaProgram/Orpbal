@@ -331,6 +331,29 @@ func HasExecutorWith(preds ...predicate.PlatformUser) predicate.Migration {
 	})
 }
 
+// HasSnapshots applies the HasEdge predicate on the "snapshots" edge.
+func HasSnapshots() predicate.Migration {
+	return predicate.Migration(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, SnapshotsTable, SnapshotsColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasSnapshotsWith applies the HasEdge predicate on the "snapshots" edge with a given conditions (other predicates).
+func HasSnapshotsWith(preds ...predicate.SchemaSnapshot) predicate.Migration {
+	return predicate.Migration(func(s *sql.Selector) {
+		step := newSnapshotsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
 // And groups predicates with the AND operator between them.
 func And(predicates ...predicate.Migration) predicate.Migration {
 	return predicate.Migration(sql.AndPredicates(predicates...))

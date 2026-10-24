@@ -1,0 +1,110 @@
+---
+import type { DatabaseSchema, SchemaTable, TableCount } from "@/lib/api";
+
+interface Props {
+	schema: DatabaseSchema;
+	connectionId: string;
+	counts: TableCount[] | null;
+	csrf: string;
+}
+
+const { schema, connectionId, counts, csrf } = Astro.props;
+const publicEntry = schema.schemas.find((entry) => entry.schema === "public");
+const tables: SchemaTable[] = publicEntry?.tables ?? [];
+
+const estimateFor = (name: string): string => {
+	const count = counts?.find((c) => c.table === name);
+	if (!count?.estimate) return "—";
+	return `${count.estimate} (est.)`;
+};
+
+function columnConstraints(table: SchemaTable, column: string): string[] {
+	return (table.constraints ?? [])
+		.filter((c) => c.columns.includes(column))
+		.map((c) => c.type);
+}
+---
+
+<div class="space-y-4" data-csrf={csrf}>
+	{tables.length === 0 && <div class="panel p-6 text-sm text-dim">No tables in the public schema.</div>}
+	{tables.map((table) => (
+		<div class="panel">
+			<details>
+				<summary class="grid cursor-pointer grid-cols-[1fr_auto_auto] items-center gap-3 px-4 py-3 hover:bg-plate-raised/60">
+					<span class="mono font-semibold">{table.name}</span>
+					<span class="text-xs text-dim">{table.columns.length} columns</span>
+					<span class="mono text-xs text-dim" data-estimate>{estimateFor(table.name)}</span>
+				</summary>
+				<div class="border-t border-seam px-4 py-3">
+					<div class="mb-2 flex items-center gap-2 text-xs">
+						<button
+							type="button"
+							class="btn-brass px-3 py-1 text-xs"
+							data-count-button
+							data-schema="public"
+							data-table={table.name}
+							data-connection={connectionId}
+						>
+							Count rows exactly
+						</button>
+						<span
+							data-count-result
+							class="mono text-sm text-dim"
+							data-schema="public"
+							data-table={table.name}
+						></span>
+					</div>
+					<table class="w-full text-left text-xs">
+						<thead class="bg-plate-raised text-dim">
+							<tr>
+								<th class="px-3 py-2 font-semibold">Column</th>
+								<th class="px-3 py-2 font-semibold">Type</th>
+								<th class="px-3 py-2 font-semibold">Nullable</th>
+								<th class="px-3 py-2 font-semibold">Constraints</th>
+							</tr>
+						</thead>
+						<tbody class="divide-y divide-seam">
+							{table.columns.map((column) => (
+								<tr>
+									<td class="mono px-3 py-2 font-semibold">{column.name}</td>
+									<td class="mono px-3 py-2">{column.type}</td>
+									<td class="px-3 py-2">{column.is_nullable ? "yes" : "no"}</td>
+									<td class="px-3 py-2">
+										{columnConstraints(table, column.name).join(", ") || "—"}
+									</td>
+								</tr>
+							))}
+						</tbody>
+					</table>
+				</div>
+			</details>
+		</div>
+	))}
+</div>
+
+<script>
+	import { actions } from "astro:actions";
+
+	// Exact row counts are fetched on demand — the list shows the free
+	// pg_class estimate, the click pays for a real COUNT(*).
+	document.querySelectorAll<HTMLButtonElement>("[data-count-button]").forEach((button) => {
+		button.addEventListener("click", async () => {
+			const schemaName = button.dataset.schema ?? "";
+			const tableName = button.dataset.table ?? "";
+			const connection = Number(button.dataset.connection);
+			const csrf = button.closest("[data-csrf]")?.getAttribute("data-csrf") ?? "";
+			const output = document.querySelector<HTMLElement>(
+				`[data-count-result][data-schema="${schemaName}"][data-table="${tableName}"]`,
+			);
+			if (!output) return;
+			output.textContent = "counting…";
+			try {
+				const result = await actions.countRows({ id: connection, schema: schemaName, table: tableName, csrf_token: csrf });
+				if (result.error) throw new Error();
+				output.textContent = `${result.data?.count ?? "?"} rows (exact)`;
+			} catch {
+				output.textContent = "count failed";
+			}
+		});
+	});
+</script>

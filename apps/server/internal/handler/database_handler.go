@@ -79,6 +79,12 @@ func (h *Handler) ExecuteDatabaseQuery(c *gin.Context, id api.Id, params api.Exe
 	if body.Limit != nil {
 		limit = *body.Limit
 	}
+	// Hard server ceiling: an uncapped SELECT against a big target would
+	// serialize the entire result into one JSON response.
+	const hardCeiling = 10000
+	if limit > hardCeiling {
+		limit = hardCeiling
+	}
 	// Offset is applied in Go while scanning, so any SQL statement paginates
 	// without the handler having to wrap user SQL.
 	offset := 0
