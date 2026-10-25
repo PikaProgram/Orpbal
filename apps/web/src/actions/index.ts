@@ -46,7 +46,7 @@ const rowInput = z.looseObject({
 // Row mutation forms post per-column fields: `col.<name>` are the new
 // values, `pk.<name>` identify the target row. Empty inputs are omitted:
 // inserts fall back to column defaults, updates leave the column unchanged.
-function splitRowFields(input: Record<string, unknown>) {
+export function splitRowFields(input: Record<string, unknown>) {
 	const values: Record<string, string> = {};
 	const pk: Record<string, string> = {};
 	for (const [key, value] of Object.entries(input)) {

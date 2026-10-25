@@ -84,7 +84,7 @@ bun run build
 
 cd apps/server
 go vet ./...
-TEST_DATABASE_URL='postgres://postgres:postgres@localhost:5432/Orpbal?sslmode=disable' go test ./...
+TEST_DATABASE_URL='postgres://postgres:postgres@localhost:5432/orpbal_test?sslmode=disable'
 ```
 
 Integration tests create isolated schemas and drop them afterwards. CI runs the same checks with a `postgres:16` service.
