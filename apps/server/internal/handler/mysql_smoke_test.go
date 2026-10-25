@@ -119,4 +119,22 @@ func TestMySQLSmoke(t *testing.T) {
 	if !found {
 		t.Fatalf("synthesized indexdef missing: %v", idxRows)
 	}
+
+	plan, err := v.Explain(t.Context(), stored, "SELECT a, b FROM smoke_t WHERE b = 'x'", false)
+	if err != nil {
+		t.Fatalf("explain: %v", err)
+	}
+	if plan.Engine != "mysql" || len(plan.Columns) == 0 || len(plan.Rows) == 0 {
+		t.Fatalf("unexpected mysql explain: %+v", plan)
+	}
+	analyzed, err := v.Explain(t.Context(), stored, "SELECT COUNT(*) FROM smoke_t", true)
+	if err != nil {
+		t.Fatalf("explain analyze: %v", err)
+	}
+	if analyzed.Engine != "mysql" || len(analyzed.Rows) == 0 {
+		t.Fatalf("unexpected mysql explain analyze: %+v", analyzed)
+	}
+	if _, err := v.Explain(t.Context(), stored, "EXPLAIN SELECT 1", false); err == nil {
+		t.Fatal("explain accepted a pre-prefixed statement")
+	}
 }
