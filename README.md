@@ -25,6 +25,9 @@ Editor SQL berbasis CodeMirror dengan pembatasan keamanan transaksi read-only da
 ### Pelacakan Migrasi & Schema Diff
 Catatan riwayat migrasi bertahap yang otomatis mengambil snapshot sebelum dan sesudah eksekusi, sehingga diff skema dapat dibandingkan dengan jelas.
 
+### Analisis Query Plan (EXPLAIN / EXPLAIN ANALYZE)
+Rencanakan query dari SQL runner atau migration yang masih `pending` sebelum dieksekusi. PostgreSQL menampilkan pohon plan terstruktur berisi strategi scan dan join, index yang dipakai, estimated cost/rows, serta actual time dan row count saat ANALYZE dijalankan. `EXPLAIN ANALYZE` dieksekusi di dalam transaksi read-only sehingga perubahan data tetap ditolak dan hasil eksekusi dibuang. Target MySQL menampilkan keluaran EXPLAIN tabular.
+
 
 ## Repository Structure
 
@@ -324,6 +327,7 @@ Backend menyediakan strictly-typed REST API  berbasis spesifikasi OpenAPI 3.0 ya
   - `GET /api/me/databases` - Daftar database yang dapat diakses pengguna
   - `GET /api/databases/{id}/schema` - Graf skema lengkap (tabel, kolom, PK/FK)
   - `POST /api/databases/{id}/query` - Eksekusi SQL read-only dalam lingkungan sandbox
+  - `POST /api/databases/{id}/explain` - Rencana eksekusi EXPLAIN / EXPLAIN ANALYZE untuk query
   - `GET /api/databases/{id}/table-counts` - Statistik tabel & estimasi planner
   - `GET /api/databases/{id}/rows` - Data baris tabel dengan paginasi
   - `GET /api/databases/{id}/migrations` - Buku besar riwayat migrasi
@@ -384,12 +388,14 @@ go test ./...
 
 ### Uji Integrasi Menggunakan Docker
 
-Untuk menguji API secara menyeluruh terhadap kontainer PostgreSQL sementara yang terisolasi:
+Untuk menguji API secara menyeluruh terhadap kontainer PostgreSQL dan MySQL sementara yang terisolasi:
 
 ```sh
 # Menjalankan docker-compose.test.yml dan mengeksekusi rangkaian pengujian integrasi
 bun run test:integration
 ```
+
+Skrip memakai `docker compose` bila tersedia dan otomatis jatuh ke `docker-compose` pada instalasi lama. Tes integrasi mencakup alur sukses, kegagalan target, penolakan akses, siklus migration, dan smoke test MySQL 8.
 
 ---
 

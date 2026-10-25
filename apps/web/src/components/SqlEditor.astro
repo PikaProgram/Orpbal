@@ -38,6 +38,63 @@ const statusClass = (status: string) =>
 
 <script>
 	import "@/scripts/sql-editor";
+	import type { ExplainNode, ExplainResult } from "@/lib/api";
+
+	const escapeHtml = (value: unknown) =>
+		String(value).replace(
+			/[&<>"']/g,
+			(char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char] ?? char,
+		);
+
+	// Render one plan node with its scan/index/join details, planner estimates,
+	// and — when ANALYZE ran — actual timings and row counts.
+	const renderNode = (node: ExplainNode): string => {
+		const label = [`<span class="font-semibold text-brass-lit">${escapeHtml(node.node_type)}</span>`];
+		if (node.relation) label.push(`on <span class="text-foreground">${escapeHtml(node.relation)}</span>`);
+		if (node.alias && node.alias !== node.relation) label.push(`<span class="text-dim">(${escapeHtml(node.alias)})</span>`);
+		if (node.index) label.push(`using <span class="text-foreground">${escapeHtml(node.index)}</span>`);
+		if (node.join_type) label.push(`<span class="text-dim">[${escapeHtml(node.join_type)}]</span>`);
+		const estimate = `cost ${node.startup_cost.toFixed(2)}..${node.total_cost.toFixed(2)} · rows ${node.plan_rows} · width ${node.plan_width}`;
+		const actual =
+			node.actual_total_time === null || node.actual_total_time === undefined
+				? ""
+				: ` · <span class="text-ok">actual ${(node.actual_startup_time ?? 0).toFixed(3)}..${node.actual_total_time.toFixed(3)} ms · rows ${node.actual_rows ?? "?"} · loops ${node.actual_loops ?? "?"}</span>`;
+		const details: string[] = [];
+		if (node.index_cond) details.push(`Index Cond: ${escapeHtml(node.index_cond)}`);
+		if (node.filter) details.push(`Filter: ${escapeHtml(node.filter)}`);
+		if (node.sort_key?.length) details.push(`Sort Key: ${escapeHtml(node.sort_key.join(", "))}`);
+		const children = (node.children ?? []).map(renderNode).join("");
+		return `<div class="border-l border-seam pl-3">
+			<div>${label.join(" ")}</div>
+			<div class="text-dim">${estimate}${actual}</div>
+			${details.length ? `<div class="text-dim">${details.join(" · ")}</div>` : ""}
+			${children ? `<div class="mt-1 space-y-1">${children}</div>` : ""}
+		</div>`;
+	};
+
+	const renderExplain = (body: ExplainResult): string => {
+		if (body.nodes?.length) {
+			return `<div class="mono space-y-2 text-xs">${body.nodes.map(renderNode).join("")}</div>`;
+		}
+		const columns = body.columns ?? [];
+		const rows = body.rows ?? [];
+		if (columns.length === 0) {
+			return "<p class='text-sm text-dim'>No plan returned.</p>";
+		}
+		const head = columns.map((name) => `<th class="mono px-3 py-2 font-semibold">${escapeHtml(name)}</th>`).join("");
+		const bodyRows = rows
+			.map(
+				(row) =>
+					`<tr>${row
+						.map((value) => `<td class="mono max-w-xs truncate px-3 py-2">${value === null ? "NULL" : escapeHtml(value)}</td>`)
+						.join("")}</tr>`,
+			)
+			.join("");
+		return `<table class="w-full text-left text-xs"><thead class="bg-plate-raised text-dim"><tr>${head}</tr></thead><tbody class="divide-y divide-seam">${bodyRows}</tbody></table>`;
+	};
+
+	const explainError = (message: string) =>
+		`<div class='border border-error/40 bg-error/10 px-4 py-3 text-sm text-error'>${escapeHtml(message)}</div>`;
 
 	// Ad-hoc read-only runner: submits the CodeMirror-backed textarea through
 	// the existing read-only query endpoint and renders the result table.
@@ -49,6 +106,29 @@ const statusClass = (status: string) =>
 		const sql = (runnerForm.elements.namedItem("sql") as HTMLTextAreaElement).value;
 		const connection = runnerForm.dataset.connection ?? "";
 		const csrfToken = runnerForm.dataset.csrf ?? "";
+		const mode = (event as SubmitEvent).submitter instanceof HTMLButtonElement
+			? ((event as SubmitEvent).submitter as HTMLButtonElement).dataset.mode ?? "run"
+			: "run";
+		if (mode !== "run") {
+			const analyze = mode === "explain-analyze";
+			runnerOutput.innerHTML = `<p class='text-sm text-dim'>${analyze ? "Running EXPLAIN ANALYZE…" : "Planning…"}</p>`;
+			try {
+				const response = await fetch(`/api/databases/${connection}/explain`, {
+					method: "POST",
+					headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken },
+					body: JSON.stringify({ sql, analyze }),
+				});
+				const body = await response.json();
+				if (!response.ok) {
+					runnerOutput.innerHTML = explainError(body?.error?.message ?? "Explain failed");
+					return;
+				}
+				runnerOutput.innerHTML = renderExplain(body as ExplainResult);
+			} catch {
+				runnerOutput.innerHTML = explainError("Explain failed.");
+			}
+			return;
+		}
 		runnerOutput.innerHTML = "<p class='text-sm text-dim'>Running…</p>";
 		try {
 			const response = await fetch(`/api/databases/${connection}/query`, {
@@ -58,7 +138,7 @@ const statusClass = (status: string) =>
 			});
 			const body = await response.json();
 			if (!response.ok) {
-				runnerOutput.innerHTML = `<div class='border border-error/40 bg-error/10 px-4 py-3 text-sm text-error'>${body?.error?.message ?? "Query failed"}</div>`;
+				runnerOutput.innerHTML = explainError(body?.error?.message ?? "Query failed");
 				return;
 			}
 			const columns: string[] = body.columns ?? [];
@@ -67,19 +147,51 @@ const statusClass = (status: string) =>
 				runnerOutput.innerHTML = "<p class='text-sm text-dim'>No result set.</p>";
 				return;
 			}
-			const head = columns.map((name) => `<th class="mono px-3 py-2 font-semibold">${name}</th>`).join("");
+			const head = columns.map((name) => `<th class="mono px-3 py-2 font-semibold">${escapeHtml(name)}</th>`).join("");
 			const bodyRows = rows
 				.map(
 					(row) =>
 						`<tr>${row
-							.map((value) => `<td class="mono max-w-xs truncate px-3 py-2">${value === null ? "NULL" : String(value)}</td>`)
+							.map((value) => `<td class="mono max-w-xs truncate px-3 py-2">${value === null ? "NULL" : escapeHtml(value)}</td>`)
 							.join("")}</tr>`,
 				)
 				.join("");
 			runnerOutput.innerHTML = `<table class="w-full text-left text-xs"><thead class="bg-plate-raised text-dim"><tr>${head}</tr></thead><tbody class="divide-y divide-seam">${bodyRows}</tbody></table>`;
 		} catch {
-			runnerOutput.innerHTML = "<div class='text-sm text-error'>Query failed.</div>";
+			runnerOutput.innerHTML = explainError("Query failed.");
 		}
+	});
+
+	// Pending migrations can be planned before execution. When the inline
+	// editor is open its textarea wins over the stored SQL.
+	document.querySelectorAll<HTMLButtonElement>("button[data-explain]").forEach((button) => {
+		button.addEventListener("click", async () => {
+			const block = button.closest<HTMLElement>("[data-migration]");
+			const output = block?.querySelector<HTMLElement>(".explain-output");
+			if (!block || !output) return;
+			const sql = block.querySelector<HTMLTextAreaElement>("textarea[name='sql']")?.value ?? block.dataset.sql ?? "";
+			if (!sql.trim()) {
+				output.classList.remove("hidden");
+				output.innerHTML = explainError("SQL is empty.");
+				return;
+			}
+			const analyze = button.dataset.analyze === "true";
+			output.classList.remove("hidden");
+			output.innerHTML = `<p class='text-sm text-dim'>${analyze ? "Running EXPLAIN ANALYZE…" : "Planning…"}</p>`;
+			try {
+				const response = await fetch(`/api/databases/${block.dataset.connection}/explain`, {
+					method: "POST",
+					headers: { "Content-Type": "application/json", "X-CSRF-Token": block.dataset.csrf ?? "" },
+					body: JSON.stringify({ sql, analyze }),
+				});
+				const body = await response.json();
+				output.innerHTML = response.ok
+					? renderExplain(body as ExplainResult)
+					: explainError(body?.error?.message ?? "Explain failed");
+			} catch {
+				output.innerHTML = explainError("Explain failed.");
+			}
+		});
 	});
 
 	// Delete confirmations on destructive migration actions.
@@ -112,7 +224,16 @@ const statusClass = (status: string) =>
 		<div class="p-4">
 			<form id="runner-form" data-connection={connectionId} data-csrf={csrf} class="grid gap-3">
 				<textarea name="sql" rows="4" required class="mono field w-full sql-editor" placeholder="SELECT * FROM notes LIMIT 5;"></textarea>
-				<button type="submit" class="btn-brass px-3 py-2 text-xs">Run query</button>
+				<div class="flex flex-wrap items-center gap-2">
+					<button type="submit" data-mode="run" class="btn-brass px-3 py-2 text-xs">Run query</button>
+					<button type="submit" data-mode="explain" class="border border-seam px-3 py-2 text-xs text-brass-lit hover:border-brass">
+						Explain
+					</button>
+					<button type="submit" data-mode="explain-analyze" class="border border-seam px-3 py-2 text-xs text-brass-lit hover:border-brass">
+						Explain Analyze
+					</button>
+					<span class="text-xs text-dim">EXPLAIN ANALYZE runs inside a read-only transaction; results are discarded.</span>
+				</div>
 			</form>
 			<div id="runner-output" class="mt-3 overflow-x-auto"></div>
 		</div>
@@ -126,7 +247,13 @@ const statusClass = (status: string) =>
 			) : (
 				<div class="space-y-2">
 					{migrations.map((migration) => (
-						<div class="border border-seam bg-zinc-950">
+						<div
+							class="border border-seam bg-zinc-950"
+							data-migration={migration.id}
+							data-sql={migration.sql}
+							data-connection={connectionId}
+							data-csrf={csrf}
+						>
 							<div class="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
 								<div class="flex items-center gap-2 text-xs">
 									<span class="mono font-bold">v{migration.version}</span>
@@ -172,6 +299,19 @@ const statusClass = (status: string) =>
 								) : (
 									<pre class="mono max-h-40 overflow-auto whitespace-pre-wrap text-xs text-dim">{migration.sql}</pre>
 								)}
+								{canEdit && migration.status === "pending" && (
+									<div class="mt-2 flex flex-wrap items-center gap-2 border-t border-seam pt-2">
+										<span class="text-xs text-dim">Execution plan:</span>
+										<button type="button" data-explain data-analyze="false" class="text-xs text-brass-lit hover:underline">
+											Explain
+										</button>
+										<button type="button" data-explain data-analyze="true" class="text-xs text-brass-lit hover:underline">
+											Explain Analyze
+										</button>
+										<span class="text-xs text-dim">Only SELECT/WITH statements can be planned; DDL executes without a plan.</span>
+									</div>
+								)}
+								<div class="explain-output mt-2 hidden"></div>
 							</div>
 							{diffId === migration.id && (
 								<div class="border-t border-seam px-3 py-3">

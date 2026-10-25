@@ -272,6 +272,50 @@ type ExecuteQueryRequest struct {
 	Sql    string `json:"sql"`
 }
 
+// ExplainNode defines model for ExplainNode.
+type ExplainNode struct {
+	ActualLoops       *int           `json:"actual_loops,omitempty"`
+	ActualRows        *int           `json:"actual_rows,omitempty"`
+	ActualStartupTime *float64       `json:"actual_startup_time,omitempty"`
+	ActualTotalTime   *float64       `json:"actual_total_time,omitempty"`
+	Alias             *string        `json:"alias,omitempty"`
+	Children          *[]ExplainNode `json:"children,omitempty"`
+	Filter            *string        `json:"filter,omitempty"`
+	Index             *string        `json:"index,omitempty"`
+	IndexCond         *string        `json:"index_cond,omitempty"`
+	JoinType          *string        `json:"join_type,omitempty"`
+
+	// NodeType Scan or join strategy, e.g. Seq Scan, Index Scan, Nested Loop.
+	NodeType      string    `json:"node_type"`
+	PlanRows      int       `json:"plan_rows"`
+	PlanWidth     int       `json:"plan_width"`
+	Relation      *string   `json:"relation,omitempty"`
+	ScanDirection *string   `json:"scan_direction,omitempty"`
+	SortKey       *[]string `json:"sort_key,omitempty"`
+	StartupCost   float64   `json:"startup_cost"`
+	TotalCost     float64   `json:"total_cost"`
+}
+
+// ExplainQueryRequest defines model for ExplainQueryRequest.
+type ExplainQueryRequest struct {
+	// Analyze Run EXPLAIN ANALYZE. Executes inside a read-only transaction and discards the results.
+	Analyze *bool  `json:"analyze,omitempty"`
+	Sql     string `json:"sql"`
+}
+
+// ExplainResult defines model for ExplainResult.
+type ExplainResult struct {
+	Analyze bool      `json:"analyze"`
+	Columns *[]string `json:"columns,omitempty"`
+
+	// Engine Target DBMS engine; immutable once a connection is created.
+	Engine Engine `json:"engine"`
+
+	// Nodes PostgreSQL plan tree; empty for MySQL, whose EXPLAIN output is tabular.
+	Nodes []ExplainNode     `json:"nodes"`
+	Rows  *[]*[]interface{} `json:"rows,omitempty"`
+}
+
 // Grant defines model for Grant.
 type Grant struct {
 	AccessLevel  AccessLevel `json:"access_level"`
@@ -628,6 +672,12 @@ type ChangePasswordParams struct {
 	XCSRFToken CsrfToken `json:"X-CSRF-Token"`
 }
 
+// ExplainDatabaseQueryParams defines parameters for ExplainDatabaseQuery.
+type ExplainDatabaseQueryParams struct {
+	// XCSRFToken Per-session CSRF token from GET /auth/session
+	XCSRFToken CsrfToken `json:"X-CSRF-Token"`
+}
+
 // CreateMigrationParams defines parameters for CreateMigration.
 type CreateMigrationParams struct {
 	// XCSRFToken Per-session CSRF token from GET /auth/session
@@ -687,6 +737,9 @@ type LoginJSONRequestBody = LoginRequest
 
 // ChangePasswordJSONRequestBody defines body for ChangePassword for application/json ContentType.
 type ChangePasswordJSONRequestBody = ChangePasswordRequest
+
+// ExplainDatabaseQueryJSONRequestBody defines body for ExplainDatabaseQuery for application/json ContentType.
+type ExplainDatabaseQueryJSONRequestBody = ExplainQueryRequest
 
 // CreateMigrationJSONRequestBody defines body for CreateMigration for application/json ContentType.
 type CreateMigrationJSONRequestBody = CreateMigrationRequest
@@ -771,6 +824,9 @@ type ServerInterface interface {
 
 	// (GET /auth/session)
 	GetSession(c *gin.Context)
+
+	// (POST /databases/{id}/explain)
+	ExplainDatabaseQuery(c *gin.Context, id Id, params ExplainDatabaseQueryParams)
 
 	// (GET /databases/{id}/migrations)
 	ListMigrations(c *gin.Context, id Id)
@@ -1753,6 +1809,60 @@ func (siw *ServerInterfaceWrapper) GetSession(c *gin.Context) {
 	siw.Handler.GetSession(c)
 }
 
+// ExplainDatabaseQuery operation middleware
+func (siw *ServerInterfaceWrapper) ExplainDatabaseQuery(c *gin.Context) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", c.Param("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter id: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	c.Set(string(CookieAuthScopes), []string{})
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ExplainDatabaseQueryParams
+
+	headers := c.Request.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandler(c, fmt.Errorf("Expected one value for X-CSRF-Token, got %d", n), http.StatusBadRequest)
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter X-CSRF-Token: %w", err), http.StatusBadRequest)
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		siw.ErrorHandler(c, fmt.Errorf("Header parameter X-CSRF-Token is required, but not found"), http.StatusBadRequest)
+		return
+	}
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.ExplainDatabaseQuery(c, id, params)
+}
+
 // ListMigrations operation middleware
 func (siw *ServerInterfaceWrapper) ListMigrations(c *gin.Context) {
 
@@ -2236,6 +2346,7 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 	router.POST(options.BaseURL+"/auth/logout", wrapper.Logout)
 	router.POST(options.BaseURL+"/auth/password", wrapper.ChangePassword)
 	router.GET(options.BaseURL+"/auth/session", wrapper.GetSession)
+	router.POST(options.BaseURL+"/databases/:id/explain", wrapper.ExplainDatabaseQuery)
 	router.GET(options.BaseURL+"/databases/:id/migrations", wrapper.ListMigrations)
 	router.POST(options.BaseURL+"/databases/:id/migrations", wrapper.CreateMigration)
 	router.PATCH(options.BaseURL+"/databases/:id/migrations/:migrationId", wrapper.UpdateMigration)

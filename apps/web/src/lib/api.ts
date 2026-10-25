@@ -219,3 +219,37 @@ export interface ExecuteQueryRequest {
 	limit?: number;
 	offset?: number;
 }
+
+export interface ExplainQueryRequest {
+	sql: string;
+	analyze?: boolean;
+}
+
+export interface ExplainNode {
+	node_type: string;
+	relation?: string | null;
+	alias?: string | null;
+	index?: string | null;
+	join_type?: string | null;
+	scan_direction?: string | null;
+	filter?: string | null;
+	index_cond?: string | null;
+	sort_key?: string[] | null;
+	startup_cost: number;
+	total_cost: number;
+	plan_rows: number;
+	plan_width: number;
+	actual_startup_time?: number | null;
+	actual_total_time?: number | null;
+	actual_rows?: number | null;
+	actual_loops?: number | null;
+	children?: ExplainNode[] | null;
+}
+
+export interface ExplainResult {
+	engine: "postgres" | "mysql";
+	analyze: boolean;
+	nodes: ExplainNode[];
+	columns?: string[] | null;
+	rows?: (unknown | null)[][] | null;
+}

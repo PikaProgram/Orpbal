@@ -565,6 +565,38 @@ paths:
           $ref: "#/components/responses/TargetError"
         "500":
           $ref: "#/components/responses/InternalError"
+  /databases/{id}/explain:
+    post:
+      operationId: explainDatabaseQuery
+      tags: [viewer]
+      parameters:
+        - $ref: "#/components/parameters/Id"
+        - $ref: "#/components/parameters/CsrfToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExplainQueryRequest"
+      responses:
+        "200":
+          description: Execution plan for the statement
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExplainResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "502":
+          $ref: "#/components/responses/TargetError"
+        "500":
+          $ref: "#/components/responses/InternalError"
   /databases/{id}/table-counts:
     get:
       operationId: listTableCounts
@@ -1295,6 +1327,101 @@ components:
           minimum: 0
           maximum: 1000000
           default: 0
+    ExplainQueryRequest:
+      type: object
+      required: [sql]
+      properties:
+        sql:
+          type: string
+          maxLength: 100000
+        analyze:
+          type: boolean
+          default: false
+          description: Run EXPLAIN ANALYZE. Executes inside a read-only transaction and discards the results.
+    ExplainResult:
+      type: object
+      required: [engine, analyze, nodes]
+      properties:
+        engine:
+          $ref: "#/components/schemas/Engine"
+        analyze:
+          type: boolean
+        nodes:
+          type: array
+          description: PostgreSQL plan tree; empty for MySQL, whose EXPLAIN output is tabular.
+          items:
+            $ref: "#/components/schemas/ExplainNode"
+        columns:
+          type: array
+          items:
+            type: string
+        rows:
+          type: array
+          items:
+            type: array
+            nullable: true
+    ExplainNode:
+      type: object
+      required: [node_type, startup_cost, total_cost, plan_rows, plan_width]
+      properties:
+        node_type:
+          type: string
+          description: Scan or join strategy, e.g. Seq Scan, Index Scan, Nested Loop.
+        relation:
+          type: string
+          nullable: true
+        alias:
+          type: string
+          nullable: true
+        index:
+          type: string
+          nullable: true
+        join_type:
+          type: string
+          nullable: true
+        scan_direction:
+          type: string
+          nullable: true
+        filter:
+          type: string
+          nullable: true
+        index_cond:
+          type: string
+          nullable: true
+        sort_key:
+          type: array
+          nullable: true
+          items:
+            type: string
+        startup_cost:
+          type: number
+          format: double
+        total_cost:
+          type: number
+          format: double
+        plan_rows:
+          type: integer
+        plan_width:
+          type: integer
+        actual_startup_time:
+          type: number
+          format: double
+          nullable: true
+        actual_total_time:
+          type: number
+          format: double
+          nullable: true
+        actual_rows:
+          type: integer
+          nullable: true
+        actual_loops:
+          type: integer
+          nullable: true
+        children:
+          type: array
+          nullable: true
+          items:
+            $ref: "#/components/schemas/ExplainNode"
     QueryResult:
       type: object
       required: [columns, rows]
