@@ -1,69 +1,78 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-vi.stubGlobal(
-	"fetch",
-	async (input: RequestInfo, init?: RequestInit) => {
-		const url = typeof input === "string" ? input : input?.url ?? "";
-		if (url.includes("/auth/session")) {
-			return new Response(
-				JSON.stringify({
-					status: 200,
-					data: { user: { id: 1, username: "testuser" } },
-					setCookies: [{ name: "session", value: "abc123", httpOnly: true, path: "/", maxAge: 3600 }],
-				}),
-				{ status: 200, headers: { "content-type": "application/json" } }
-			);
-		}
-		if (url.includes("/databases")) {
-			return new Response(
-				JSON.stringify({
-					status: 200,
-					data: {
-						schemas: [
-							{
-								tables: [
-									{
-										name: "test_table",
-										columns: [{ name: "id", type: "int" }, { name: "label", type: "text" }],
-										indexes: [],
-										constraints: [{ type: "PRIMARY KEY", name: "pk_test_table" }],
-									},
-								],
-							},
-						],
-					},
-					setCookies: [],
-				}),
-				{ status: 200, headers: { "content-type": "application/json" } }
-			);
-		}
-		// Default success response
-		return new Response(
-			JSON.stringify({ status: 200, data: null, setCookies: [] }),
-			{ status: 200, headers: { "content-type": "application/json" } }
+import { ApiError, api } from "./api";
+
+function stubFetch(response: Response) {
+	const fetchMock = vi.fn(async () => response);
+	vi.stubGlobal("fetch", fetchMock);
+	return fetchMock;
+}
+
+afterEach(() => {
+	vi.unstubAllGlobals();
+});
+
+describe("api", () => {
+	it("parses a JSON success body and returns status plus data", async () => {
+		stubFetch(
+			new Response(JSON.stringify({ id: 7 }), {
+				status: 200,
+				headers: { "content-type": "application/json" },
+			}),
 		);
-	}
-);
 
-describe("api fetch mock", () => {
-	it("returns session data via stubbed fetch", async () => {
-		const res = await globalThis.fetch("/auth/session", { method: "GET" });
-		const json = await res.json();
-		expect(json.status).toBe(200);
-		expect(json.data).toBeDefined();
-		expect(json.data.user).toEqual({ id: 1, username: "testuser" });
+		const result = await api<{ id: number }>("/databases/7");
+
+		expect(result).toEqual({ status: 200, data: { id: 7 }, setCookies: [] });
 	});
 
-	it("returns database schema via stubbed fetch", async () => {
-		const res = await globalThis.fetch("/databases/1/schema", { method: "GET" });
-		const json = await res.json();
-		expect(json.status).toBe(200);
-		expect(Array.isArray(json.data?.schemas)).toBe(true);
+	it("returns plain text bodies unchanged when they are not JSON", async () => {
+		stubFetch(new Response("not json", { status: 200, headers: { "content-type": "text/plain" } }));
+
+		const result = await api<string>("/health");
+
+		expect(result.data).toBe("not json");
 	});
 
-	it("handles unknown path gracefully via stubbed fetch", async () => {
-		const res = await globalThis.fetch("/some/unknown/path", { method: "GET" });
-		const json = await res.json();
-		expect(json.status).toBe(200);
-		expect(json.data).toBeNull();
+	it("throws ApiError carrying the server error code, message and fields", async () => {
+		stubFetch(
+			new Response(
+				JSON.stringify({
+					error: { code: "invalid_input", message: "bad sql", fields: { sql: "must be a SELECT" } },
+				}),
+				{ status: 400, headers: { "content-type": "application/json" } },
+			),
+		);
+
+		await expect(api("/databases/7/migrations", { method: "POST", body: { sql: "DROP TABLE x" } })).rejects.toMatchObject({
+			name: "ApiError",
+			status: 400,
+			code: "invalid_input",
+			message: "bad sql",
+			fields: { sql: "must be a SELECT" },
+		});
 	});
+
+	it("falls back to a generic ApiError when the body has no error detail", async () => {
+		stubFetch(new Response(null, { status: 403 }));
+
+		const error = await api("/admin/users").catch((caught: unknown) => caught);
+
+		expect(error).toBeInstanceOf(ApiError);
+		expect((error as ApiError).status).toBe(403);
+		expect((error as ApiError).code).toBe("request_failed");
+		expect((error as ApiError).message).toBe("Request failed with status 403");
+	});
+
+	it("sends the path under /api with the configured method and CSRF header", async () => {
+		const fetchMock = stubFetch(new Response("{}", { status: 200 }));
+
+		await api("/databases/7/migrations/2", { method: "PATCH", csrf: "token-123", body: { sql: "SELECT 1" } });
+
+		const [url, init] = fetchMock.mock.calls[0] as unknown as [URL, RequestInit];
+		expect(url.pathname).toBe("/api/databases/7/migrations/2");
+		expect(init.method).toBe("PATCH");
+		expect((init.headers as Headers).get("X-CSRF-Token")).toBe("token-123");
+		expect(init.body).toBe(JSON.stringify({ sql: "SELECT 1" }));
+	});
+});
