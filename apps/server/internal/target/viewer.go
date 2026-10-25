@@ -54,12 +54,11 @@ func (v *Viewer) pool(dsn string) (*sql.DB, error) {
 }
 
 // Query executes one statement in a READ ONLY transaction and returns
-// a result set when the statement produces rows.
-func (v *Viewer) Query(ctx context.Context, dsn, statement string, limit int) (columns []string, rows [][]any, err error) {
-	if err := ReadableStatement(statement); err != nil {
-		return nil, nil, err
-	}
-	db, err := v.pool(dsn)
+// a result set when the statement produces rows. On MySQL the read-only
+// transaction is unavailable, so MultiStatements=false plus an allowlist
+// guard the execution instead.
+func (v *Viewer) Query(ctx context.Context, stored, statement string, limit int) (columns []string, rows [][]any, err error) {
+	db, err := v.pool(stored)
 	if err != nil {
 		return nil, nil, fmt.Errorf("open target database: %w", err)
 	}
@@ -67,13 +66,26 @@ func (v *Viewer) Query(ctx context.Context, dsn, statement string, limit int) (c
 	ctx, cancel := context.WithTimeout(ctx, QueryTimeout)
 	defer cancel()
 
-	tx, err := db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
-	if err != nil {
-		return nil, nil, fmt.Errorf("begin read-only transaction: %w", err)
-	}
-	defer tx.Rollback()
+	mysql := isMySQL(stored)
 
-	rs, err := tx.QueryContext(ctx, statement)
+	var rs *sql.Rows
+	var tx *sql.Tx
+	if mysql {
+		if err := MySQLReadableStatement(statement); err != nil {
+			return nil, nil, err
+		}
+		rs, err = db.QueryContext(ctx, statement)
+	} else {
+		if err := ReadableStatement(statement); err != nil {
+			return nil, nil, err
+		}
+		tx, err = db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+		if err != nil {
+			return nil, nil, fmt.Errorf("begin read-only transaction: %w", err)
+		}
+		defer tx.Rollback()
+		rs, err = tx.QueryContext(ctx, statement)
+	}
 	if err != nil {
 		return nil, nil, fmt.Errorf("execute query: %w", err)
 	}
@@ -97,6 +109,9 @@ func (v *Viewer) Query(ctx context.Context, dsn, statement string, limit int) (c
 	}
 	if err := rs.Err(); err != nil {
 		return nil, nil, fmt.Errorf("iterate rows: %w", err)
+	}
+	if mysql {
+		return columns, rows, nil
 	}
 	return columns, rows, tx.Commit()
 }
@@ -168,6 +183,30 @@ func TruncateCell(v any, max int) any {
 func ReadableStatement(s string) error {
 	if strings.TrimSpace(s) == "" {
 		return fmt.Errorf("sql statement is required")
+	}
+	return nil
+}
+
+// mysqlReadableKeywords allowlists the statement types a read-only MySQL
+// query may start with. MultiStatements=false blocks `;` concatenation, so
+// the first keyword decides.
+var mysqlReadableKeywords = map[string]bool{
+	"SELECT":   true,
+	"SHOW":     true,
+	"EXPLAIN":  true,
+	"DESCRIBE": true,
+	"DESC":     true,
+	"WITH":     true, // CTEs in MySQL 8 can only precede SELECT
+}
+
+// MySQLReadableStatement enforces read-only semantics for MySQL targets:
+// only statements that cannot mutate state pass.
+func MySQLReadableStatement(s string) error {
+	if err := ReadableStatement(s); err != nil {
+		return err
+	}
+	if first := strings.ToUpper(strings.Fields(s)[0]); !mysqlReadableKeywords[first] {
+		return fmt.Errorf("only SELECT, SHOW, EXPLAIN, DESCRIBE, or WITH statements are allowed")
 	}
 	return nil
 }

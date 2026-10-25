@@ -47,6 +47,7 @@ export interface GroupDetail extends Group {
 export interface DatabaseConnection {
 	id: number;
 	name: string;
+	engine: string;
 	host: string;
 	port: number;
 	database_name: string;

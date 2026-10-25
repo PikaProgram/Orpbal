@@ -165,6 +165,26 @@ func NameContainsFold(v string) predicate.DatabaseConnection {
 	return predicate.DatabaseConnection(sql.FieldContainsFold(FieldName, v))
 }
 
+// EngineEQ applies the EQ predicate on the "engine" field.
+func EngineEQ(v Engine) predicate.DatabaseConnection {
+	return predicate.DatabaseConnection(sql.FieldEQ(FieldEngine, v))
+}
+
+// EngineNEQ applies the NEQ predicate on the "engine" field.
+func EngineNEQ(v Engine) predicate.DatabaseConnection {
+	return predicate.DatabaseConnection(sql.FieldNEQ(FieldEngine, v))
+}
+
+// EngineIn applies the In predicate on the "engine" field.
+func EngineIn(vs ...Engine) predicate.DatabaseConnection {
+	return predicate.DatabaseConnection(sql.FieldIn(FieldEngine, vs...))
+}
+
+// EngineNotIn applies the NotIn predicate on the "engine" field.
+func EngineNotIn(vs ...Engine) predicate.DatabaseConnection {
+	return predicate.DatabaseConnection(sql.FieldNotIn(FieldEngine, vs...))
+}
+
 // HostEQ applies the EQ predicate on the "host" field.
 func HostEQ(v string) predicate.DatabaseConnection {
 	return predicate.DatabaseConnection(sql.FieldEQ(FieldHost, v))

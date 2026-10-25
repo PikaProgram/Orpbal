@@ -956,6 +956,10 @@ components:
     AccessLevel:
       type: string
       enum: [view_only, view_edit]
+    Engine:
+      type: string
+      enum: [postgres, mysql]
+      description: Target DBMS engine; immutable once a connection is created.
     SSLMode:
       type: string
       enum: [disable, require, verify-ca, verify-full]
@@ -1111,12 +1115,14 @@ components:
           $ref: "#/components/schemas/AccessLevel"
     DatabaseConnection:
       type: object
-      required: [id, name, host, port, database_name, username, ssl_mode, is_enabled, has_password, created_at, updated_at]
+      required: [id, name, engine, host, port, database_name, username, ssl_mode, is_enabled, has_password, created_at, updated_at]
       properties:
         id:
           type: integer
         name:
           type: string
+        engine:
+          $ref: "#/components/schemas/Engine"
         host:
           type: string
         port:
@@ -1139,10 +1145,12 @@ components:
           format: date-time
     CreateConnectionRequest:
       type: object
-      required: [name, host, database_name, username]
+      required: [name, engine, host, database_name, username]
       properties:
         name:
           type: string
+        engine:
+          $ref: "#/components/schemas/Engine"
         host:
           type: string
         port:
@@ -1150,6 +1158,7 @@ components:
           default: 5432
           minimum: 1
           maximum: 65535
+          description: Defaults to 5432 for postgres and 3306 for mysql.
         database_name:
           type: string
         username:

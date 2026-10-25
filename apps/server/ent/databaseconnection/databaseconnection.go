@@ -17,6 +17,8 @@ const (
 	FieldID = "id"
 	// FieldName holds the string denoting the name field in the database.
 	FieldName = "name"
+	// FieldEngine holds the string denoting the engine field in the database.
+	FieldEngine = "engine"
 	// FieldHost holds the string denoting the host field in the database.
 	FieldHost = "host"
 	// FieldPort holds the string denoting the port field in the database.
@@ -52,6 +54,7 @@ const (
 var Columns = []string{
 	FieldID,
 	FieldName,
+	FieldEngine,
 	FieldHost,
 	FieldPort,
 	FieldDatabaseName,
@@ -96,6 +99,32 @@ var (
 	UpdateDefaultUpdatedAt func() time.Time
 )
 
+// Engine defines the type for the "engine" enum field.
+type Engine string
+
+// EnginePostgres is the default value of the Engine enum.
+const DefaultEngine = EnginePostgres
+
+// Engine values.
+const (
+	EnginePostgres Engine = "postgres"
+	EngineMysql    Engine = "mysql"
+)
+
+func (e Engine) String() string {
+	return string(e)
+}
+
+// EngineValidator is a validator for the "engine" field enum values. It is called by the builders before save.
+func EngineValidator(e Engine) error {
+	switch e {
+	case EnginePostgres, EngineMysql:
+		return nil
+	default:
+		return fmt.Errorf("databaseconnection: invalid enum value for engine field: %q", e)
+	}
+}
+
 // SslMode defines the type for the "ssl_mode" enum field.
 type SslMode string
 
@@ -135,6 +164,11 @@ func ByID(opts ...sql.OrderTermOption) OrderOption {
 // ByName orders the results by the name field.
 func ByName(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldName, opts...).ToFunc()
+}
+
+// ByEngine orders the results by the engine field.
+func ByEngine(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldEngine, opts...).ToFunc()
 }
 
 // ByHost orders the results by the host field.

@@ -47,10 +47,17 @@ func (h *Handler) CreateDatabaseConnection(c *gin.Context, _ api.CreateDatabaseC
 	}
 
 	name := strings.TrimSpace(req.Name)
+	engine := api.Postgres
+	if req.Engine != "" {
+		engine = req.Engine
+	}
 	host := strings.TrimSpace(req.Host)
 	databaseName := strings.TrimSpace(req.DatabaseName)
 	username := strings.TrimSpace(req.Username)
 	port := 5432
+	if engine == api.Mysql {
+		port = 3306
+	}
 	if req.Port != nil {
 		port = *req.Port
 	}
@@ -58,7 +65,7 @@ func (h *Handler) CreateDatabaseConnection(c *gin.Context, _ api.CreateDatabaseC
 	if req.SslMode != nil {
 		sslMode = *req.SslMode
 	}
-	if fields := validateConnection(name, host, databaseName, username, port, sslMode); fields != nil {
+	if fields := validateConnection(name, host, databaseName, username, port, sslMode, string(engine)); fields != nil {
 		writeFields(c, fields)
 		return
 	}
@@ -68,6 +75,7 @@ func (h *Handler) CreateDatabaseConnection(c *gin.Context, _ api.CreateDatabaseC
 		plainPassword = *req.Password
 	}
 	targetDSN, err := (dsn.Config{
+		Engine:       string(engine),
 		Host:         host,
 		Port:         port,
 		DatabaseName: databaseName,
@@ -89,6 +97,7 @@ func (h *Handler) CreateDatabaseConnection(c *gin.Context, _ api.CreateDatabaseC
 
 	create := h.client.DatabaseConnection.Create().
 		SetName(name).
+		SetEngine(databaseconnection.Engine(engine)).
 		SetHost(host).
 		SetPort(port).
 		SetDatabaseName(databaseName).
@@ -123,6 +132,7 @@ func (h *Handler) UpdateDatabaseConnection(c *gin.Context, id api.Id, _ api.Upda
 		writeFields(c, map[string]string{"body": "at least one field is required"})
 		return
 	}
+	// Engine is immutable: DSN, introspection SQL, and pools are keyed to it.
 
 	ctx := c.Request.Context()
 	connection, err := h.client.DatabaseConnection.Get(ctx, id)
@@ -160,7 +170,7 @@ func (h *Handler) UpdateDatabaseConnection(c *gin.Context, id api.Id, _ api.Upda
 	if req.IsEnabled != nil {
 		enabled = *req.IsEnabled
 	}
-	if fields := validateConnection(name, host, databaseName, username, port, sslMode); fields != nil {
+	if fields := validateConnection(name, host, databaseName, username, port, sslMode, string(connection.Engine)); fields != nil {
 		writeFields(c, fields)
 		return
 	}
@@ -173,6 +183,7 @@ func (h *Handler) UpdateDatabaseConnection(c *gin.Context, id api.Id, _ api.Upda
 	// Old DSN for pool invalidation: any query against the previous settings
 	// must reconnect after the update.
 	oldDSN, err := (dsn.Config{
+		Engine:       string(connection.Engine),
 		Host:         connection.Host,
 		Port:         connection.Port,
 		DatabaseName: connection.DatabaseName,
@@ -200,6 +211,7 @@ func (h *Handler) UpdateDatabaseConnection(c *gin.Context, id api.Id, _ api.Upda
 
 	if enabled {
 		targetDSN, err := (dsn.Config{
+			Engine:       string(connection.Engine),
 			Host:         host,
 			Port:         port,
 			DatabaseName: databaseName,
@@ -257,6 +269,7 @@ func toAPIConnection(connection *ent.DatabaseConnection) api.DatabaseConnection 
 	return api.DatabaseConnection{
 		Id:           connection.ID,
 		Name:         connection.Name,
+		Engine:       api.Engine(connection.Engine),
 		Host:         connection.Host,
 		Port:         connection.Port,
 		DatabaseName: connection.DatabaseName,
@@ -269,8 +282,11 @@ func toAPIConnection(connection *ent.DatabaseConnection) api.DatabaseConnection 
 	}
 }
 
-func validateConnection(name, host, databaseName, username string, port int, sslMode api.SSLMode) map[string]string {
+func validateConnection(name, host, databaseName, username string, port int, sslMode api.SSLMode, engine string) map[string]string {
 	fields := map[string]string{}
+	if engine != string(api.Postgres) && engine != string(api.Mysql) {
+		fields["engine"] = fmt.Sprintf("must be one of %s, %s", api.Postgres, api.Mysql)
+	}
 	if name == "" {
 		fields["name"] = "required"
 	}

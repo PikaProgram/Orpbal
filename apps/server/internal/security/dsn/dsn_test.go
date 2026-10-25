@@ -109,3 +109,65 @@ func TestPingSuccess(t *testing.T) {
 		t.Fatalf("Ping() error = %v", err)
 	}
 }
+
+func TestMySQLDSN(t *testing.T) {
+	got, err := Config{
+		Engine:       EngineMySQL,
+		Host:         "db.internal",
+		Port:         3307,
+		DatabaseName: "app",
+		Username:     "user",
+		Password:     "secret",
+		SSLMode:      "require",
+	}.DSN()
+	if err != nil {
+		t.Fatalf("DSN() error = %v", err)
+	}
+	if got != "mysql://user:secret@tcp(db.internal:3307)/app?charset=utf8mb4&tls=skip-verify" {
+		t.Fatalf("DSN() = %q", got)
+	}
+	driver, connect := DriverForDSN(got)
+	if driver != EngineMySQL || connect != "user:secret@tcp(db.internal:3307)/app?charset=utf8mb4&tls=skip-verify" {
+		t.Fatalf("DriverForDSN() = (%q, %q)", driver, connect)
+	}
+}
+
+func TestMySQLDSNDefaults(t *testing.T) {
+	got, err := Config{Engine: EngineMySQL, Host: "localhost", DatabaseName: "app", Username: "user"}.DSN()
+	if err != nil {
+		t.Fatalf("DSN() error = %v", err)
+	}
+	if !strings.Contains(got, "tcp(localhost:3306)") {
+		t.Fatalf("DSN() = %q, missing default port", got)
+	}
+	if strings.Contains(got, "tls=") {
+		t.Fatalf("DSN() = %q, unexpected TLS parameter for sslmode disable", got)
+	}
+}
+
+func TestMySQLEmptyPasswordOmitted(t *testing.T) {
+	got, err := Config{Engine: EngineMySQL, Host: "localhost", DatabaseName: "app", Username: "user", SSLMode: "require"}.DSN()
+	if err != nil {
+		t.Fatalf("DSN() error = %v", err)
+	}
+	if strings.Contains(got, ":@") {
+		t.Fatalf("DSN() = %q, contains an empty password marker", got)
+	}
+	if !strings.Contains(got, "tls=skip-verify") {
+		t.Fatalf("DSN() = %q, missing TLS parameter for sslmode require", got)
+	}
+}
+
+func TestDSNRejectsUnknownEngine(t *testing.T) {
+	cfg := Config{Engine: "sqlite", Host: "db", Port: 3306, DatabaseName: "app", Username: "user"}
+	if _, err := cfg.DSN(); err == nil {
+		t.Fatal("DSN() accepted an unknown engine")
+	}
+}
+
+func TestDriverForDSNPostgresPassthrough(t *testing.T) {
+	driver, connect := DriverForDSN("postgres://u@h:5432/db")
+	if driver != "postgres" || connect != "postgres://u@h:5432/db" {
+		t.Fatalf("DriverForDSN() = (%q, %q)", driver, connect)
+	}
+}

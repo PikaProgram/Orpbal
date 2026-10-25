@@ -3,6 +3,7 @@ package handler
 import (
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -33,18 +34,23 @@ func (h *Handler) GetDatabaseSchema(c *gin.Context, id api.Id) {
 	if !ok {
 		return
 	}
-	_ = connection
-	colCols, colRows, err := h.viewer.Query(c.Request.Context(), dsnStr, columnsSQL, 0)
+	var colsSQL, consSQL, idxsSQL string
+	if connection.Engine == databaseconnection.EngineMysql {
+		colsSQL, consSQL, idxsSQL = mysqlColumnsSQL, mysqlConstraintsSQL, mysqlIndexesSQL
+	} else {
+		colsSQL, consSQL, idxsSQL = columnsSQL, constraintsSQL, indexesSQL
+	}
+	colCols, colRows, err := h.viewer.Query(c.Request.Context(), dsnStr, colsSQL, 0)
 	if err != nil {
 		writeError(c, http.StatusBadGateway, "target_unreachable", err.Error())
 		return
 	}
-	_, constraintRows, err := h.viewer.Query(c.Request.Context(), dsnStr, constraintsSQL, 0)
+	_, constraintRows, err := h.viewer.Query(c.Request.Context(), dsnStr, consSQL, 0)
 	if err != nil {
 		writeError(c, http.StatusBadGateway, "target_unreachable", err.Error())
 		return
 	}
-	_, indexRows, err := h.viewer.Query(c.Request.Context(), dsnStr, indexesSQL, 0)
+	_, indexRows, err := h.viewer.Query(c.Request.Context(), dsnStr, idxsSQL, 0)
 	if err != nil {
 		writeError(c, http.StatusBadGateway, "target_unreachable", err.Error())
 		return
@@ -78,6 +84,10 @@ func (h *Handler) ExecuteDatabaseQuery(c *gin.Context, id api.Id, params api.Exe
 	limit := 100
 	if body.Limit != nil {
 		limit = *body.Limit
+	}
+	// Zero/negative would loop uncapped in the scan, bypassing the ceiling.
+	if limit < 1 {
+		limit = 1
 	}
 	// Hard server ceiling: an uncapped SELECT against a big target would
 	// serialize the entire result into one JSON response.
@@ -151,6 +161,7 @@ func (h *Handler) loadTargetDSN(c *gin.Context, id api.Id) (*ent.DatabaseConnect
 		return nil, "", false
 	}
 	dsn, err := dsn.Config{
+		Engine:       string(connection.Engine),
 		Host:         connection.Host,
 		Port:         connection.Port,
 		DatabaseName: connection.DatabaseName,
@@ -198,6 +209,42 @@ ORDER BY schemaname, tablename, indexname`
 
 const cellLimit = 4096
 
+// mysqlColumnsSQL groups rows under the connected database as the single
+// schema; the shape matches the Postgres projection.
+const mysqlColumnsSQL = `
+SELECT DATABASE() AS table_schema, table_name, column_name, data_type, is_nullable,
+       ordinal_position, column_default, character_maximum_length
+FROM information_schema.columns
+WHERE table_schema = DATABASE()
+ORDER BY table_name, ordinal_position`
+
+// mysqlConstraintsSQL mirrors the Postgres constraint projection. MySQL 8
+// key_column_usage carries referenced table/column names for foreign keys.
+const mysqlConstraintsSQL = `
+SELECT tc.table_schema, tc.table_name, tc.constraint_type, tc.constraint_name,
+       kcu.column_name,
+       kcu.referenced_table_name AS referenced_table,
+       kcu.referenced_column_name AS referenced_column
+FROM information_schema.table_constraints tc
+JOIN information_schema.key_column_usage kcu
+  ON tc.constraint_name = kcu.constraint_name
+ AND tc.constraint_schema = kcu.constraint_schema
+ AND tc.table_name = kcu.table_name
+WHERE tc.table_schema = DATABASE()
+ORDER BY tc.table_name, tc.constraint_name, kcu.ordinal_position`
+
+// mysqlIndexesSQL synthesizes a pg-style indexdef from
+// information_schema.statistics; the PRIMARY pseudo-index duplicates the PK
+// constraint and is skipped.
+const mysqlIndexesSQL = `
+SELECT table_schema, table_name, index_name,
+       CONCAT('CREATE ', IF(MAX(non_unique)=0, 'UNIQUE ', ''), 'INDEX ', index_name,
+              ' ON ', table_name, ' (', GROUP_CONCAT(column_name ORDER BY seq_in_index SEPARATOR ', '), ')') AS indexdef
+FROM information_schema.statistics
+WHERE table_schema = DATABASE() AND index_name <> 'PRIMARY'
+GROUP BY table_schema, table_name, index_name
+ORDER BY table_schema, table_name, index_name`
+
 // buildSchema folds the flat columns, constraints, and indexes results into the API shape.
 func buildSchema(cols []string, colRows, constraintRows, indexRows [][]any) api.DatabaseSchema {
 	bySchema := map[string]*api.SchemaTables{}
@@ -214,9 +261,9 @@ func buildSchema(cols []string, colRows, constraintRows, indexRows [][]any) api.
 		var table *api.SchemaTable
 		table, st.Tables = findTable(st.Tables, tableName)
 		column := api.SchemaColumn{
-			Name:       toString(row[2]),
-			Type:       toString(row[3]),
-			IsNullable: toString(row[4]) == "YES",
+			Name:            toString(row[2]),
+			Type:            toString(row[3]),
+			IsNullable:      toString(row[4]) == "YES",
 			OrdinalPosition: toInt(row[5]),
 		}
 		if row[6] != nil {
@@ -373,6 +420,12 @@ func toInt(v any) int {
 		return int(t)
 	case float64:
 		return int(t)
+	case []byte:
+		n, _ := strconv.Atoi(string(t))
+		return n
+	case string:
+		n, _ := strconv.Atoi(t)
+		return n
 	default:
 		return 0
 	}

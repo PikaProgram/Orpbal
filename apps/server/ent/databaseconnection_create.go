@@ -27,6 +27,20 @@ func (dcc *DatabaseConnectionCreate) SetName(s string) *DatabaseConnectionCreate
 	return dcc
 }
 
+// SetEngine sets the "engine" field.
+func (dcc *DatabaseConnectionCreate) SetEngine(d databaseconnection.Engine) *DatabaseConnectionCreate {
+	dcc.mutation.SetEngine(d)
+	return dcc
+}
+
+// SetNillableEngine sets the "engine" field if the given value is not nil.
+func (dcc *DatabaseConnectionCreate) SetNillableEngine(d *databaseconnection.Engine) *DatabaseConnectionCreate {
+	if d != nil {
+		dcc.SetEngine(*d)
+	}
+	return dcc
+}
+
 // SetHost sets the "host" field.
 func (dcc *DatabaseConnectionCreate) SetHost(s string) *DatabaseConnectionCreate {
 	dcc.mutation.SetHost(s)
@@ -171,6 +185,10 @@ func (dcc *DatabaseConnectionCreate) ExecX(ctx context.Context) {
 
 // defaults sets the default values of the builder before save.
 func (dcc *DatabaseConnectionCreate) defaults() {
+	if _, ok := dcc.mutation.Engine(); !ok {
+		v := databaseconnection.DefaultEngine
+		dcc.mutation.SetEngine(v)
+	}
 	if _, ok := dcc.mutation.Port(); !ok {
 		v := databaseconnection.DefaultPort
 		dcc.mutation.SetPort(v)
@@ -201,6 +219,14 @@ func (dcc *DatabaseConnectionCreate) check() error {
 	if v, ok := dcc.mutation.Name(); ok {
 		if err := databaseconnection.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "DatabaseConnection.name": %w`, err)}
+		}
+	}
+	if _, ok := dcc.mutation.Engine(); !ok {
+		return &ValidationError{Name: "engine", err: errors.New(`ent: missing required field "DatabaseConnection.engine"`)}
+	}
+	if v, ok := dcc.mutation.Engine(); ok {
+		if err := databaseconnection.EngineValidator(v); err != nil {
+			return &ValidationError{Name: "engine", err: fmt.Errorf(`ent: validator failed for field "DatabaseConnection.engine": %w`, err)}
 		}
 	}
 	if _, ok := dcc.mutation.Host(); !ok {
@@ -281,6 +307,10 @@ func (dcc *DatabaseConnectionCreate) createSpec() (*DatabaseConnection, *sqlgrap
 	if value, ok := dcc.mutation.Name(); ok {
 		_spec.SetField(databaseconnection.FieldName, field.TypeString, value)
 		_node.Name = value
+	}
+	if value, ok := dcc.mutation.Engine(); ok {
+		_spec.SetField(databaseconnection.FieldEngine, field.TypeEnum, value)
+		_node.Engine = value
 	}
 	if value, ok := dcc.mutation.Host(); ok {
 		_spec.SetField(databaseconnection.FieldHost, field.TypeString, value)

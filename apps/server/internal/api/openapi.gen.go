@@ -34,6 +34,24 @@ func (e AccessLevel) Valid() bool {
 	}
 }
 
+// Defines values for Engine.
+const (
+	Mysql    Engine = "mysql"
+	Postgres Engine = "postgres"
+)
+
+// Valid indicates whether the value is a known member of the Engine enum.
+func (e Engine) Valid() bool {
+	switch e {
+	case Mysql:
+		return true
+	case Postgres:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for MigrationStatus.
 const (
 	MigrationStatusFailed  MigrationStatus = "failed"
@@ -177,13 +195,18 @@ type ChangePasswordRequest struct {
 
 // CreateConnectionRequest defines model for CreateConnectionRequest.
 type CreateConnectionRequest struct {
-	DatabaseName string   `json:"database_name"`
-	Host         string   `json:"host"`
-	Name         string   `json:"name"`
-	Password     *string  `json:"password,omitempty"`
-	Port         *int     `json:"port,omitempty"`
-	SslMode      *SSLMode `json:"ssl_mode,omitempty"`
-	Username     string   `json:"username"`
+	DatabaseName string `json:"database_name"`
+
+	// Engine Target DBMS engine; immutable once a connection is created.
+	Engine   Engine  `json:"engine"`
+	Host     string  `json:"host"`
+	Name     string  `json:"name"`
+	Password *string `json:"password,omitempty"`
+
+	// Port Defaults to 5432 for postgres and 3306 for mysql.
+	Port     *int     `json:"port,omitempty"`
+	SslMode  *SSLMode `json:"ssl_mode,omitempty"`
+	Username string   `json:"username"`
 }
 
 // CreateGroupRequest defines model for CreateGroupRequest.
@@ -208,21 +231,27 @@ type CreateUserRequest struct {
 type DatabaseConnection struct {
 	CreatedAt    time.Time `json:"created_at"`
 	DatabaseName string    `json:"database_name"`
-	HasPassword  bool      `json:"has_password"`
-	Host         string    `json:"host"`
-	Id           int       `json:"id"`
-	IsEnabled    bool      `json:"is_enabled"`
-	Name         string    `json:"name"`
-	Port         int       `json:"port"`
-	SslMode      SSLMode   `json:"ssl_mode"`
-	UpdatedAt    time.Time `json:"updated_at"`
-	Username     string    `json:"username"`
+
+	// Engine Target DBMS engine; immutable once a connection is created.
+	Engine      Engine    `json:"engine"`
+	HasPassword bool      `json:"has_password"`
+	Host        string    `json:"host"`
+	Id          int       `json:"id"`
+	IsEnabled   bool      `json:"is_enabled"`
+	Name        string    `json:"name"`
+	Port        int       `json:"port"`
+	SslMode     SSLMode   `json:"ssl_mode"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	Username    string    `json:"username"`
 }
 
 // DatabaseSchema defines model for DatabaseSchema.
 type DatabaseSchema struct {
 	Schemas []SchemaTables `json:"schemas"`
 }
+
+// Engine Target DBMS engine; immutable once a connection is created.
+type Engine string
 
 // ErrorDetail defines model for ErrorDetail.
 type ErrorDetail struct {

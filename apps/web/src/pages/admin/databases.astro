@@ -18,6 +18,10 @@ if (outcome.succeeded) return Astro.redirect("/admin/databases");
 
 const connections = (await api<DatabaseConnection[]>("/admin/databases", { cookie: auth.cookie })).data;
 const csrf = auth.session.csrf_token;
+const engines = [
+	{ value: "postgres", label: "PostgreSQL", port: 5432 },
+	{ value: "mysql", label: "MySQL", port: 3306 },
+];
 const sslModes = ["disable", "require", "verify-ca", "verify-full"];
 const inputClass =
 	"field";
@@ -28,7 +32,7 @@ const quietButtonClass = "btn-steel px-3 py-1.5 text-xs";
 <Layout title="Connections" user={auth.session.user}>
 	<h1 class="text-2xl font-semibold tracking-tight">Database connections</h1>
 	<p class="mb-6 text-sm text-zinc-400">
-		Managed PostgreSQL targets. Creating or enabling a connection verifies it first.
+		Managed targets (PostgreSQL and MySQL). Creating or enabling a connection verifies it first; the engine cannot be changed afterwards.
 	</p>
 
 	{
@@ -46,6 +50,12 @@ const quietButtonClass = "btn-steel px-3 py-1.5 text-xs";
 	>
 		<input type="hidden" name="csrf_token" value={csrf} />
 		<label class="block text-sm">
+			<span class="mb-1 block text-zinc-400">Engine</span>
+			<select id="connection-engine" name="engine" class={inputClass}>
+				{engines.map((e) => <option value={e.value} data-port={e.port}>{e.label}</option>)}
+			</select>
+		</label>
+		<label class="block text-sm">
 			<span class="mb-1 block text-zinc-400">Name</span>
 			<input name="name" required class={inputClass} />
 		</label>
@@ -55,7 +65,7 @@ const quietButtonClass = "btn-steel px-3 py-1.5 text-xs";
 		</label>
 		<label class="block text-sm">
 			<span class="mb-1 block text-zinc-400">Port</span>
-			<input name="port" type="number" min="1" max="65535" value="5432" required class={inputClass} />
+			<input id="connection-port" name="port" type="number" min="1" max="65535" value="5432" required class={inputClass} />
 		</label>
 		<label class="block text-sm">
 			<span class="mb-1 block text-zinc-400">Database</span>
@@ -94,6 +104,7 @@ const quietButtonClass = "btn-steel px-3 py-1.5 text-xs";
 						<span class={connection.is_enabled ? "text-emerald-400" : "text-zinc-500"}>
 							{connection.is_enabled ? "Enabled" : "Disabled"}
 						</span>
+						<span class="uppercase text-zinc-500">{connection.engine}</span>
 						<span class="text-zinc-500">SSL: {connection.ssl_mode}</span>
 						<span class="text-zinc-500">{connection.has_password ? "Password stored" : "No password"}</span>
 					</div>
@@ -140,3 +151,25 @@ const quietButtonClass = "btn-steel px-3 py-1.5 text-xs";
 		)}
 	</div>
 </Layout>
+
+<script>
+	// The API defaults the port per engine; mirror that in the create form.
+	const engine = document.getElementById("connection-engine") as HTMLSelectElement | null;
+	const port = document.getElementById("connection-port") as HTMLInputElement | null;
+	if (engine && port) {
+		for (const option of engine.querySelectorAll("option")) {
+			if (option instanceof HTMLOptionElement && option.selected) {
+				port.value = option.dataset.port ?? "5432";
+			}
+		}
+		engine.addEventListener("change", () => {
+			const selected = engine.selectedOptions[0];
+			if (selected && !port.dataset.touched) {
+				port.value = selected.dataset.port ?? "5432";
+			}
+		});
+		port.addEventListener("input", () => {
+			port.dataset.touched = "true";
+		});
+	}
+</script>

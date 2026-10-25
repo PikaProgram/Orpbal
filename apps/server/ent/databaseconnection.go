@@ -19,6 +19,8 @@ type DatabaseConnection struct {
 	ID int `json:"id,omitempty"`
 	// Name holds the value of the "name" field.
 	Name string `json:"name,omitempty"`
+	// Engine holds the value of the "engine" field.
+	Engine databaseconnection.Engine `json:"engine,omitempty"`
 	// Host holds the value of the "host" field.
 	Host string `json:"host,omitempty"`
 	// Port holds the value of the "port" field.
@@ -72,7 +74,7 @@ func (*DatabaseConnection) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case databaseconnection.FieldID, databaseconnection.FieldPort:
 			values[i] = new(sql.NullInt64)
-		case databaseconnection.FieldName, databaseconnection.FieldHost, databaseconnection.FieldDatabaseName, databaseconnection.FieldUsername, databaseconnection.FieldSslMode:
+		case databaseconnection.FieldName, databaseconnection.FieldEngine, databaseconnection.FieldHost, databaseconnection.FieldDatabaseName, databaseconnection.FieldUsername, databaseconnection.FieldSslMode:
 			values[i] = new(sql.NullString)
 		case databaseconnection.FieldCreatedAt, databaseconnection.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -102,6 +104,12 @@ func (dc *DatabaseConnection) assignValues(columns []string, values []any) error
 				return fmt.Errorf("unexpected type %T for field name", values[i])
 			} else if value.Valid {
 				dc.Name = value.String
+			}
+		case databaseconnection.FieldEngine:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field engine", values[i])
+			} else if value.Valid {
+				dc.Engine = databaseconnection.Engine(value.String)
 			}
 		case databaseconnection.FieldHost:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -200,6 +208,9 @@ func (dc *DatabaseConnection) String() string {
 	builder.WriteString(fmt.Sprintf("id=%v, ", dc.ID))
 	builder.WriteString("name=")
 	builder.WriteString(dc.Name)
+	builder.WriteString(", ")
+	builder.WriteString("engine=")
+	builder.WriteString(fmt.Sprintf("%v", dc.Engine))
 	builder.WriteString(", ")
 	builder.WriteString("host=")
 	builder.WriteString(dc.Host)

@@ -43,6 +43,20 @@ func (dcu *DatabaseConnectionUpdate) SetNillableName(s *string) *DatabaseConnect
 	return dcu
 }
 
+// SetEngine sets the "engine" field.
+func (dcu *DatabaseConnectionUpdate) SetEngine(d databaseconnection.Engine) *DatabaseConnectionUpdate {
+	dcu.mutation.SetEngine(d)
+	return dcu
+}
+
+// SetNillableEngine sets the "engine" field if the given value is not nil.
+func (dcu *DatabaseConnectionUpdate) SetNillableEngine(d *databaseconnection.Engine) *DatabaseConnectionUpdate {
+	if d != nil {
+		dcu.SetEngine(*d)
+	}
+	return dcu
+}
+
 // SetHost sets the "host" field.
 func (dcu *DatabaseConnectionUpdate) SetHost(s string) *DatabaseConnectionUpdate {
 	dcu.mutation.SetHost(s)
@@ -236,6 +250,11 @@ func (dcu *DatabaseConnectionUpdate) check() error {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "DatabaseConnection.name": %w`, err)}
 		}
 	}
+	if v, ok := dcu.mutation.Engine(); ok {
+		if err := databaseconnection.EngineValidator(v); err != nil {
+			return &ValidationError{Name: "engine", err: fmt.Errorf(`ent: validator failed for field "DatabaseConnection.engine": %w`, err)}
+		}
+	}
 	if v, ok := dcu.mutation.Host(); ok {
 		if err := databaseconnection.HostValidator(v); err != nil {
 			return &ValidationError{Name: "host", err: fmt.Errorf(`ent: validator failed for field "DatabaseConnection.host": %w`, err)}
@@ -278,6 +297,9 @@ func (dcu *DatabaseConnectionUpdate) sqlSave(ctx context.Context) (n int, err er
 	}
 	if value, ok := dcu.mutation.Name(); ok {
 		_spec.SetField(databaseconnection.FieldName, field.TypeString, value)
+	}
+	if value, ok := dcu.mutation.Engine(); ok {
+		_spec.SetField(databaseconnection.FieldEngine, field.TypeEnum, value)
 	}
 	if value, ok := dcu.mutation.Host(); ok {
 		_spec.SetField(databaseconnection.FieldHost, field.TypeString, value)
@@ -384,6 +406,20 @@ func (dcuo *DatabaseConnectionUpdateOne) SetName(s string) *DatabaseConnectionUp
 func (dcuo *DatabaseConnectionUpdateOne) SetNillableName(s *string) *DatabaseConnectionUpdateOne {
 	if s != nil {
 		dcuo.SetName(*s)
+	}
+	return dcuo
+}
+
+// SetEngine sets the "engine" field.
+func (dcuo *DatabaseConnectionUpdateOne) SetEngine(d databaseconnection.Engine) *DatabaseConnectionUpdateOne {
+	dcuo.mutation.SetEngine(d)
+	return dcuo
+}
+
+// SetNillableEngine sets the "engine" field if the given value is not nil.
+func (dcuo *DatabaseConnectionUpdateOne) SetNillableEngine(d *databaseconnection.Engine) *DatabaseConnectionUpdateOne {
+	if d != nil {
+		dcuo.SetEngine(*d)
 	}
 	return dcuo
 }
@@ -594,6 +630,11 @@ func (dcuo *DatabaseConnectionUpdateOne) check() error {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "DatabaseConnection.name": %w`, err)}
 		}
 	}
+	if v, ok := dcuo.mutation.Engine(); ok {
+		if err := databaseconnection.EngineValidator(v); err != nil {
+			return &ValidationError{Name: "engine", err: fmt.Errorf(`ent: validator failed for field "DatabaseConnection.engine": %w`, err)}
+		}
+	}
 	if v, ok := dcuo.mutation.Host(); ok {
 		if err := databaseconnection.HostValidator(v); err != nil {
 			return &ValidationError{Name: "host", err: fmt.Errorf(`ent: validator failed for field "DatabaseConnection.host": %w`, err)}
@@ -653,6 +694,9 @@ func (dcuo *DatabaseConnectionUpdateOne) sqlSave(ctx context.Context) (_node *Da
 	}
 	if value, ok := dcuo.mutation.Name(); ok {
 		_spec.SetField(databaseconnection.FieldName, field.TypeString, value)
+	}
+	if value, ok := dcuo.mutation.Engine(); ok {
+		_spec.SetField(databaseconnection.FieldEngine, field.TypeEnum, value)
 	}
 	if value, ok := dcuo.mutation.Host(); ok {
 		_spec.SetField(databaseconnection.FieldHost, field.TypeString, value)

@@ -54,4 +54,3 @@ func EnsureAdmin(ctx context.Context, client *ent.Client, log zerolog.Logger) er
 	log.Info().Str("username", created.Username).Msg("Bootstrap platform admin created")
 	return nil
 }
-	

@@ -26,33 +26,33 @@ func init() {
 	// databaseconnection.NameValidator is a validator for the "name" field. It is called by the builders before save.
 	databaseconnection.NameValidator = databaseconnectionDescName.Validators[0].(func(string) error)
 	// databaseconnectionDescHost is the schema descriptor for host field.
-	databaseconnectionDescHost := databaseconnectionFields[1].Descriptor()
+	databaseconnectionDescHost := databaseconnectionFields[2].Descriptor()
 	// databaseconnection.HostValidator is a validator for the "host" field. It is called by the builders before save.
 	databaseconnection.HostValidator = databaseconnectionDescHost.Validators[0].(func(string) error)
 	// databaseconnectionDescPort is the schema descriptor for port field.
-	databaseconnectionDescPort := databaseconnectionFields[2].Descriptor()
+	databaseconnectionDescPort := databaseconnectionFields[3].Descriptor()
 	// databaseconnection.DefaultPort holds the default value on creation for the port field.
 	databaseconnection.DefaultPort = databaseconnectionDescPort.Default.(int)
 	// databaseconnection.PortValidator is a validator for the "port" field. It is called by the builders before save.
 	databaseconnection.PortValidator = databaseconnectionDescPort.Validators[0].(func(int) error)
 	// databaseconnectionDescDatabaseName is the schema descriptor for database_name field.
-	databaseconnectionDescDatabaseName := databaseconnectionFields[3].Descriptor()
+	databaseconnectionDescDatabaseName := databaseconnectionFields[4].Descriptor()
 	// databaseconnection.DatabaseNameValidator is a validator for the "database_name" field. It is called by the builders before save.
 	databaseconnection.DatabaseNameValidator = databaseconnectionDescDatabaseName.Validators[0].(func(string) error)
 	// databaseconnectionDescUsername is the schema descriptor for username field.
-	databaseconnectionDescUsername := databaseconnectionFields[4].Descriptor()
+	databaseconnectionDescUsername := databaseconnectionFields[5].Descriptor()
 	// databaseconnection.UsernameValidator is a validator for the "username" field. It is called by the builders before save.
 	databaseconnection.UsernameValidator = databaseconnectionDescUsername.Validators[0].(func(string) error)
 	// databaseconnectionDescIsEnabled is the schema descriptor for is_enabled field.
-	databaseconnectionDescIsEnabled := databaseconnectionFields[7].Descriptor()
+	databaseconnectionDescIsEnabled := databaseconnectionFields[8].Descriptor()
 	// databaseconnection.DefaultIsEnabled holds the default value on creation for the is_enabled field.
 	databaseconnection.DefaultIsEnabled = databaseconnectionDescIsEnabled.Default.(bool)
 	// databaseconnectionDescCreatedAt is the schema descriptor for created_at field.
-	databaseconnectionDescCreatedAt := databaseconnectionFields[8].Descriptor()
+	databaseconnectionDescCreatedAt := databaseconnectionFields[9].Descriptor()
 	// databaseconnection.DefaultCreatedAt holds the default value on creation for the created_at field.
 	databaseconnection.DefaultCreatedAt = databaseconnectionDescCreatedAt.Default.(func() time.Time)
 	// databaseconnectionDescUpdatedAt is the schema descriptor for updated_at field.
-	databaseconnectionDescUpdatedAt := databaseconnectionFields[9].Descriptor()
+	databaseconnectionDescUpdatedAt := databaseconnectionFields[10].Descriptor()
 	// databaseconnection.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	databaseconnection.DefaultUpdatedAt = databaseconnectionDescUpdatedAt.Default.(func() time.Time)
 	// databaseconnection.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

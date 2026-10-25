@@ -48,6 +48,7 @@ type DatabaseConnectionMutation struct {
 	typ                 string
 	id                  *int
 	name                *string
+	engine              *databaseconnection.Engine
 	host                *string
 	port                *int
 	addport             *int
@@ -199,6 +200,42 @@ func (m *DatabaseConnectionMutation) OldName(ctx context.Context) (v string, err
 // ResetName resets all changes to the "name" field.
 func (m *DatabaseConnectionMutation) ResetName() {
 	m.name = nil
+}
+
+// SetEngine sets the "engine" field.
+func (m *DatabaseConnectionMutation) SetEngine(d databaseconnection.Engine) {
+	m.engine = &d
+}
+
+// Engine returns the value of the "engine" field in the mutation.
+func (m *DatabaseConnectionMutation) Engine() (r databaseconnection.Engine, exists bool) {
+	v := m.engine
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEngine returns the old "engine" field's value of the DatabaseConnection entity.
+// If the DatabaseConnection object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DatabaseConnectionMutation) OldEngine(ctx context.Context) (v databaseconnection.Engine, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEngine is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEngine requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEngine: %w", err)
+	}
+	return oldValue.Engine, nil
+}
+
+// ResetEngine resets all changes to the "engine" field.
+func (m *DatabaseConnectionMutation) ResetEngine() {
+	m.engine = nil
 }
 
 // SetHost sets the "host" field.
@@ -646,9 +683,12 @@ func (m *DatabaseConnectionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *DatabaseConnectionMutation) Fields() []string {
-	fields := make([]string, 0, 10)
+	fields := make([]string, 0, 11)
 	if m.name != nil {
 		fields = append(fields, databaseconnection.FieldName)
+	}
+	if m.engine != nil {
+		fields = append(fields, databaseconnection.FieldEngine)
 	}
 	if m.host != nil {
 		fields = append(fields, databaseconnection.FieldHost)
@@ -687,6 +727,8 @@ func (m *DatabaseConnectionMutation) Field(name string) (ent.Value, bool) {
 	switch name {
 	case databaseconnection.FieldName:
 		return m.Name()
+	case databaseconnection.FieldEngine:
+		return m.Engine()
 	case databaseconnection.FieldHost:
 		return m.Host()
 	case databaseconnection.FieldPort:
@@ -716,6 +758,8 @@ func (m *DatabaseConnectionMutation) OldField(ctx context.Context, name string) 
 	switch name {
 	case databaseconnection.FieldName:
 		return m.OldName(ctx)
+	case databaseconnection.FieldEngine:
+		return m.OldEngine(ctx)
 	case databaseconnection.FieldHost:
 		return m.OldHost(ctx)
 	case databaseconnection.FieldPort:
@@ -749,6 +793,13 @@ func (m *DatabaseConnectionMutation) SetField(name string, value ent.Value) erro
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetName(v)
+		return nil
+	case databaseconnection.FieldEngine:
+		v, ok := value.(databaseconnection.Engine)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEngine(v)
 		return nil
 	case databaseconnection.FieldHost:
 		v, ok := value.(string)
@@ -888,6 +939,9 @@ func (m *DatabaseConnectionMutation) ResetField(name string) error {
 	switch name {
 	case databaseconnection.FieldName:
 		m.ResetName()
+		return nil
+	case databaseconnection.FieldEngine:
+		m.ResetEngine()
 		return nil
 	case databaseconnection.FieldHost:
 		m.ResetHost()

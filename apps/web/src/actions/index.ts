@@ -31,6 +31,7 @@ async function run(action: () => Promise<void>) {
 const csrf = z.string().min(1);
 const id = z.coerce.number().int().positive();
 const sslMode = z.enum(["disable", "require", "verify-ca", "verify-full"]).default("disable");
+const engine = z.enum(["postgres", "mysql"]).default("postgres");
 const accessLevel = z.enum(["view_only", "view_edit"]);
 
 const schemaName = z.string().regex(/^[a-zA-Z_][a-zA-Z0-9_]*$/);
@@ -269,8 +270,9 @@ export const server = {
 		accept: "form",
 		input: z.object({
 			name: z.string().min(1),
+			engine,
 			host: z.string().min(1),
-			port: z.coerce.number().int().min(1).max(65535).default(5432),
+			port: z.coerce.number().int().min(1).max(65535),
 			database_name: z.string().min(1),
 			username: z.string().min(1),
 			password: z.string().optional().default(""),
@@ -281,6 +283,7 @@ export const server = {
 			run(async () => {
 				const body: Record<string, unknown> = {
 					name: input.name,
+					engine: input.engine,
 					host: input.host,
 					port: input.port,
 					database_name: input.database_name,

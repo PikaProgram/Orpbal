@@ -12,6 +12,7 @@ var (
 	DatabaseConnectionsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
 		{Name: "name", Type: field.TypeString, Unique: true},
+		{Name: "engine", Type: field.TypeEnum, Enums: []string{"postgres", "mysql"}, Default: "postgres"},
 		{Name: "host", Type: field.TypeString},
 		{Name: "port", Type: field.TypeInt, Default: 5432},
 		{Name: "database_name", Type: field.TypeString},

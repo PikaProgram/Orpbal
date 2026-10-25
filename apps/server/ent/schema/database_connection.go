@@ -19,6 +19,10 @@ func (DatabaseConnection) Fields() []ent.Field {
 		field.String("name").
 			NotEmpty().
 			Unique(),
+		// Engine is immutable after creation; it designates the target DBMS.
+		field.Enum("engine").
+			Values("postgres", "mysql").
+			Default("postgres"),
 		field.String("host").
 			NotEmpty(),
 		field.Int("port").
