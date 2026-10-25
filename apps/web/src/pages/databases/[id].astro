@@ -6,7 +6,7 @@ import { actionResults } from "@/lib/forms";
 import { api, type MyDatabase, type DatabaseSchema, type QueryResult, type Migration, type TableCount, type MigrationDiff } from "@/lib/api";
 import { requireSession } from "@/lib/session";
 
-import SchemaVisualizer from "@/components/SchemaVisualizer.astro";
+import { SchemaGraph } from "@/components/SchemaGraph";
 import TablesList from "@/components/TablesList.astro";
 import TableEditor from "@/components/TableEditor.astro";
 import SqlEditor from "@/components/SqlEditor.astro";
@@ -165,9 +165,9 @@ const accessLabel = database?.access_level === "view_edit" ? "View + Edit" : "Vi
 		</nav>
 	)}
 
-	{
-		database && schema && tab === "schema" && <SchemaVisualizer schema={schema} />
-	}
+	{database && schema && tab === "schema" && (
+		<SchemaGraph schema={schema} connectionId={connectionId} canEdit={canEdit} csrf={csrf} client:only="react" />
+	)}
 
 	{database && schema && tab === "tables" && <TablesList schema={schema} connectionId={connectionId} counts={counts} csrf={csrf} />}
 

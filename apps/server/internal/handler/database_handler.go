@@ -167,7 +167,8 @@ func (h *Handler) loadTargetDSN(c *gin.Context, id api.Id) (*ent.DatabaseConnect
 
 // columnsSQL reads every table with its columns; run in a read-only transaction.
 const columnsSQL = `
-SELECT table_schema, table_name, column_name, data_type, is_nullable
+SELECT table_schema, table_name, column_name, data_type, is_nullable,
+       ordinal_position, column_default, character_maximum_length
 FROM information_schema.columns
 WHERE table_schema NOT IN ('pg_catalog', 'information_schema')
 ORDER BY table_schema, table_name, ordinal_position`
@@ -212,11 +213,19 @@ func buildSchema(cols []string, colRows, constraintRows, indexRows [][]any) api.
 		}
 		var table *api.SchemaTable
 		table, st.Tables = findTable(st.Tables, tableName)
-		table.Columns = append(table.Columns, api.SchemaColumn{
+		column := api.SchemaColumn{
 			Name:       toString(row[2]),
 			Type:       toString(row[3]),
 			IsNullable: toString(row[4]) == "YES",
-		})
+			OrdinalPosition: toInt(row[5]),
+		}
+		if row[6] != nil {
+			column.ColumnDefault = &[]string{toString(row[6])}[0]
+		}
+		if row[7] != nil {
+			column.CharacterMaximumLength = &[]int{toInt(row[7])}[0]
+		}
+		table.Columns = append(table.Columns, column)
 	}
 	for _, row := range constraintRows {
 		schemaName := toString(row[0])
@@ -257,10 +266,11 @@ func buildSchema(cols []string, colRows, constraintRows, indexRows [][]any) api.
 			empty := []api.SchemaIndex{}
 			table.Indexes = &empty
 		}
+		def := toString(row[3])
 		*table.Indexes = append(*table.Indexes, api.SchemaIndex{
 			Name:     toString(row[2]),
-			Columns:  []string{toString(row[3])},
-			IsUnique: strings.Contains(toString(row[3]), "UNIQUE"),
+			Columns:  parseIndexColumns(def),
+			IsUnique: strings.HasPrefix(strings.TrimSpace(def), "CREATE UNIQUE INDEX"),
 		})
 	}
 	schemas := make([]api.SchemaTables, 0, len(order))
@@ -296,6 +306,76 @@ func findTable(tables []api.SchemaTable, name string) (*api.SchemaTable, []api.S
 	}
 	tables = append(tables, api.SchemaTable{Name: name, Columns: []api.SchemaColumn{}})
 	return &tables[len(tables)-1], tables
+}
+
+// parseIndexColumns extracts the first top-level parenthesized column list
+// from a pg_indexes indexdef ("CREATE INDEX x ON t USING btree (a, b DESC, lower(c))"
+// -> ["a", "b DESC", "lower(c)"]). The column list is the FIRST top-level
+// paren group; a partial-index predicate follows it.
+func parseIndexColumns(def string) []string {
+	start, depth, inQuote := -1, 0, false
+	for i, r := range def {
+		switch {
+		case r == '\'':
+			inQuote = !inQuote
+		case inQuote:
+		case r == '(':
+			if depth == 0 {
+				start = i
+			}
+			depth++
+		case r == ')':
+			depth--
+			if depth == 0 {
+				return splitIndexColumns(def[start+1 : i])
+			}
+		}
+	}
+	return []string{}
+}
+
+// splitIndexColumns splits a column list on top-level commas so quoted
+// strings and function calls like lower(c) stay intact.
+func splitIndexColumns(body string) []string {
+	parts := []string{}
+	depth, inQuote := 0, false
+	partStart := 0
+	for i, r := range body {
+		switch {
+		case r == '\'':
+			inQuote = !inQuote
+		case inQuote:
+		case r == '(':
+			depth++
+		case r == ')':
+			depth--
+		case r == ',' && depth == 0:
+			if name := strings.TrimSpace(body[partStart:i]); name != "" {
+				parts = append(parts, name)
+			}
+			partStart = i + 1
+		}
+	}
+	if name := strings.TrimSpace(body[partStart:]); name != "" {
+		parts = append(parts, name)
+	}
+	if parts == nil {
+		return []string{}
+	}
+	return parts
+}
+
+func toInt(v any) int {
+	switch t := v.(type) {
+	case int:
+		return t
+	case int64:
+		return int(t)
+	case float64:
+		return int(t)
+	default:
+		return 0
+	}
 }
 
 func toString(v any) string {

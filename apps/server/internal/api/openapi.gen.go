@@ -376,9 +376,12 @@ type SchemaChangeObjectType string
 
 // SchemaColumn defines model for SchemaColumn.
 type SchemaColumn struct {
-	IsNullable bool   `json:"is_nullable"`
-	Name       string `json:"name"`
-	Type       string `json:"type"`
+	CharacterMaximumLength *int    `json:"character_maximum_length,omitempty"`
+	ColumnDefault          *string `json:"column_default,omitempty"`
+	IsNullable             bool    `json:"is_nullable"`
+	Name                   string  `json:"name"`
+	OrdinalPosition        int     `json:"ordinal_position"`
+	Type                   string  `json:"type"`
 }
 
 // SchemaConstraint defines model for SchemaConstraint.

@@ -1,4 +1,5 @@
 import node from "@astrojs/node";
+import react from "@astrojs/react";
 import solidJs from "@astrojs/solid-js";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "astro/config";
@@ -9,7 +10,10 @@ export default defineConfig({
 	security: {
 		checkOrigin: true,
 	},
-	integrations: [solidJs()],
+	integrations: [
+		react({ include: ["src/components/SchemaGraph.tsx"] }),
+		solidJs({ exclude: ["src/components/SchemaGraph.tsx"] }),
+	],
 	vite: {
 		plugins: [tailwindcss()],
 	},

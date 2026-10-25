@@ -134,6 +134,9 @@ export interface SchemaColumn {
 	name: string;
 	type: string;
 	is_nullable: boolean;
+	ordinal_position: number;
+	column_default?: string | null;
+	character_maximum_length?: number | null;
 }
 
 export interface SchemaConstraint {
