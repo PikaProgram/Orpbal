@@ -6,10 +6,6 @@ import (
 	"testing"
 )
 
-type fakeOpen struct {
-	db *sql.DB
-}
-
 func TestReadableStatement(t *testing.T) {
 	if err := ReadableStatement("   "); err == nil {
 		t.Fatal("expected empty statement to be rejected")
@@ -38,31 +34,28 @@ func TestTruncateCell(t *testing.T) {
 }
 
 func TestQueryRejectsEmpty(t *testing.T) {
-	v := NewViewer(func(string) (*sql.DB, error) { return nil, nil })
-	if _, _, err := v.Query(context.Background(), "postgres://x", "  ", 10); err == nil {
+	tgt := &Target{dialect: NewPostgresDialect()}
+	if _, _, err := tgt.Query(context.Background(), "  ", 10); err == nil {
 		t.Fatal("expected empty statement to be rejected")
 	}
 }
 
 func TestExecuteRejectsEmpty(t *testing.T) {
-	v := NewViewer(func(string) (*sql.DB, error) { return nil, nil })
-	if err := v.Execute(context.Background(), "postgres://x", "  "); err == nil {
+	tgt := &Target{dialect: NewPostgresDialect()}
+	if err := tgt.Execute(context.Background(), "  "); err == nil {
 		t.Fatal("expected empty statement to be rejected")
 	}
 }
 
 func TestInvalidate(t *testing.T) {
-	v := NewViewer(func(string) (*sql.DB, error) { return nil, nil })
-	if v.Invalidate("missing-dsn"); false {
-		t.Fatal("unreachable")
-	}
+	m := NewManager(nil, nil)
 	closed := false
-	v.pools.Store("dsn", closedDB{closed: &closed})
-	v.Invalidate("dsn")
+	m.pools.Store("dsn", closedDB{closed: &closed})
+	m.Invalidate("dsn")
 	if !closed {
 		t.Fatal("Invalidate did not close the cached pool")
 	}
-	if _, ok := v.pools.Load("dsn"); ok {
+	if _, ok := m.pools.Load("dsn"); ok {
 		t.Fatal("Invalidate did not forget the cached pool")
 	}
 }

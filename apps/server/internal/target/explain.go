@@ -1,8 +1,6 @@
 package target
 
 import (
-	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -63,123 +61,6 @@ type pgPlanNode struct {
 	ActualRows        *float64     `json:"Actual Rows"`
 	ActualLoops       *int         `json:"Actual Loops"`
 	Plans             []pgPlanNode `json:"Plans"`
-}
-
-// Explain runs EXPLAIN (optionally ANALYZE) for one statement against a target.
-// PostgreSQL plans are parsed into a tree so the UI can show scan/index/join
-// details plus estimates and actual measurements. MySQL is returned tabular.
-func (v *Viewer) Explain(ctx context.Context, stored, statement string, analyze bool) (ExplainResult, error) {
-	if err := ReadableStatement(statement); err != nil {
-		return ExplainResult{}, err
-	}
-	if firstKeyword(statement) == "EXPLAIN" {
-		return ExplainResult{}, fmt.Errorf("remove the leading EXPLAIN; the planner adds it")
-	}
-	db, err := v.pool(stored)
-	if err != nil {
-		return ExplainResult{}, fmt.Errorf("open target database: %w", err)
-	}
-
-	ctx, cancel := context.WithTimeout(ctx, QueryTimeout)
-	defer cancel()
-
-	if isMySQL(stored) {
-		return explainMySQL(ctx, db, statement, analyze)
-	}
-	return explainPostgres(ctx, db, statement, analyze)
-}
-
-// explainPostgres wraps the statement in EXPLAIN (FORMAT JSON) inside a
-// read-only transaction. ANALYZE executes the statement, but the read-only
-// transaction prevents it from mutating the target; the plan is still measured.
-func explainPostgres(ctx context.Context, db *sql.DB, statement string, analyze bool) (ExplainResult, error) {
-	options := "FORMAT JSON"
-	if analyze {
-		options += ", ANALYZE, BUFFERS, TIMING true"
-	}
-	query := "EXPLAIN (" + options + ") " + statement
-
-	tx, err := db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
-	if err != nil {
-		return ExplainResult{}, fmt.Errorf("begin read-only transaction: %w", err)
-	}
-	defer tx.Rollback()
-
-	rows, err := tx.QueryContext(ctx, query)
-	if err != nil {
-		return ExplainResult{}, fmt.Errorf("explain query: %w", err)
-	}
-	defer rows.Close()
-
-	if !rows.Next() {
-		if err := rows.Err(); err != nil {
-			return ExplainResult{}, fmt.Errorf("read explain result: %w", err)
-		}
-		return ExplainResult{}, fmt.Errorf("explain returned no plan")
-	}
-	var value any
-	if err := rows.Scan(&value); err != nil {
-		return ExplainResult{}, fmt.Errorf("scan explain result: %w", err)
-	}
-	if err := rows.Err(); err != nil {
-		return ExplainResult{}, fmt.Errorf("iterate explain result: %w", err)
-	}
-
-	nodes, err := parsePostgresExplain(toBytes(value))
-	if err != nil {
-		return ExplainResult{}, err
-	}
-	if err := tx.Commit(); err != nil {
-		return ExplainResult{}, fmt.Errorf("commit explain transaction: %w", err)
-	}
-	return ExplainResult{Engine: "postgres", Analyze: analyze, Nodes: nodes}, nil
-}
-
-// explainMySQL uses the engine's textual EXPLAIN output. MySQL has no
-// read-only transaction here, so the same allowlist as the viewer applies.
-func explainMySQL(ctx context.Context, db *sql.DB, statement string, analyze bool) (ExplainResult, error) {
-	if err := MySQLReadableStatement(statement); err != nil {
-		return ExplainResult{}, err
-	}
-	prefix := "EXPLAIN "
-	if analyze {
-		prefix = "EXPLAIN ANALYZE "
-	}
-	rows, err := db.QueryContext(ctx, prefix+statement)
-	if err != nil {
-		return ExplainResult{}, fmt.Errorf("explain query: %w", err)
-	}
-	defer rows.Close()
-
-	columns, err := rows.Columns()
-	if err != nil {
-		return ExplainResult{}, fmt.Errorf("read explain columns: %w", err)
-	}
-	result := [][]any{}
-	for rows.Next() {
-		values := make([]any, len(columns))
-		pointers := make([]any, len(columns))
-		for i := range values {
-			pointers[i] = &values[i]
-		}
-		if err := rows.Scan(pointers...); err != nil {
-			return ExplainResult{}, fmt.Errorf("scan explain row: %w", err)
-		}
-		for i := range values {
-			values[i] = FormatValue(values[i])
-		}
-		result = append(result, values)
-	}
-	if err := rows.Err(); err != nil {
-		return ExplainResult{}, fmt.Errorf("iterate explain rows: %w", err)
-	}
-	return ExplainResult{
-		Engine:  "mysql",
-		Analyze: analyze,
-		Nodes:   []ExplainNode{},
-		Columns: columns,
-		Rows:    result,
-	}, nil
 }
 
 // parsePostgresExplain converts the JSON array returned by EXPLAIN into the

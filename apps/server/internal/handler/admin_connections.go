@@ -175,25 +175,18 @@ func (h *Handler) UpdateDatabaseConnection(c *gin.Context, id api.Id, _ api.Upda
 		return
 	}
 
-	plainPassword, err := h.targetPassword(connection)
-	if err != nil {
-		h.fail(c, err, "decrypt target password")
-		return
-	}
-	// Old DSN for pool invalidation: any query against the previous settings
-	// must reconnect after the update.
-	oldDSN, err := (dsn.Config{
-		Engine:       string(connection.Engine),
-		Host:         connection.Host,
-		Port:         connection.Port,
-		DatabaseName: connection.DatabaseName,
-		Username:     connection.Username,
-		Password:     plainPassword,
-		SSLMode:      string(connection.SslMode),
-	}).DSN()
-	if err != nil {
-		h.fail(c, err, "build previous target DSN")
-		return
+	// The verification DSN needs the password that will be in effect after
+	// the update: the supplied new value, or the stored one when unchanged.
+	plainPassword := ""
+	if req.Password == nil {
+		if len(connection.PasswordCiphertext) > 0 {
+			plain, err := h.cipher.Decrypt(connection.PasswordCiphertext)
+			if err != nil {
+				h.fail(c, err, "decrypt target password")
+				return
+			}
+			plainPassword = string(plain)
+		}
 	}
 	var encrypted []byte
 	passwordChanged := false
@@ -245,24 +238,13 @@ func (h *Handler) UpdateDatabaseConnection(c *gin.Context, id api.Id, _ api.Upda
 			update.SetPasswordCiphertext(encrypted)
 		}
 	}
+	h.manager.InvalidateConnection(ctx, h.client, int(id))
 	updated, err := update.Save(ctx)
 	if err != nil {
 		h.fail(c, err, "update database connection")
 		return
 	}
-	h.viewer.Invalidate(oldDSN)
 	c.JSON(http.StatusOK, toAPIConnection(updated))
-}
-
-func (h *Handler) targetPassword(connection *ent.DatabaseConnection) (string, error) {
-	if len(connection.PasswordCiphertext) == 0 {
-		return "", nil
-	}
-	plain, err := h.cipher.Decrypt(connection.PasswordCiphertext)
-	if err != nil {
-		return "", err
-	}
-	return string(plain), nil
 }
 
 func toAPIConnection(connection *ent.DatabaseConnection) api.DatabaseConnection {

@@ -18,12 +18,7 @@ import (
 
 // ListMigrations returns the linear migration history for one database.
 func (h *Handler) ListMigrations(c *gin.Context, id api.Id) {
-	user := h.currentUser(c)
-	if user == nil {
-		writeError(c, http.StatusUnauthorized, "unauthorized", "authentication required")
-		return
-	}
-	if _, ok := h.requireAccess(c, user, id); !ok {
+	if _, ok := h.authorizedTarget(c, id, ""); !ok {
 		return
 	}
 	entries, err := h.client.Migration.Query().
@@ -53,16 +48,7 @@ func (h *Handler) CreateMigration(c *gin.Context, id api.Id, params api.CreateMi
 		return
 	}
 	user := h.currentUser(c)
-	if user == nil {
-		writeError(c, http.StatusUnauthorized, "unauthorized", "authentication required")
-		return
-	}
-	level, ok := h.requireAccess(c, user, id)
-	if !ok {
-		return
-	}
-	if level.Level != databasegrant.AccessLevelViewEdit {
-		writeError(c, http.StatusForbidden, "forbidden", "view_edit access required")
+	if _, ok := h.authorizedTarget(c, id, databasegrant.AccessLevelViewEdit); !ok {
 		return
 	}
 	latest, err := h.client.Migration.Query().
@@ -94,17 +80,8 @@ func (h *Handler) CreateMigration(c *gin.Context, id api.Id, params api.CreateMi
 // ExecuteMigration runs a pending migration against the target in a
 // transaction: commit on success, record failure on rollback.
 func (h *Handler) ExecuteMigration(c *gin.Context, id api.Id, migrationId int, params api.ExecuteMigrationParams) {
-	user := h.currentUser(c)
-	if user == nil {
-		writeError(c, http.StatusUnauthorized, "unauthorized", "authentication required")
-		return
-	}
-	level, ok := h.requireAccess(c, user, id)
+	t, ok := h.authorizedTarget(c, id, databasegrant.AccessLevelViewEdit)
 	if !ok {
-		return
-	}
-	if level.Level != databasegrant.AccessLevelViewEdit {
-		writeError(c, http.StatusForbidden, "forbidden", "view_edit access required")
 		return
 	}
 	entry, err := h.client.Migration.Query().
@@ -122,17 +99,13 @@ func (h *Handler) ExecuteMigration(c *gin.Context, id api.Id, migrationId int, p
 		writeError(c, http.StatusConflict, "conflict", "migration already executed")
 		return
 	}
-	_, dsnStr, ok := h.loadTargetDSN(c, id)
-	if !ok {
-		return
-	}
 	// Capture the schema before the migration runs so the UI can diff what
 	// the execution changed.
-	if err := h.captureSnapshot(c, dsnStr, migrationId, schemasnapshot.PhaseBefore); err != nil {
+	if err := h.captureSnapshot(c.Request.Context(), t, migrationId, schemasnapshot.PhaseBefore); err != nil {
 		h.fail(c, err, "capture before snapshot")
 		return
 	}
-	err = h.viewer.Execute(c.Request.Context(), dsnStr, entry.SQL)
+	err = t.Execute(c.Request.Context(), entry.SQL)
 	now := time.Now().UTC()
 	status := migration.StatusSuccess
 	if err != nil {
@@ -150,9 +123,8 @@ func (h *Handler) ExecuteMigration(c *gin.Context, id api.Id, migrationId int, p
 		writeError(c, http.StatusBadGateway, "target_unreachable", "migration failed")
 		return
 	}
-	if err := h.captureSnapshot(c, dsnStr, migrationId, schemasnapshot.PhaseAfter); err != nil {
-		h.fail(c, err, "capture after snapshot")
-		return
+	if err := h.captureSnapshot(c.Request.Context(), t, migrationId, schemasnapshot.PhaseAfter); err != nil {
+		h.logger.Warn().Err(err).Int("migration", migrationId).Msg("capture after snapshot")
 	}
 	c.JSON(http.StatusOK, toAPIMigration(entry, h.executorUsernames(c.Request.Context(), []*ent.Migration{entry})[entry.ExecutorID]))
 }
@@ -163,17 +135,7 @@ func (h *Handler) UpdateMigration(c *gin.Context, id api.Id, migrationId int, pa
 	if !bindJSON(c, &body) {
 		return
 	}
-	user := h.currentUser(c)
-	if user == nil {
-		writeError(c, http.StatusUnauthorized, "unauthorized", "authentication required")
-		return
-	}
-	level, ok := h.requireAccess(c, user, id)
-	if !ok {
-		return
-	}
-	if level.Level != databasegrant.AccessLevelViewEdit {
-		writeError(c, http.StatusForbidden, "forbidden", "view_edit access required")
+	if _, ok := h.authorizedTarget(c, id, databasegrant.AccessLevelViewEdit); !ok {
 		return
 	}
 	entry, err := h.client.Migration.Query().

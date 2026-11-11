@@ -21,7 +21,7 @@ type Handler struct {
 	cipher   *crypto.Cipher
 	secure   bool
 	logger   zerolog.Logger
-	viewer   *target.Viewer
+	manager  *target.Manager
 }
 
 var _ api.ServerInterface = (*Handler)(nil)
@@ -34,7 +34,7 @@ func New(client *ent.Client, sessions *auth.Service, cipher *crypto.Cipher, secu
 		cipher:   cipher,
 		secure:   secure,
 		logger:   logger,
-		viewer:   target.NewViewer(nil),
+		manager:  target.NewManager(nil, cipher),
 	}
 }
 

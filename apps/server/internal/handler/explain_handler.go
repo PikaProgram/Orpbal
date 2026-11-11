@@ -9,9 +9,8 @@ import (
 	"Orpbal/internal/target"
 )
 
-// ExplainDatabaseQuery returns the PostgreSQL execution plan for a statement.
-// ANALYZE runs the statement inside the same read-only transaction used by the
-// viewer so runtime metrics can be collected without mutating the target.
+// ExplainDatabaseQuery returns the execution plan for a statement. MySQL
+// returns tabular rows instead of plan nodes.
 func (h *Handler) ExplainDatabaseQuery(c *gin.Context, id api.Id, _ api.ExplainDatabaseQueryParams) {
 	body := api.ExplainQueryRequest{}
 	if !bindJSON(c, &body) {
@@ -21,15 +20,7 @@ func (h *Handler) ExplainDatabaseQuery(c *gin.Context, id api.Id, _ api.ExplainD
 		writeFields(c, map[string]string{"sql": err.Error()})
 		return
 	}
-	user := h.currentUser(c)
-	if user == nil {
-		writeError(c, http.StatusUnauthorized, "unauthorized", "authentication required")
-		return
-	}
-	if _, ok := h.requireAccess(c, user, id); !ok {
-		return
-	}
-	_, dsnStr, ok := h.loadTargetDSN(c, id)
+	t, ok := h.authorizedTarget(c, id, "")
 	if !ok {
 		return
 	}
@@ -37,7 +28,7 @@ func (h *Handler) ExplainDatabaseQuery(c *gin.Context, id api.Id, _ api.ExplainD
 	if body.Analyze != nil {
 		analyze = *body.Analyze
 	}
-	result, err := h.viewer.Explain(c.Request.Context(), dsnStr, body.Sql, analyze)
+	result, err := t.Explain(c.Request.Context(), body.Sql, analyze)
 	if err != nil {
 		writeError(c, http.StatusBadGateway, "target_unreachable", err.Error())
 		return

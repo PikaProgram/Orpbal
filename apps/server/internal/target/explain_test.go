@@ -2,7 +2,6 @@ package target
 
 import (
 	"context"
-	"database/sql"
 	"strings"
 	"testing"
 )
@@ -98,11 +97,11 @@ func TestParsePostgresExplainRejectsInvalidJSON(t *testing.T) {
 }
 
 func TestExplainRejectsInvalidStatements(t *testing.T) {
-	v := NewViewer(func(string) (*sql.DB, error) { return nil, nil })
-	if _, err := v.Explain(context.Background(), "postgres://x", "  ", false); err == nil {
+	tgt := &Target{dialect: NewPostgresDialect()}
+	if _, err := tgt.Explain(context.Background(), "  ", false); err == nil {
 		t.Fatal("empty statement should be rejected")
 	}
-	if _, err := v.Explain(context.Background(), "postgres://x", "EXPLAIN SELECT 1", false); err == nil {
+	if _, err := tgt.Explain(context.Background(), "EXPLAIN SELECT 1", false); err == nil {
 		t.Fatal("prefixed EXPLAIN should be rejected")
 	}
 }
