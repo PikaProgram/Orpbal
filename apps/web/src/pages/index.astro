@@ -1,8 +1,0 @@
----
-import { requireSession } from "@/lib/session";
-
-const auth = await requireSession(Astro);
-if (auth instanceof Response) return auth;
-
-return Astro.redirect(auth.session.user.is_platform_admin ? "/admin/users" : "/databases");
----

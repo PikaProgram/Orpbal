@@ -23,7 +23,7 @@ describe("api", () => {
 
 		const result = await api<{ id: number }>("/databases/7");
 
-		expect(result).toEqual({ status: 200, data: { id: 7 }, setCookies: [] });
+		expect(result).toEqual({ status: 200, data: { id: 7 } });
 	});
 
 	it("returns plain text bodies unchanged when they are not JSON", async () => {
@@ -64,15 +64,25 @@ describe("api", () => {
 		expect((error as ApiError).message).toBe("Request failed with status 403");
 	});
 
-	it("sends the path under /api with the configured method and CSRF header", async () => {
+	it("sends the path under same-origin /api with the configured method and CSRF header", async () => {
 		const fetchMock = stubFetch(new Response("{}", { status: 200 }));
 
 		await api("/databases/7/migrations/2", { method: "PATCH", csrf: "token-123", body: { sql: "SELECT 1" } });
 
-		const [url, init] = fetchMock.mock.calls[0] as unknown as [URL, RequestInit];
-		expect(url.pathname).toBe("/api/databases/7/migrations/2");
+		const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+		expect(url).toBe("/api/databases/7/migrations/2");
 		expect(init.method).toBe("PATCH");
 		expect((init.headers as Headers).get("X-CSRF-Token")).toBe("token-123");
+		expect((init.headers as Headers).get("Content-Type")).toBe("application/json");
 		expect(init.body).toBe(JSON.stringify({ sql: "SELECT 1" }));
+	});
+
+	it("does not set a Content-Type for GET requests", async () => {
+		const fetchMock = stubFetch(new Response("{}", { status: 200 }));
+
+		await api("/databases");
+
+		const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+		expect((init.headers as Headers).get("Content-Type")).toBeNull();
 	});
 });

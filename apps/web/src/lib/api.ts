@@ -62,14 +62,12 @@ export interface DatabaseConnection {
 export interface ApiOptions {
 	method?: string;
 	body?: unknown;
-	cookie?: string;
 	csrf?: string;
 }
 
 export interface ApiResult<T> {
 	status: number;
 	data: T;
-	setCookies: string[];
 }
 
 export class ApiError extends Error {
@@ -86,28 +84,24 @@ export class ApiError extends Error {
 	}
 }
 
+// Same-origin client: the browser sends the httpOnly session cookie
+// automatically; the Vite dev proxy (or nginx) forwards /api to the Go server.
 export async function api<T>(path: string, options: ApiOptions = {}): Promise<ApiResult<T>> {
-	const base = process.env.SERVER_URL || import.meta.env.SERVER_URL || "http://localhost:8080";
 	const headers = new Headers({ Accept: "application/json" });
 	if (options.body !== undefined) {
 		headers.set("Content-Type", "application/json");
-	}
-	if (options.cookie) {
-		headers.set("Cookie", options.cookie);
 	}
 	if (options.csrf) {
 		headers.set("X-CSRF-Token", options.csrf);
 	}
 
-	const response = await fetch(new URL(`/api${path}`, base), {
+	const response = await fetch(`/api${path}`, {
 		method: options.method ?? "GET",
 		headers,
 		body: options.body === undefined ? undefined : JSON.stringify(options.body),
 		redirect: "manual",
 	});
 
-	const getSetCookie = (response.headers as Headers & { getSetCookie?: () => string[] }).getSetCookie;
-	const setCookies = getSetCookie ? getSetCookie.call(response.headers) : [];
 	const text = await response.text();
 	let parsed: unknown;
 	if (text) {
@@ -128,7 +122,7 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<Ap
 		);
 	}
 
-	return { status: response.status, data: parsed as T, setCookies };
+	return { status: response.status, data: parsed as T };
 }
 
 export interface SchemaColumn {

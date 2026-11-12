@@ -4,14 +4,11 @@ services:
   web:
     build:
       context: .
-      dockerfile: apps/web/Dockerfile.vite
+      dockerfile: apps/web/Dockerfile.nginx
     ports:
       - "3000:3000"
     environment:
       NODE_ENV: production
-      HOST: 0.0.0.0
-      PORT: 3000
-      SERVER_URL: http://app:8080
     depends_on:
       app:
         condition: service_healthy
@@ -33,7 +30,7 @@ services:
       - "8080:8080"
     environment:
       APP_ENV: ${APP_ENV:-development}
-      APP_ORIGIN: ${APP_ORIGIN:-http://localhost:3001}
+      APP_ORIGIN: ${APP_ORIGIN:-http://localhost:3000}
       HOST: 0.0.0.0
       PORT: 8080
       DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-Orpbal}?sslmode=disable

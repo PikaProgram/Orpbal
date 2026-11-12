@@ -58,18 +58,18 @@ Orpbal/
 │   └── web/                     
 │       ├── public/              
 │       ├── src/
-│       │   ├── actions/ 
+│       │   ├── auth/     
 │       │   ├── components/
 │       │   ├── layouts/  
 │       │   ├── lib/
 │       │   ├── pages/ 
 │       │   │   ├── admin/
-│       │   │   ├── api/
 │       │   │   ├── databases/ 
-│       │   │   ├── login.astro  
-│       │   │   └── logout.astro
+│       │   │   ├── login.tsx  
+│       │   │   └── logout.tsx
 │       │   └── styles/  
-│       ├── Dockerfile.vite
+│       ├── Dockerfile.nginx
+│       ├── nginx.conf
 │       └── package.json
 ├── packages/
 │   ├── config/  
@@ -89,11 +89,12 @@ Orpbal/
 
 | Domain | Technology | Description |
 |---|---|---|
-| Frontend Framework |	Astro 7 |	Aplikasi web Server-Side Rendered (SSR) berkinerja tinggi dengan adapter Node
-| Interactive UI |	React 19 |	Komponen interaktif reaktif sisi klien untuk kanvas dan editor
+| Frontend Framework |	React 19 + Vite 8 |	Single-Page Application (SPA) reaktif; seluruh state dan alur hidup sisi klien |
+| Routing |	React Router 7 |	SPA routing dengan URL yang tetap (`/login`, `/databases`, `/admin/*`) |
 | Diagram Engine |	@xyflow/react + Dagre |	Editor graf visual interaktif dengan tata letak otomatis untuk diagram relasional
-| SQL Editor |	CodeMirror 6	| Editor web canggih dengan penyorotan sintaksis SQL, nomor baris, dan pelengkapan otomatis
-| Styling |	Tailwind CSS v4	| Styling modern menggunakan CSS
+| SQL Editor |	CodeMirror 6 (@uiw/react-codemirror)	| Editor web canggih dengan penyorotan sintaksis SQL, nomor baris, dan pelengkapan otomatis
+| Styling |	Tailwind CSS v4	| Styling modern responsif (mobile dan desktop)
+| Penyajian (Docker) |	nginx |	Melayani `dist/` hasil build, fallback SPA routing, dan proxy `/api` ke backend
 | Backend API	| Go 1.25 + Gin	| Server REST API terkompilasi yang memory-safe dengan throughput tinggi
 | ORM / Data Access	| Ent	| Schema-as-code type-safe entity framework untuk Go
 | API Contract	| OpenAPI 3.0 + oapi-codegen |	Strictly typed kontrak API dengan pembuatan route handler Gin secara otomatis
@@ -222,11 +223,13 @@ Atau jalankan masing-masing pada terminal terpisah:
 # Terminal 1: Backend API
 cd apps/server && go run cmd/server/main.go
 
-# Terminal 2: Aplikasi Web Astro SSR
+# Terminal 2: Vite SPA dev server (dengan proxy /api → :8080)
 bun run --filter web dev
 ```
 
-Buka `http://localhost:4321` di browser Anda.
+Buka `http://localhost:4321` di browser Anda. Server pengembangan Vite mem-
+proxy seluruh trafik `/api/*` ke Go Gin API, sehingga browser tetap
+same-origin (cookie sesi otomatis terlampir tanpa konfigurasi CORS).
 
 ---
 
@@ -252,10 +255,13 @@ Buka `http://localhost:4321` di browser Anda.
 
 ### Frontend (`apps/web/.env`)
 
+Hanya relevan untuk **server pengembangan** (dev). Pada produksi, nginx
+mem-proxy `/api` ke backend secara langsung, jadi nilai ini tidak digunakan.
+
 | Variabel | Wajib | Default | Deskripsi |
 |---|---|---|---|
-| `SERVER_URL` | Tidak | `http://localhost:8080` | Alamat Go Gin API. Diproxy ke `/api/*` oleh layer Astro SSR |
-| `HOST` | Tidak | `0.0.0.0` | Alamat bind server frontend |
+| `SERVER_URL` | Tidak | `http://localhost:8080` | Alamat Go Gin API yang dituju proxy `/api/*` oleh Vite saat dev |
+| `HOST` | Tidak | `0.0.0.0` | Alamat bind server pengembangan Vite |
 | `PORT` | Tidak | `4321` (dev) / `3000` (prod) | Port server frontend |
 
 ---
@@ -364,7 +370,7 @@ go generate ./internal/api
 ### Verifikasi Frontend
 
 ```sh
-# Pemeriksaan tipe untuk semua file Astro dan TypeScript
+# Pemeriksaan tipe untuk seluruh source TypeScript (SPA React + Vite)
 bun run check-types
 
 # Menjalankan unit test frontend menggunakan Vitest
@@ -410,7 +416,7 @@ Skrip memakai `docker compose` bila tersedia dan otomatis jatuh ke `docker-compo
 | `bun run check-types` | `bun run --filter '*' check-types` | Memeriksa tipe data web dan package TypeScript |
 | `bun run test` | `bun run --filter web test` | Menjalankan seluruh pengujian web dengan Vitest |
 | `bun run test:integration`| `bash scripts/test-integration.sh` | Menjalankan kontainer Postgres sementara & mengeksekusi test suite Go |
-| `bun run dev:web` | `bun run --filter web dev` | Menjalankan server pengembangan Astro SSR |
+| `bun run dev:web` | `bun run --filter web dev` | Menjalankan server pengembangan Vite (SPA) |
 | `bun run dev:server` | `bash scripts/native/task-1.sh` | Menjalankan server backend Go |
 | `bun run setup:server` | `bash scripts/native/task-2.sh` | Merapikan dan memverifikasi modul Go |
 | `bun run test:server` | `bash scripts/native/task-3.sh` | Merapikan modul Go dan menjalankan pengujian backend |

@@ -15,7 +15,7 @@ import {
 import dagre from "@dagrejs/dagre";
 import "@xyflow/react/dist/style.css";
 
-import type { DatabaseSchema, SchemaTable } from "@/lib/api";
+import { api, ApiError, type DatabaseSchema, type SchemaTable } from "@/lib/api";
 
 const TYPE_ABBREV: Record<string, string> = {
 	"character varying": "varchar",
@@ -1138,7 +1138,26 @@ function ReviewModal(props: {
 	onClear: () => void;
 }) {
 	const { statements, dropCount, connectionId, csrf, onClose, onClear } = props;
+	const [creating, setCreating] = useState(false);
+	const [createError, setCreateError] = useState<string | null>(null);
 	const sqlText = statements.map((statement) => statement.sql).join("\n\n");
+
+	const createMigration = async () => {
+		setCreating(true);
+		setCreateError(null);
+		try {
+			await api(`/databases/${connectionId}/migrations`, {
+				method: "POST",
+				body: { sql: sqlText },
+				csrf,
+			});
+			onClose();
+		} catch (error) {
+			setCreateError(error instanceof ApiError ? error.message : "Request failed");
+			setCreating(false);
+		}
+	};
+
 	return (
 		<div className="absolute inset-0 z-30 grid place-items-center bg-black/60 p-4">
 			<div className="panel w-full max-w-[640px] p-4">
@@ -1161,17 +1180,17 @@ function ReviewModal(props: {
 						close
 					</button>
 				</div>
-				<form method="POST" action={`?_action=createMigration`} className="mt-3 flex items-center justify-end gap-2">
-					<input type="hidden" name="csrf_token" value={csrf} />
-					<input type="hidden" name="id" value={connectionId} />
-					<input type="hidden" name="sql" value={sqlText} />
+				{createError && (
+					<p className="mb-2 border border-error/40 bg-error/10 px-3 py-2 text-xs text-error">{createError}</p>
+				)}
+				<div className="mt-3 flex items-center justify-end gap-2">
 					<button type="button" className="text-xs text-dim underline" onClick={onClear}>
 						discard all
 					</button>
-					<button type="submit" className="btn-brass px-3 py-1 text-xs">
-						Create migration
+					<button type="button" className="btn-brass px-3 py-1 text-xs" disabled={creating} onClick={() => void createMigration()}>
+						{creating ? "Creating…" : "Create migration"}
 					</button>
-				</form>
+				</div>
 			</div>
 		</div>
 	);

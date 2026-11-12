@@ -1,9 +1,12 @@
-/// <reference types="vitest/config" />
-import { getViteConfig } from "astro/config";
+import { fileURLToPath } from "node:url";
+import { defineConfig } from "vitest/config";
 
-// Astro's loader gives tests the same vite pipeline the app uses: the `@/`
-// tsconfig alias and virtual modules such as `astro:actions`.
-export default getViteConfig({
+export default defineConfig({
+	resolve: {
+		alias: {
+			"@": fileURLToPath(new URL("./src", import.meta.url)),
+		},
+	},
 	test: {
 		environment: "node",
 		include: ["src/**/*.test.ts"],
