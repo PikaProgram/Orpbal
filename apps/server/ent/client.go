@@ -16,6 +16,9 @@ import (
 	"Orpbal/ent/group"
 	"Orpbal/ent/groupmembership"
 	"Orpbal/ent/migration"
+	"Orpbal/ent/migrationapproval"
+	"Orpbal/ent/migrationexecution"
+	"Orpbal/ent/migrationjob"
 	"Orpbal/ent/platformuser"
 	"Orpbal/ent/schemasnapshot"
 	"Orpbal/ent/session"
@@ -41,6 +44,12 @@ type Client struct {
 	GroupMembership *GroupMembershipClient
 	// Migration is the client for interacting with the Migration builders.
 	Migration *MigrationClient
+	// MigrationApproval is the client for interacting with the MigrationApproval builders.
+	MigrationApproval *MigrationApprovalClient
+	// MigrationExecution is the client for interacting with the MigrationExecution builders.
+	MigrationExecution *MigrationExecutionClient
+	// MigrationJob is the client for interacting with the MigrationJob builders.
+	MigrationJob *MigrationJobClient
 	// PlatformUser is the client for interacting with the PlatformUser builders.
 	PlatformUser *PlatformUserClient
 	// SchemaSnapshot is the client for interacting with the SchemaSnapshot builders.
@@ -63,6 +72,9 @@ func (c *Client) init() {
 	c.Group = NewGroupClient(c.config)
 	c.GroupMembership = NewGroupMembershipClient(c.config)
 	c.Migration = NewMigrationClient(c.config)
+	c.MigrationApproval = NewMigrationApprovalClient(c.config)
+	c.MigrationExecution = NewMigrationExecutionClient(c.config)
+	c.MigrationJob = NewMigrationJobClient(c.config)
 	c.PlatformUser = NewPlatformUserClient(c.config)
 	c.SchemaSnapshot = NewSchemaSnapshotClient(c.config)
 	c.Session = NewSessionClient(c.config)
@@ -163,6 +175,9 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		Group:              NewGroupClient(cfg),
 		GroupMembership:    NewGroupMembershipClient(cfg),
 		Migration:          NewMigrationClient(cfg),
+		MigrationApproval:  NewMigrationApprovalClient(cfg),
+		MigrationExecution: NewMigrationExecutionClient(cfg),
+		MigrationJob:       NewMigrationJobClient(cfg),
 		PlatformUser:       NewPlatformUserClient(cfg),
 		SchemaSnapshot:     NewSchemaSnapshotClient(cfg),
 		Session:            NewSessionClient(cfg),
@@ -190,6 +205,9 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		Group:              NewGroupClient(cfg),
 		GroupMembership:    NewGroupMembershipClient(cfg),
 		Migration:          NewMigrationClient(cfg),
+		MigrationApproval:  NewMigrationApprovalClient(cfg),
+		MigrationExecution: NewMigrationExecutionClient(cfg),
+		MigrationJob:       NewMigrationJobClient(cfg),
 		PlatformUser:       NewPlatformUserClient(cfg),
 		SchemaSnapshot:     NewSchemaSnapshotClient(cfg),
 		Session:            NewSessionClient(cfg),
@@ -223,7 +241,8 @@ func (c *Client) Close() error {
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.DatabaseConnection, c.DatabaseGrant, c.Group, c.GroupMembership, c.Migration,
-		c.PlatformUser, c.SchemaSnapshot, c.Session,
+		c.MigrationApproval, c.MigrationExecution, c.MigrationJob, c.PlatformUser,
+		c.SchemaSnapshot, c.Session,
 	} {
 		n.Use(hooks...)
 	}
@@ -234,7 +253,8 @@ func (c *Client) Use(hooks ...Hook) {
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.DatabaseConnection, c.DatabaseGrant, c.Group, c.GroupMembership, c.Migration,
-		c.PlatformUser, c.SchemaSnapshot, c.Session,
+		c.MigrationApproval, c.MigrationExecution, c.MigrationJob, c.PlatformUser,
+		c.SchemaSnapshot, c.Session,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -253,6 +273,12 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.GroupMembership.mutate(ctx, m)
 	case *MigrationMutation:
 		return c.Migration.mutate(ctx, m)
+	case *MigrationApprovalMutation:
+		return c.MigrationApproval.mutate(ctx, m)
+	case *MigrationExecutionMutation:
+		return c.MigrationExecution.mutate(ctx, m)
+	case *MigrationJobMutation:
+		return c.MigrationJob.mutate(ctx, m)
 	case *PlatformUserMutation:
 		return c.PlatformUser.mutate(ctx, m)
 	case *SchemaSnapshotMutation:
@@ -718,6 +744,22 @@ func (c *GroupClient) QueryGrants(gr *Group) *DatabaseGrantQuery {
 	return query
 }
 
+// QueryApprovals queries the approvals edge of a Group.
+func (c *GroupClient) QueryApprovals(gr *Group) *MigrationApprovalQuery {
+	query := (&MigrationApprovalClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := gr.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(group.Table, group.FieldID, id),
+			sqlgraph.To(migrationapproval.Table, migrationapproval.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, group.ApprovalsTable, group.ApprovalsColumn),
+		)
+		fromV = sqlgraph.Neighbors(gr.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // Hooks returns the client hooks.
 func (c *GroupClient) Hooks() []Hook {
 	return c.hooks.Group
@@ -1032,15 +1074,47 @@ func (c *MigrationClient) QueryConnection(m *Migration) *DatabaseConnectionQuery
 	return query
 }
 
-// QueryExecutor queries the executor edge of a Migration.
-func (c *MigrationClient) QueryExecutor(m *Migration) *PlatformUserQuery {
+// QueryAuthor queries the author edge of a Migration.
+func (c *MigrationClient) QueryAuthor(m *Migration) *PlatformUserQuery {
 	query := (&PlatformUserClient{config: c.config}).Query()
 	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
 		id := m.ID
 		step := sqlgraph.NewStep(
 			sqlgraph.From(migration.Table, migration.FieldID, id),
 			sqlgraph.To(platformuser.Table, platformuser.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, false, migration.ExecutorTable, migration.ExecutorColumn),
+			sqlgraph.Edge(sqlgraph.M2O, false, migration.AuthorTable, migration.AuthorColumn),
+		)
+		fromV = sqlgraph.Neighbors(m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryExecutions queries the executions edge of a Migration.
+func (c *MigrationClient) QueryExecutions(m *Migration) *MigrationExecutionQuery {
+	query := (&MigrationExecutionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(migration.Table, migration.FieldID, id),
+			sqlgraph.To(migrationexecution.Table, migrationexecution.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, migration.ExecutionsTable, migration.ExecutionsColumn),
+		)
+		fromV = sqlgraph.Neighbors(m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryApprovals queries the approvals edge of a Migration.
+func (c *MigrationClient) QueryApprovals(m *Migration) *MigrationApprovalQuery {
+	query := (&MigrationApprovalClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(migration.Table, migration.FieldID, id),
+			sqlgraph.To(migrationapproval.Table, migrationapproval.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, migration.ApprovalsTable, migration.ApprovalsColumn),
 		)
 		fromV = sqlgraph.Neighbors(m.driver.Dialect(), step)
 		return fromV, nil
@@ -1086,6 +1160,549 @@ func (c *MigrationClient) mutate(ctx context.Context, m *MigrationMutation) (Val
 		return (&MigrationDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown Migration mutation op: %q", m.Op())
+	}
+}
+
+// MigrationApprovalClient is a client for the MigrationApproval schema.
+type MigrationApprovalClient struct {
+	config
+}
+
+// NewMigrationApprovalClient returns a client for the MigrationApproval from the given config.
+func NewMigrationApprovalClient(c config) *MigrationApprovalClient {
+	return &MigrationApprovalClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `migrationapproval.Hooks(f(g(h())))`.
+func (c *MigrationApprovalClient) Use(hooks ...Hook) {
+	c.hooks.MigrationApproval = append(c.hooks.MigrationApproval, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `migrationapproval.Intercept(f(g(h())))`.
+func (c *MigrationApprovalClient) Intercept(interceptors ...Interceptor) {
+	c.inters.MigrationApproval = append(c.inters.MigrationApproval, interceptors...)
+}
+
+// Create returns a builder for creating a MigrationApproval entity.
+func (c *MigrationApprovalClient) Create() *MigrationApprovalCreate {
+	mutation := newMigrationApprovalMutation(c.config, OpCreate)
+	return &MigrationApprovalCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of MigrationApproval entities.
+func (c *MigrationApprovalClient) CreateBulk(builders ...*MigrationApprovalCreate) *MigrationApprovalCreateBulk {
+	return &MigrationApprovalCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *MigrationApprovalClient) MapCreateBulk(slice any, setFunc func(*MigrationApprovalCreate, int)) *MigrationApprovalCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &MigrationApprovalCreateBulk{err: fmt.Errorf("calling to MigrationApprovalClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*MigrationApprovalCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &MigrationApprovalCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for MigrationApproval.
+func (c *MigrationApprovalClient) Update() *MigrationApprovalUpdate {
+	mutation := newMigrationApprovalMutation(c.config, OpUpdate)
+	return &MigrationApprovalUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *MigrationApprovalClient) UpdateOne(ma *MigrationApproval) *MigrationApprovalUpdateOne {
+	mutation := newMigrationApprovalMutation(c.config, OpUpdateOne, withMigrationApproval(ma))
+	return &MigrationApprovalUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *MigrationApprovalClient) UpdateOneID(id int) *MigrationApprovalUpdateOne {
+	mutation := newMigrationApprovalMutation(c.config, OpUpdateOne, withMigrationApprovalID(id))
+	return &MigrationApprovalUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for MigrationApproval.
+func (c *MigrationApprovalClient) Delete() *MigrationApprovalDelete {
+	mutation := newMigrationApprovalMutation(c.config, OpDelete)
+	return &MigrationApprovalDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *MigrationApprovalClient) DeleteOne(ma *MigrationApproval) *MigrationApprovalDeleteOne {
+	return c.DeleteOneID(ma.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *MigrationApprovalClient) DeleteOneID(id int) *MigrationApprovalDeleteOne {
+	builder := c.Delete().Where(migrationapproval.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &MigrationApprovalDeleteOne{builder}
+}
+
+// Query returns a query builder for MigrationApproval.
+func (c *MigrationApprovalClient) Query() *MigrationApprovalQuery {
+	return &MigrationApprovalQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeMigrationApproval},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a MigrationApproval entity by its id.
+func (c *MigrationApprovalClient) Get(ctx context.Context, id int) (*MigrationApproval, error) {
+	return c.Query().Where(migrationapproval.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *MigrationApprovalClient) GetX(ctx context.Context, id int) *MigrationApproval {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryMigration queries the migration edge of a MigrationApproval.
+func (c *MigrationApprovalClient) QueryMigration(ma *MigrationApproval) *MigrationQuery {
+	query := (&MigrationClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := ma.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(migrationapproval.Table, migrationapproval.FieldID, id),
+			sqlgraph.To(migration.Table, migration.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, migrationapproval.MigrationTable, migrationapproval.MigrationColumn),
+		)
+		fromV = sqlgraph.Neighbors(ma.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryGroup queries the group edge of a MigrationApproval.
+func (c *MigrationApprovalClient) QueryGroup(ma *MigrationApproval) *GroupQuery {
+	query := (&GroupClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := ma.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(migrationapproval.Table, migrationapproval.FieldID, id),
+			sqlgraph.To(group.Table, group.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, migrationapproval.GroupTable, migrationapproval.GroupColumn),
+		)
+		fromV = sqlgraph.Neighbors(ma.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryLeader queries the leader edge of a MigrationApproval.
+func (c *MigrationApprovalClient) QueryLeader(ma *MigrationApproval) *PlatformUserQuery {
+	query := (&PlatformUserClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := ma.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(migrationapproval.Table, migrationapproval.FieldID, id),
+			sqlgraph.To(platformuser.Table, platformuser.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, migrationapproval.LeaderTable, migrationapproval.LeaderColumn),
+		)
+		fromV = sqlgraph.Neighbors(ma.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *MigrationApprovalClient) Hooks() []Hook {
+	return c.hooks.MigrationApproval
+}
+
+// Interceptors returns the client interceptors.
+func (c *MigrationApprovalClient) Interceptors() []Interceptor {
+	return c.inters.MigrationApproval
+}
+
+func (c *MigrationApprovalClient) mutate(ctx context.Context, m *MigrationApprovalMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&MigrationApprovalCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&MigrationApprovalUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&MigrationApprovalUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&MigrationApprovalDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown MigrationApproval mutation op: %q", m.Op())
+	}
+}
+
+// MigrationExecutionClient is a client for the MigrationExecution schema.
+type MigrationExecutionClient struct {
+	config
+}
+
+// NewMigrationExecutionClient returns a client for the MigrationExecution from the given config.
+func NewMigrationExecutionClient(c config) *MigrationExecutionClient {
+	return &MigrationExecutionClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `migrationexecution.Hooks(f(g(h())))`.
+func (c *MigrationExecutionClient) Use(hooks ...Hook) {
+	c.hooks.MigrationExecution = append(c.hooks.MigrationExecution, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `migrationexecution.Intercept(f(g(h())))`.
+func (c *MigrationExecutionClient) Intercept(interceptors ...Interceptor) {
+	c.inters.MigrationExecution = append(c.inters.MigrationExecution, interceptors...)
+}
+
+// Create returns a builder for creating a MigrationExecution entity.
+func (c *MigrationExecutionClient) Create() *MigrationExecutionCreate {
+	mutation := newMigrationExecutionMutation(c.config, OpCreate)
+	return &MigrationExecutionCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of MigrationExecution entities.
+func (c *MigrationExecutionClient) CreateBulk(builders ...*MigrationExecutionCreate) *MigrationExecutionCreateBulk {
+	return &MigrationExecutionCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *MigrationExecutionClient) MapCreateBulk(slice any, setFunc func(*MigrationExecutionCreate, int)) *MigrationExecutionCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &MigrationExecutionCreateBulk{err: fmt.Errorf("calling to MigrationExecutionClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*MigrationExecutionCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &MigrationExecutionCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for MigrationExecution.
+func (c *MigrationExecutionClient) Update() *MigrationExecutionUpdate {
+	mutation := newMigrationExecutionMutation(c.config, OpUpdate)
+	return &MigrationExecutionUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *MigrationExecutionClient) UpdateOne(me *MigrationExecution) *MigrationExecutionUpdateOne {
+	mutation := newMigrationExecutionMutation(c.config, OpUpdateOne, withMigrationExecution(me))
+	return &MigrationExecutionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *MigrationExecutionClient) UpdateOneID(id int) *MigrationExecutionUpdateOne {
+	mutation := newMigrationExecutionMutation(c.config, OpUpdateOne, withMigrationExecutionID(id))
+	return &MigrationExecutionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for MigrationExecution.
+func (c *MigrationExecutionClient) Delete() *MigrationExecutionDelete {
+	mutation := newMigrationExecutionMutation(c.config, OpDelete)
+	return &MigrationExecutionDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *MigrationExecutionClient) DeleteOne(me *MigrationExecution) *MigrationExecutionDeleteOne {
+	return c.DeleteOneID(me.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *MigrationExecutionClient) DeleteOneID(id int) *MigrationExecutionDeleteOne {
+	builder := c.Delete().Where(migrationexecution.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &MigrationExecutionDeleteOne{builder}
+}
+
+// Query returns a query builder for MigrationExecution.
+func (c *MigrationExecutionClient) Query() *MigrationExecutionQuery {
+	return &MigrationExecutionQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeMigrationExecution},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a MigrationExecution entity by its id.
+func (c *MigrationExecutionClient) Get(ctx context.Context, id int) (*MigrationExecution, error) {
+	return c.Query().Where(migrationexecution.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *MigrationExecutionClient) GetX(ctx context.Context, id int) *MigrationExecution {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryMigration queries the migration edge of a MigrationExecution.
+func (c *MigrationExecutionClient) QueryMigration(me *MigrationExecution) *MigrationQuery {
+	query := (&MigrationClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := me.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(migrationexecution.Table, migrationexecution.FieldID, id),
+			sqlgraph.To(migration.Table, migration.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, migrationexecution.MigrationTable, migrationexecution.MigrationColumn),
+		)
+		fromV = sqlgraph.Neighbors(me.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryActor queries the actor edge of a MigrationExecution.
+func (c *MigrationExecutionClient) QueryActor(me *MigrationExecution) *PlatformUserQuery {
+	query := (&PlatformUserClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := me.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(migrationexecution.Table, migrationexecution.FieldID, id),
+			sqlgraph.To(platformuser.Table, platformuser.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, migrationexecution.ActorTable, migrationexecution.ActorColumn),
+		)
+		fromV = sqlgraph.Neighbors(me.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryReverted queries the reverted edge of a MigrationExecution.
+func (c *MigrationExecutionClient) QueryReverted(me *MigrationExecution) *MigrationExecutionQuery {
+	query := (&MigrationExecutionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := me.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(migrationexecution.Table, migrationexecution.FieldID, id),
+			sqlgraph.To(migrationexecution.Table, migrationexecution.FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, false, migrationexecution.RevertedTable, migrationexecution.RevertedColumn),
+		)
+		fromV = sqlgraph.Neighbors(me.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryJobs queries the jobs edge of a MigrationExecution.
+func (c *MigrationExecutionClient) QueryJobs(me *MigrationExecution) *MigrationJobQuery {
+	query := (&MigrationJobClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := me.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(migrationexecution.Table, migrationexecution.FieldID, id),
+			sqlgraph.To(migrationjob.Table, migrationjob.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, migrationexecution.JobsTable, migrationexecution.JobsColumn),
+		)
+		fromV = sqlgraph.Neighbors(me.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QuerySnapshots queries the snapshots edge of a MigrationExecution.
+func (c *MigrationExecutionClient) QuerySnapshots(me *MigrationExecution) *SchemaSnapshotQuery {
+	query := (&SchemaSnapshotClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := me.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(migrationexecution.Table, migrationexecution.FieldID, id),
+			sqlgraph.To(schemasnapshot.Table, schemasnapshot.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, migrationexecution.SnapshotsTable, migrationexecution.SnapshotsColumn),
+		)
+		fromV = sqlgraph.Neighbors(me.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *MigrationExecutionClient) Hooks() []Hook {
+	return c.hooks.MigrationExecution
+}
+
+// Interceptors returns the client interceptors.
+func (c *MigrationExecutionClient) Interceptors() []Interceptor {
+	return c.inters.MigrationExecution
+}
+
+func (c *MigrationExecutionClient) mutate(ctx context.Context, m *MigrationExecutionMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&MigrationExecutionCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&MigrationExecutionUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&MigrationExecutionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&MigrationExecutionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown MigrationExecution mutation op: %q", m.Op())
+	}
+}
+
+// MigrationJobClient is a client for the MigrationJob schema.
+type MigrationJobClient struct {
+	config
+}
+
+// NewMigrationJobClient returns a client for the MigrationJob from the given config.
+func NewMigrationJobClient(c config) *MigrationJobClient {
+	return &MigrationJobClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `migrationjob.Hooks(f(g(h())))`.
+func (c *MigrationJobClient) Use(hooks ...Hook) {
+	c.hooks.MigrationJob = append(c.hooks.MigrationJob, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `migrationjob.Intercept(f(g(h())))`.
+func (c *MigrationJobClient) Intercept(interceptors ...Interceptor) {
+	c.inters.MigrationJob = append(c.inters.MigrationJob, interceptors...)
+}
+
+// Create returns a builder for creating a MigrationJob entity.
+func (c *MigrationJobClient) Create() *MigrationJobCreate {
+	mutation := newMigrationJobMutation(c.config, OpCreate)
+	return &MigrationJobCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of MigrationJob entities.
+func (c *MigrationJobClient) CreateBulk(builders ...*MigrationJobCreate) *MigrationJobCreateBulk {
+	return &MigrationJobCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *MigrationJobClient) MapCreateBulk(slice any, setFunc func(*MigrationJobCreate, int)) *MigrationJobCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &MigrationJobCreateBulk{err: fmt.Errorf("calling to MigrationJobClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*MigrationJobCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &MigrationJobCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for MigrationJob.
+func (c *MigrationJobClient) Update() *MigrationJobUpdate {
+	mutation := newMigrationJobMutation(c.config, OpUpdate)
+	return &MigrationJobUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *MigrationJobClient) UpdateOne(mj *MigrationJob) *MigrationJobUpdateOne {
+	mutation := newMigrationJobMutation(c.config, OpUpdateOne, withMigrationJob(mj))
+	return &MigrationJobUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *MigrationJobClient) UpdateOneID(id int) *MigrationJobUpdateOne {
+	mutation := newMigrationJobMutation(c.config, OpUpdateOne, withMigrationJobID(id))
+	return &MigrationJobUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for MigrationJob.
+func (c *MigrationJobClient) Delete() *MigrationJobDelete {
+	mutation := newMigrationJobMutation(c.config, OpDelete)
+	return &MigrationJobDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *MigrationJobClient) DeleteOne(mj *MigrationJob) *MigrationJobDeleteOne {
+	return c.DeleteOneID(mj.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *MigrationJobClient) DeleteOneID(id int) *MigrationJobDeleteOne {
+	builder := c.Delete().Where(migrationjob.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &MigrationJobDeleteOne{builder}
+}
+
+// Query returns a query builder for MigrationJob.
+func (c *MigrationJobClient) Query() *MigrationJobQuery {
+	return &MigrationJobQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeMigrationJob},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a MigrationJob entity by its id.
+func (c *MigrationJobClient) Get(ctx context.Context, id int) (*MigrationJob, error) {
+	return c.Query().Where(migrationjob.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *MigrationJobClient) GetX(ctx context.Context, id int) *MigrationJob {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryExecution queries the execution edge of a MigrationJob.
+func (c *MigrationJobClient) QueryExecution(mj *MigrationJob) *MigrationExecutionQuery {
+	query := (&MigrationExecutionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := mj.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(migrationjob.Table, migrationjob.FieldID, id),
+			sqlgraph.To(migrationexecution.Table, migrationexecution.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, migrationjob.ExecutionTable, migrationjob.ExecutionColumn),
+		)
+		fromV = sqlgraph.Neighbors(mj.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *MigrationJobClient) Hooks() []Hook {
+	return c.hooks.MigrationJob
+}
+
+// Interceptors returns the client interceptors.
+func (c *MigrationJobClient) Interceptors() []Interceptor {
+	return c.inters.MigrationJob
+}
+
+func (c *MigrationJobClient) mutate(ctx context.Context, m *MigrationJobMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&MigrationJobCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&MigrationJobUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&MigrationJobUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&MigrationJobDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown MigrationJob mutation op: %q", m.Op())
 	}
 }
 
@@ -1222,6 +1839,22 @@ func (c *PlatformUserClient) QuerySessions(pu *PlatformUser) *SessionQuery {
 			sqlgraph.From(platformuser.Table, platformuser.FieldID, id),
 			sqlgraph.To(session.Table, session.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, platformuser.SessionsTable, platformuser.SessionsColumn),
+		)
+		fromV = sqlgraph.Neighbors(pu.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryApprovals queries the approvals edge of a PlatformUser.
+func (c *PlatformUserClient) QueryApprovals(pu *PlatformUser) *MigrationApprovalQuery {
+	query := (&MigrationApprovalClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := pu.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(platformuser.Table, platformuser.FieldID, id),
+			sqlgraph.To(migrationapproval.Table, migrationapproval.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, platformuser.ApprovalsTable, platformuser.ApprovalsColumn),
 		)
 		fromV = sqlgraph.Neighbors(pu.driver.Dialect(), step)
 		return fromV, nil
@@ -1371,6 +2004,22 @@ func (c *SchemaSnapshotClient) QueryMigration(ss *SchemaSnapshot) *MigrationQuer
 			sqlgraph.From(schemasnapshot.Table, schemasnapshot.FieldID, id),
 			sqlgraph.To(migration.Table, migration.FieldID),
 			sqlgraph.Edge(sqlgraph.M2O, true, schemasnapshot.MigrationTable, schemasnapshot.MigrationColumn),
+		)
+		fromV = sqlgraph.Neighbors(ss.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryExecution queries the execution edge of a SchemaSnapshot.
+func (c *SchemaSnapshotClient) QueryExecution(ss *SchemaSnapshot) *MigrationExecutionQuery {
+	query := (&MigrationExecutionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := ss.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(schemasnapshot.Table, schemasnapshot.FieldID, id),
+			sqlgraph.To(migrationexecution.Table, migrationexecution.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, schemasnapshot.ExecutionTable, schemasnapshot.ExecutionColumn),
 		)
 		fromV = sqlgraph.Neighbors(ss.driver.Dialect(), step)
 		return fromV, nil
@@ -1556,10 +2205,12 @@ func (c *SessionClient) mutate(ctx context.Context, m *SessionMutation) (Value, 
 type (
 	hooks struct {
 		DatabaseConnection, DatabaseGrant, Group, GroupMembership, Migration,
-		PlatformUser, SchemaSnapshot, Session []ent.Hook
+		MigrationApproval, MigrationExecution, MigrationJob, PlatformUser,
+		SchemaSnapshot, Session []ent.Hook
 	}
 	inters struct {
 		DatabaseConnection, DatabaseGrant, Group, GroupMembership, Migration,
-		PlatformUser, SchemaSnapshot, Session []ent.Interceptor
+		MigrationApproval, MigrationExecution, MigrationJob, PlatformUser,
+		SchemaSnapshot, Session []ent.Interceptor
 	}
 )

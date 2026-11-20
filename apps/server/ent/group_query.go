@@ -6,6 +6,7 @@ import (
 	"Orpbal/ent/databasegrant"
 	"Orpbal/ent/group"
 	"Orpbal/ent/groupmembership"
+	"Orpbal/ent/migrationapproval"
 	"Orpbal/ent/predicate"
 	"context"
 	"database/sql/driver"
@@ -27,6 +28,7 @@ type GroupQuery struct {
 	predicates      []predicate.Group
 	withMemberships *GroupMembershipQuery
 	withGrants      *DatabaseGrantQuery
+	withApprovals   *MigrationApprovalQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -100,6 +102,28 @@ func (gq *GroupQuery) QueryGrants() *DatabaseGrantQuery {
 			sqlgraph.From(group.Table, group.FieldID, selector),
 			sqlgraph.To(databasegrant.Table, databasegrant.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, group.GrantsTable, group.GrantsColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(gq.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryApprovals chains the current query on the "approvals" edge.
+func (gq *GroupQuery) QueryApprovals() *MigrationApprovalQuery {
+	query := (&MigrationApprovalClient{config: gq.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := gq.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := gq.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(group.Table, group.FieldID, selector),
+			sqlgraph.To(migrationapproval.Table, migrationapproval.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, group.ApprovalsTable, group.ApprovalsColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(gq.driver.Dialect(), step)
 		return fromU, nil
@@ -301,6 +325,7 @@ func (gq *GroupQuery) Clone() *GroupQuery {
 		predicates:      append([]predicate.Group{}, gq.predicates...),
 		withMemberships: gq.withMemberships.Clone(),
 		withGrants:      gq.withGrants.Clone(),
+		withApprovals:   gq.withApprovals.Clone(),
 		// clone intermediate query.
 		sql:  gq.sql.Clone(),
 		path: gq.path,
@@ -326,6 +351,17 @@ func (gq *GroupQuery) WithGrants(opts ...func(*DatabaseGrantQuery)) *GroupQuery 
 		opt(query)
 	}
 	gq.withGrants = query
+	return gq
+}
+
+// WithApprovals tells the query-builder to eager-load the nodes that are connected to
+// the "approvals" edge. The optional arguments are used to configure the query builder of the edge.
+func (gq *GroupQuery) WithApprovals(opts ...func(*MigrationApprovalQuery)) *GroupQuery {
+	query := (&MigrationApprovalClient{config: gq.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	gq.withApprovals = query
 	return gq
 }
 
@@ -407,9 +443,10 @@ func (gq *GroupQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Group,
 	var (
 		nodes       = []*Group{}
 		_spec       = gq.querySpec()
-		loadedTypes = [2]bool{
+		loadedTypes = [3]bool{
 			gq.withMemberships != nil,
 			gq.withGrants != nil,
+			gq.withApprovals != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
@@ -441,6 +478,13 @@ func (gq *GroupQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Group,
 		if err := gq.loadGrants(ctx, query, nodes,
 			func(n *Group) { n.Edges.Grants = []*DatabaseGrant{} },
 			func(n *Group, e *DatabaseGrant) { n.Edges.Grants = append(n.Edges.Grants, e) }); err != nil {
+			return nil, err
+		}
+	}
+	if query := gq.withApprovals; query != nil {
+		if err := gq.loadApprovals(ctx, query, nodes,
+			func(n *Group) { n.Edges.Approvals = []*MigrationApproval{} },
+			func(n *Group, e *MigrationApproval) { n.Edges.Approvals = append(n.Edges.Approvals, e) }); err != nil {
 			return nil, err
 		}
 	}
@@ -492,6 +536,36 @@ func (gq *GroupQuery) loadGrants(ctx context.Context, query *DatabaseGrantQuery,
 	}
 	query.Where(predicate.DatabaseGrant(func(s *sql.Selector) {
 		s.Where(sql.InValues(s.C(group.GrantsColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.GroupID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "group_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+func (gq *GroupQuery) loadApprovals(ctx context.Context, query *MigrationApprovalQuery, nodes []*Group, init func(*Group), assign func(*Group, *MigrationApproval)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int]*Group)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(migrationapproval.FieldGroupID)
+	}
+	query.Where(predicate.MigrationApproval(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(group.ApprovalsColumn), fks...))
 	}))
 	neighbors, err := query.All(ctx)
 	if err != nil {

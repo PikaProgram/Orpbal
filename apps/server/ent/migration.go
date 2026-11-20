@@ -8,7 +8,6 @@ import (
 	"Orpbal/ent/platformuser"
 	"fmt"
 	"strings"
-	"time"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
@@ -23,14 +22,30 @@ type Migration struct {
 	ConnectionID int `json:"connection_id,omitempty"`
 	// Version holds the value of the "version" field.
 	Version int `json:"version,omitempty"`
-	// SQL executed by this migration
-	SQL string `json:"sql,omitempty"`
-	// FK to platform_user; the user who created it
-	ExecutorID int `json:"executor_id,omitempty"`
-	// When the migration was applied
-	ExecutedAt time.Time `json:"executed_at,omitempty"`
+	// Forward SQL executed by this migration
+	SQLUp string `json:"sql_up,omitempty"`
+	// Rollback SQL; empty means the migration is irreversible
+	SQLDown string `json:"sql_down,omitempty"`
+	// Irreversible holds the value of the "irreversible" field.
+	Irreversible bool `json:"irreversible,omitempty"`
+	// Why the migration cannot be rolled back
+	IrreversibleReason string `json:"irreversible_reason,omitempty"`
 	// Status holds the value of the "status" field.
 	Status migration.Status `json:"status,omitempty"`
+	// FK to platform_user; the user who created it
+	AuthorID int `json:"author_id,omitempty"`
+	// Rows per batch for batch migrations
+	BatchSize int `json:"batch_size,omitempty"`
+	// Column used as the batch cursor
+	CursorColumn string `json:"cursor_column,omitempty"`
+	// Table the batch cursor walks; scope of the data migration
+	BatchTable string `json:"batch_table,omitempty"`
+	// MinID holds the value of the "min_id" field.
+	MinID *int64 `json:"min_id,omitempty"`
+	// MaxID holds the value of the "max_id" field.
+	MaxID *int64 `json:"max_id,omitempty"`
+	// Batch SQL with {{last_id}},{{batch_size}},{{min_id}},{{max_id}} placeholders
+	Template string `json:"template,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the MigrationQuery when eager-loading is set.
 	Edges        MigrationEdges `json:"edges"`
@@ -41,13 +56,17 @@ type Migration struct {
 type MigrationEdges struct {
 	// Connection holds the value of the connection edge.
 	Connection *DatabaseConnection `json:"connection,omitempty"`
-	// Executor holds the value of the executor edge.
-	Executor *PlatformUser `json:"executor,omitempty"`
+	// Author holds the value of the author edge.
+	Author *PlatformUser `json:"author,omitempty"`
+	// Executions holds the value of the executions edge.
+	Executions []*MigrationExecution `json:"executions,omitempty"`
+	// Approvals holds the value of the approvals edge.
+	Approvals []*MigrationApproval `json:"approvals,omitempty"`
 	// Snapshots holds the value of the snapshots edge.
 	Snapshots []*SchemaSnapshot `json:"snapshots,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [3]bool
+	loadedTypes [5]bool
 }
 
 // ConnectionOrErr returns the Connection value or an error if the edge
@@ -61,21 +80,39 @@ func (e MigrationEdges) ConnectionOrErr() (*DatabaseConnection, error) {
 	return nil, &NotLoadedError{edge: "connection"}
 }
 
-// ExecutorOrErr returns the Executor value or an error if the edge
+// AuthorOrErr returns the Author value or an error if the edge
 // was not loaded in eager-loading, or loaded but was not found.
-func (e MigrationEdges) ExecutorOrErr() (*PlatformUser, error) {
-	if e.Executor != nil {
-		return e.Executor, nil
+func (e MigrationEdges) AuthorOrErr() (*PlatformUser, error) {
+	if e.Author != nil {
+		return e.Author, nil
 	} else if e.loadedTypes[1] {
 		return nil, &NotFoundError{label: platformuser.Label}
 	}
-	return nil, &NotLoadedError{edge: "executor"}
+	return nil, &NotLoadedError{edge: "author"}
+}
+
+// ExecutionsOrErr returns the Executions value or an error if the edge
+// was not loaded in eager-loading.
+func (e MigrationEdges) ExecutionsOrErr() ([]*MigrationExecution, error) {
+	if e.loadedTypes[2] {
+		return e.Executions, nil
+	}
+	return nil, &NotLoadedError{edge: "executions"}
+}
+
+// ApprovalsOrErr returns the Approvals value or an error if the edge
+// was not loaded in eager-loading.
+func (e MigrationEdges) ApprovalsOrErr() ([]*MigrationApproval, error) {
+	if e.loadedTypes[3] {
+		return e.Approvals, nil
+	}
+	return nil, &NotLoadedError{edge: "approvals"}
 }
 
 // SnapshotsOrErr returns the Snapshots value or an error if the edge
 // was not loaded in eager-loading.
 func (e MigrationEdges) SnapshotsOrErr() ([]*SchemaSnapshot, error) {
-	if e.loadedTypes[2] {
+	if e.loadedTypes[4] {
 		return e.Snapshots, nil
 	}
 	return nil, &NotLoadedError{edge: "snapshots"}
@@ -86,12 +123,12 @@ func (*Migration) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case migration.FieldID, migration.FieldConnectionID, migration.FieldVersion, migration.FieldExecutorID:
+		case migration.FieldIrreversible:
+			values[i] = new(sql.NullBool)
+		case migration.FieldID, migration.FieldConnectionID, migration.FieldVersion, migration.FieldAuthorID, migration.FieldBatchSize, migration.FieldMinID, migration.FieldMaxID:
 			values[i] = new(sql.NullInt64)
-		case migration.FieldSQL, migration.FieldStatus:
+		case migration.FieldSQLUp, migration.FieldSQLDown, migration.FieldIrreversibleReason, migration.FieldStatus, migration.FieldCursorColumn, migration.FieldBatchTable, migration.FieldTemplate:
 			values[i] = new(sql.NullString)
-		case migration.FieldExecutedAt:
-			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
 		}
@@ -125,29 +162,79 @@ func (m *Migration) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				m.Version = int(value.Int64)
 			}
-		case migration.FieldSQL:
+		case migration.FieldSQLUp:
 			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field sql", values[i])
+				return fmt.Errorf("unexpected type %T for field sql_up", values[i])
 			} else if value.Valid {
-				m.SQL = value.String
+				m.SQLUp = value.String
 			}
-		case migration.FieldExecutorID:
-			if value, ok := values[i].(*sql.NullInt64); !ok {
-				return fmt.Errorf("unexpected type %T for field executor_id", values[i])
+		case migration.FieldSQLDown:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field sql_down", values[i])
 			} else if value.Valid {
-				m.ExecutorID = int(value.Int64)
+				m.SQLDown = value.String
 			}
-		case migration.FieldExecutedAt:
-			if value, ok := values[i].(*sql.NullTime); !ok {
-				return fmt.Errorf("unexpected type %T for field executed_at", values[i])
+		case migration.FieldIrreversible:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field irreversible", values[i])
 			} else if value.Valid {
-				m.ExecutedAt = value.Time
+				m.Irreversible = value.Bool
+			}
+		case migration.FieldIrreversibleReason:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field irreversible_reason", values[i])
+			} else if value.Valid {
+				m.IrreversibleReason = value.String
 			}
 		case migration.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
 				m.Status = migration.Status(value.String)
+			}
+		case migration.FieldAuthorID:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field author_id", values[i])
+			} else if value.Valid {
+				m.AuthorID = int(value.Int64)
+			}
+		case migration.FieldBatchSize:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field batch_size", values[i])
+			} else if value.Valid {
+				m.BatchSize = int(value.Int64)
+			}
+		case migration.FieldCursorColumn:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field cursor_column", values[i])
+			} else if value.Valid {
+				m.CursorColumn = value.String
+			}
+		case migration.FieldBatchTable:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field batch_table", values[i])
+			} else if value.Valid {
+				m.BatchTable = value.String
+			}
+		case migration.FieldMinID:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field min_id", values[i])
+			} else if value.Valid {
+				m.MinID = new(int64)
+				*m.MinID = value.Int64
+			}
+		case migration.FieldMaxID:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field max_id", values[i])
+			} else if value.Valid {
+				m.MaxID = new(int64)
+				*m.MaxID = value.Int64
+			}
+		case migration.FieldTemplate:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field template", values[i])
+			} else if value.Valid {
+				m.Template = value.String
 			}
 		default:
 			m.selectValues.Set(columns[i], values[i])
@@ -167,9 +254,19 @@ func (m *Migration) QueryConnection() *DatabaseConnectionQuery {
 	return NewMigrationClient(m.config).QueryConnection(m)
 }
 
-// QueryExecutor queries the "executor" edge of the Migration entity.
-func (m *Migration) QueryExecutor() *PlatformUserQuery {
-	return NewMigrationClient(m.config).QueryExecutor(m)
+// QueryAuthor queries the "author" edge of the Migration entity.
+func (m *Migration) QueryAuthor() *PlatformUserQuery {
+	return NewMigrationClient(m.config).QueryAuthor(m)
+}
+
+// QueryExecutions queries the "executions" edge of the Migration entity.
+func (m *Migration) QueryExecutions() *MigrationExecutionQuery {
+	return NewMigrationClient(m.config).QueryExecutions(m)
+}
+
+// QueryApprovals queries the "approvals" edge of the Migration entity.
+func (m *Migration) QueryApprovals() *MigrationApprovalQuery {
+	return NewMigrationClient(m.config).QueryApprovals(m)
 }
 
 // QuerySnapshots queries the "snapshots" edge of the Migration entity.
@@ -206,17 +303,45 @@ func (m *Migration) String() string {
 	builder.WriteString("version=")
 	builder.WriteString(fmt.Sprintf("%v", m.Version))
 	builder.WriteString(", ")
-	builder.WriteString("sql=")
-	builder.WriteString(m.SQL)
+	builder.WriteString("sql_up=")
+	builder.WriteString(m.SQLUp)
 	builder.WriteString(", ")
-	builder.WriteString("executor_id=")
-	builder.WriteString(fmt.Sprintf("%v", m.ExecutorID))
+	builder.WriteString("sql_down=")
+	builder.WriteString(m.SQLDown)
 	builder.WriteString(", ")
-	builder.WriteString("executed_at=")
-	builder.WriteString(m.ExecutedAt.Format(time.ANSIC))
+	builder.WriteString("irreversible=")
+	builder.WriteString(fmt.Sprintf("%v", m.Irreversible))
+	builder.WriteString(", ")
+	builder.WriteString("irreversible_reason=")
+	builder.WriteString(m.IrreversibleReason)
 	builder.WriteString(", ")
 	builder.WriteString("status=")
 	builder.WriteString(fmt.Sprintf("%v", m.Status))
+	builder.WriteString(", ")
+	builder.WriteString("author_id=")
+	builder.WriteString(fmt.Sprintf("%v", m.AuthorID))
+	builder.WriteString(", ")
+	builder.WriteString("batch_size=")
+	builder.WriteString(fmt.Sprintf("%v", m.BatchSize))
+	builder.WriteString(", ")
+	builder.WriteString("cursor_column=")
+	builder.WriteString(m.CursorColumn)
+	builder.WriteString(", ")
+	builder.WriteString("batch_table=")
+	builder.WriteString(m.BatchTable)
+	builder.WriteString(", ")
+	if v := m.MinID; v != nil {
+		builder.WriteString("min_id=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := m.MaxID; v != nil {
+		builder.WriteString("max_id=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	builder.WriteString("template=")
+	builder.WriteString(m.Template)
 	builder.WriteByte(')')
 	return builder.String()
 }

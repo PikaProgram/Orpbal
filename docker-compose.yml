@@ -45,6 +45,22 @@ services:
       start_period: 10s
     restart: unless-stopped
 
+  worker:
+    build:
+      context: apps/server
+      dockerfile: Dockerfile
+    command: ["/app/worker"]
+    env_file:
+      - apps/server/.env
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-Orpbal}?sslmode=disable
+      WORKER_ID: worker-1
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
   db:
     image: postgres:16-alpine
     environment:

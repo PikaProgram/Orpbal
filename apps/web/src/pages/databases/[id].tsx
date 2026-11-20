@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 
 import { useSession } from "@/auth/session";
 import {
@@ -255,6 +255,9 @@ export function DatabaseDetailPage() {
 						{accessLabel}
 					</span>
 				)}
+				<Link to={`/databases/${id}/migrations`} className="btn-steel px-3 py-2 text-xs">
+					Migrations
+				</Link>
 			</div>
 
 			{database === null && !base.loading && (

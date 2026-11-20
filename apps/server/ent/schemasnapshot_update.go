@@ -4,6 +4,7 @@ package ent
 
 import (
 	"Orpbal/ent/migration"
+	"Orpbal/ent/migrationexecution"
 	"Orpbal/ent/predicate"
 	"Orpbal/ent/schemasnapshot"
 	"context"
@@ -42,6 +43,26 @@ func (ssu *SchemaSnapshotUpdate) SetNillableMigrationID(i *int) *SchemaSnapshotU
 	return ssu
 }
 
+// SetExecutionID sets the "execution_id" field.
+func (ssu *SchemaSnapshotUpdate) SetExecutionID(i int) *SchemaSnapshotUpdate {
+	ssu.mutation.SetExecutionID(i)
+	return ssu
+}
+
+// SetNillableExecutionID sets the "execution_id" field if the given value is not nil.
+func (ssu *SchemaSnapshotUpdate) SetNillableExecutionID(i *int) *SchemaSnapshotUpdate {
+	if i != nil {
+		ssu.SetExecutionID(*i)
+	}
+	return ssu
+}
+
+// ClearExecutionID clears the value of the "execution_id" field.
+func (ssu *SchemaSnapshotUpdate) ClearExecutionID() *SchemaSnapshotUpdate {
+	ssu.mutation.ClearExecutionID()
+	return ssu
+}
+
 // SetPhase sets the "phase" field.
 func (ssu *SchemaSnapshotUpdate) SetPhase(s schemasnapshot.Phase) *SchemaSnapshotUpdate {
 	ssu.mutation.SetPhase(s)
@@ -75,6 +96,11 @@ func (ssu *SchemaSnapshotUpdate) SetMigration(m *Migration) *SchemaSnapshotUpdat
 	return ssu.SetMigrationID(m.ID)
 }
 
+// SetExecution sets the "execution" edge to the MigrationExecution entity.
+func (ssu *SchemaSnapshotUpdate) SetExecution(m *MigrationExecution) *SchemaSnapshotUpdate {
+	return ssu.SetExecutionID(m.ID)
+}
+
 // Mutation returns the SchemaSnapshotMutation object of the builder.
 func (ssu *SchemaSnapshotUpdate) Mutation() *SchemaSnapshotMutation {
 	return ssu.mutation
@@ -83,6 +109,12 @@ func (ssu *SchemaSnapshotUpdate) Mutation() *SchemaSnapshotMutation {
 // ClearMigration clears the "migration" edge to the Migration entity.
 func (ssu *SchemaSnapshotUpdate) ClearMigration() *SchemaSnapshotUpdate {
 	ssu.mutation.ClearMigration()
+	return ssu
+}
+
+// ClearExecution clears the "execution" edge to the MigrationExecution entity.
+func (ssu *SchemaSnapshotUpdate) ClearExecution() *SchemaSnapshotUpdate {
+	ssu.mutation.ClearExecution()
 	return ssu
 }
 
@@ -178,6 +210,35 @@ func (ssu *SchemaSnapshotUpdate) sqlSave(ctx context.Context) (n int, err error)
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
+	if ssu.mutation.ExecutionCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   schemasnapshot.ExecutionTable,
+			Columns: []string{schemasnapshot.ExecutionColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(migrationexecution.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := ssu.mutation.ExecutionIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   schemasnapshot.ExecutionTable,
+			Columns: []string{schemasnapshot.ExecutionColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(migrationexecution.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
 	if n, err = sqlgraph.UpdateNodes(ctx, ssu.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{schemasnapshot.Label}
@@ -209,6 +270,26 @@ func (ssuo *SchemaSnapshotUpdateOne) SetNillableMigrationID(i *int) *SchemaSnaps
 	if i != nil {
 		ssuo.SetMigrationID(*i)
 	}
+	return ssuo
+}
+
+// SetExecutionID sets the "execution_id" field.
+func (ssuo *SchemaSnapshotUpdateOne) SetExecutionID(i int) *SchemaSnapshotUpdateOne {
+	ssuo.mutation.SetExecutionID(i)
+	return ssuo
+}
+
+// SetNillableExecutionID sets the "execution_id" field if the given value is not nil.
+func (ssuo *SchemaSnapshotUpdateOne) SetNillableExecutionID(i *int) *SchemaSnapshotUpdateOne {
+	if i != nil {
+		ssuo.SetExecutionID(*i)
+	}
+	return ssuo
+}
+
+// ClearExecutionID clears the value of the "execution_id" field.
+func (ssuo *SchemaSnapshotUpdateOne) ClearExecutionID() *SchemaSnapshotUpdateOne {
+	ssuo.mutation.ClearExecutionID()
 	return ssuo
 }
 
@@ -245,6 +326,11 @@ func (ssuo *SchemaSnapshotUpdateOne) SetMigration(m *Migration) *SchemaSnapshotU
 	return ssuo.SetMigrationID(m.ID)
 }
 
+// SetExecution sets the "execution" edge to the MigrationExecution entity.
+func (ssuo *SchemaSnapshotUpdateOne) SetExecution(m *MigrationExecution) *SchemaSnapshotUpdateOne {
+	return ssuo.SetExecutionID(m.ID)
+}
+
 // Mutation returns the SchemaSnapshotMutation object of the builder.
 func (ssuo *SchemaSnapshotUpdateOne) Mutation() *SchemaSnapshotMutation {
 	return ssuo.mutation
@@ -253,6 +339,12 @@ func (ssuo *SchemaSnapshotUpdateOne) Mutation() *SchemaSnapshotMutation {
 // ClearMigration clears the "migration" edge to the Migration entity.
 func (ssuo *SchemaSnapshotUpdateOne) ClearMigration() *SchemaSnapshotUpdateOne {
 	ssuo.mutation.ClearMigration()
+	return ssuo
+}
+
+// ClearExecution clears the "execution" edge to the MigrationExecution entity.
+func (ssuo *SchemaSnapshotUpdateOne) ClearExecution() *SchemaSnapshotUpdateOne {
+	ssuo.mutation.ClearExecution()
 	return ssuo
 }
 
@@ -371,6 +463,35 @@ func (ssuo *SchemaSnapshotUpdateOne) sqlSave(ctx context.Context) (_node *Schema
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(migration.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if ssuo.mutation.ExecutionCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   schemasnapshot.ExecutionTable,
+			Columns: []string{schemasnapshot.ExecutionColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(migrationexecution.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := ssuo.mutation.ExecutionIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   schemasnapshot.ExecutionTable,
+			Columns: []string{schemasnapshot.ExecutionColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(migrationexecution.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {

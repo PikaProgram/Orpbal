@@ -4,6 +4,7 @@ package ent
 
 import (
 	"Orpbal/ent/groupmembership"
+	"Orpbal/ent/migrationapproval"
 	"Orpbal/ent/platformuser"
 	"Orpbal/ent/session"
 	"context"
@@ -118,6 +119,21 @@ func (puc *PlatformUserCreate) AddSessions(s ...*Session) *PlatformUserCreate {
 		ids[i] = s[i].ID
 	}
 	return puc.AddSessionIDs(ids...)
+}
+
+// AddApprovalIDs adds the "approvals" edge to the MigrationApproval entity by IDs.
+func (puc *PlatformUserCreate) AddApprovalIDs(ids ...int) *PlatformUserCreate {
+	puc.mutation.AddApprovalIDs(ids...)
+	return puc
+}
+
+// AddApprovals adds the "approvals" edges to the MigrationApproval entity.
+func (puc *PlatformUserCreate) AddApprovals(m ...*MigrationApproval) *PlatformUserCreate {
+	ids := make([]int, len(m))
+	for i := range m {
+		ids[i] = m[i].ID
+	}
+	return puc.AddApprovalIDs(ids...)
 }
 
 // Mutation returns the PlatformUserMutation object of the builder.
@@ -278,6 +294,22 @@ func (puc *PlatformUserCreate) createSpec() (*PlatformUser, *sqlgraph.CreateSpec
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(session.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := puc.mutation.ApprovalsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   platformuser.ApprovalsTable,
+			Columns: []string{platformuser.ApprovalsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(migrationapproval.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {

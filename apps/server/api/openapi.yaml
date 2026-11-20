@@ -16,6 +16,8 @@ tags:
   - name: auth
   - name: me
   - name: admin
+  - name: viewer
+  - name: approvals
 paths:
   /health:
     get:
@@ -668,7 +670,7 @@ paths:
             minimum: 1
       responses:
         "200":
-          description: Schema changes recorded for a successful migration; empty changes for pending or failed migrations
+          description: Schema changes recorded for the latest successful execution of this migration; empty changes otherwise
           content:
             application/json:
               schema:
@@ -687,9 +689,16 @@ paths:
       tags: [viewer]
       parameters:
         - $ref: "#/components/parameters/Id"
+        - name: hide_rollback
+          in: query
+          required: false
+          description: When true, hide execution pairs cancelled by a successful rollback (failed attempts remain visible)
+          schema:
+            type: boolean
+            default: false
       responses:
         "200":
-          description: Linear migration history for the database
+          description: Migration definitions with their full execution history
           content:
             application/json:
               schema:
@@ -718,7 +727,7 @@ paths:
               $ref: "#/components/schemas/CreateMigrationRequest"
       responses:
         "201":
-          description: Migration created and pending execution
+          description: Migration draft created
           content:
             application/json:
               schema:
@@ -733,38 +742,6 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
-        "500":
-          $ref: "#/components/responses/InternalError"
-  /databases/{id}/migrations/{migrationId}/execute:
-    post:
-      operationId: executeMigration
-      tags: [viewer]
-      parameters:
-        - $ref: "#/components/parameters/Id"
-        - name: migrationId
-          in: path
-          required: true
-          schema:
-            type: integer
-            minimum: 1
-        - $ref: "#/components/parameters/CsrfToken"
-      responses:
-        "200":
-          description: Migration executed
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Migration"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "409":
-          $ref: "#/components/responses/Conflict"
-        "502":
-          $ref: "#/components/responses/TargetError"
         "500":
           $ref: "#/components/responses/InternalError"
   /databases/{id}/migrations/{migrationId}:
@@ -788,11 +765,315 @@ paths:
               $ref: "#/components/schemas/CreateMigrationRequest"
       responses:
         "200":
-          description: Pending migration updated
+          description: Draft migration updated
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Migration"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    delete:
+      operationId: deleteMigration
+      tags: [viewer]
+      parameters:
+        - $ref: "#/components/parameters/Id"
+        - name: migrationId
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+        - $ref: "#/components/parameters/CsrfToken"
+      responses:
+        "204":
+          description: Draft migration deleted; executions and history are kept
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /databases/{id}/migrations/{migrationId}/submit:
+    post:
+      operationId: submitMigration
+      tags: [viewer]
+      parameters:
+        - $ref: "#/components/parameters/Id"
+        - name: migrationId
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+        - $ref: "#/components/parameters/CsrfToken"
+      responses:
+        "202":
+          description: Submitted for review; approvals requested from every group leader with access
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Migration"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /databases/{id}/migrations/{migrationId}/rollback:
+    post:
+      operationId: requestRollback
+      tags: [viewer]
+      parameters:
+        - $ref: "#/components/parameters/Id"
+        - name: migrationId
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+        - $ref: "#/components/parameters/CsrfToken"
+      responses:
+        "202":
+          description: Rollback execution created and sent for review
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Migration"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+          description: Migration is irreversible or not the latest active migration
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /databases/{id}/migrations/{migrationId}/forward:
+    post:
+      operationId: requestForward
+      tags: [viewer]
+      parameters:
+        - $ref: "#/components/parameters/Id"
+        - name: migrationId
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+        - $ref: "#/components/parameters/CsrfToken"
+      responses:
+        "202":
+          description: Forward execution created and sent for review
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Migration"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /databases/{id}/migrations/{migrationId}/revert-batches:
+    post:
+      operationId: requestBatchRevert
+      tags: [viewer]
+      parameters:
+        - $ref: "#/components/parameters/Id"
+        - name: migrationId
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+        - $ref: "#/components/parameters/CsrfToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BatchRevertRequest"
+      responses:
+        "202":
+          description: Per-batch compensation execution created and sent for review
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Migration"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /approvals:
+    get:
+      operationId: listMyApprovals
+      tags: [approvals]
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/ApprovalStatus"
+      responses:
+        "200":
+          description: Approvals visible to the current user as a group leader
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Approval"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /approvals/{approvalId}/approve:
+    post:
+      operationId: approveMigration
+      tags: [approvals]
+      parameters:
+        - name: approvalId
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+        - $ref: "#/components/parameters/CsrfToken"
+      responses:
+        "200":
+          description: Approval recorded; queued automatically when every required leader has approved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Approval"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /approvals/{approvalId}/reject:
+    post:
+      operationId: rejectMigration
+      tags: [approvals]
+      parameters:
+        - name: approvalId
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+        - $ref: "#/components/parameters/CsrfToken"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RejectRequest"
+      responses:
+        "200":
+          description: Rejection recorded; migration returns to draft with the comment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Approval"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /jobs/{jobId}:
+    get:
+      operationId: getJob
+      tags: [viewer]
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: Job status including execution and batch progress
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /jobs/{jobId}/cancel:
+    post:
+      operationId: cancelJob
+      tags: [viewer]
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+        - $ref: "#/components/parameters/CsrfToken"
+      responses:
+        "202":
+          description: Cancellation requested; batch jobs stop at the next batch boundary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -1436,28 +1717,6 @@ components:
             type: array
             nullable: true
             description: Row values; null entries are SQL NULLs.
-    Migration:
-      type: object
-      required: [id, connection_id, version, sql, executor_id, executor_username, status, executed_at]
-      properties:
-        id:
-          type: integer
-        connection_id:
-          type: integer
-        version:
-          type: integer
-        sql:
-          type: string
-        executor_id:
-          type: integer
-        executor_username:
-          type: string
-        status:
-          type: string
-          enum: [pending, success, failed]
-        executed_at:
-          type: string
-          format: date-time
     TableCount:
       type: object
       required: [schema, table, columns, estimate]
@@ -1528,14 +1787,284 @@ components:
           enum: [added, removed, changed]
         detail:
           type: string
+          maxLength: 100000
           description: Human-readable rendering of the change, e.g. "text NOT NULL → integer NULL".
+    MigrationStatus:
+      type: string
+      enum: [draft, pending_review, approved, queued, running, success, failed, partial, cancelled]
+    ExecutionKind:
+      type: string
+      enum: [up, rollback, forward, retry, batch_revert]
     CreateMigrationRequest:
       type: object
-      required: [sql]
+      required: [sql_up]
       properties:
-        sql:
+        sql_up:
           type: string
           maxLength: 100000
+        sql_down:
+          type: string
+          maxLength: 100000
+          description: Reverse SQL enabling rollback; omit or leave empty when irreversible
+        irreversible:
+          type: boolean
+          default: false
+        irreversible_reason:
+          type: string
+          description: Required when irreversible is true
+        batch:
+          $ref: "#/components/schemas/BatchConfig"
+    BatchConfig:
+      type: object
+      required: [batch_size, cursor_column, template]
+      properties:
+        batch_size:
+          type: integer
+          minimum: 1
+          maximum: 1000000
+        cursor_column:
+          type: string
+          description: Unique, unchanging column the worker advances each batch, e.g. id
+        batch_table:
+          type: string
+          description: Table the batch cursor walks (identifier-validated), e.g. orpbal_demo_events
+        min_id:
+          type: integer
+          format: int64
+          description: Inclusive lower scope of the data migration
+        max_id:
+          type: integer
+          format: int64
+          description: Inclusive upper scope of the data migration
+        template:
+          type: string
+          maxLength: 100000
+          description: |
+            Batch SQL with {{last_id}} (exclusive lower cursor bound), {{upper_id}} (inclusive upper bound the worker
+            probes per batch), {{batch_size}}, {{min_id}}, {{max_id}} placeholders. Must be idempotent; scope rows with
+            a subselect, e.g. UPDATE t SET ... WHERE id IN (SELECT id FROM t WHERE id > {{last_id}} AND id <= {{upper_id}}
+            AND id >= {{min_id}} AND id <= {{max_id}} ORDER BY id LIMIT {{batch_size}}).
+    BatchRevertRequest:
+      type: object
+      required: [execution_id, sql_down, batch_size, cursor_column]
+      properties:
+        execution_id:
+          type: integer
+          description: The partial batch execution to compensate
+        sql_down:
+          type: string
+          maxLength: 100000
+          description: Immutable compensation SQL with {{last_id}}, {{batch_size}}, {{min_id}}, {{max_id}} placeholders
+        batch_size:
+          type: integer
+          minimum: 1
+        cursor_column:
+          type: string
+        template:
+          type: string
+          description: Fallback when compensation SQL needs extra data recovery columns
+    Execution:
+      type: object
+      required: [id, migration_id, connection_id, kind, status, actor_id, actor_username, created_at]
+      properties:
+        id:
+          type: integer
+        migration_id:
+          type: integer
+        connection_id:
+          type: integer
+        kind:
+          $ref: "#/components/schemas/ExecutionKind"
+        status:
+          $ref: "#/components/schemas/MigrationStatus"
+        actor_id:
+          type: integer
+        actor_username:
+          type: string
+        sql_executed:
+          type: string
+          description: Copy of the SQL that actually ran, filled after execution
+        error:
+          type: string
+          nullable: true
+        reverted_execution_id:
+          type: integer
+          nullable: true
+          description: For rollback, the execution ID being cancelled
+        batch_cursor:
+          type: integer
+          format: int64
+          nullable: true
+          description: Last committed batch upper bound (exclusive) for batch migrations
+        batches_done:
+          type: integer
+        rows_done:
+          type: integer
+          format: int64
+        created_at:
+          type: string
+          format: date-time
+        finished_at:
+          type: string
+          format: date-time
+          nullable: true
+        snapshots:
+          type: array
+          items:
+            $ref: "#/components/schemas/SchemaSnapshotInfo"
+    SchemaSnapshotInfo:
+      type: object
+      required: [phase]
+      properties:
+        phase:
+          type: string
+          enum: [before, after]
+        captured_at:
+          type: string
+          format: date-time
+    Migration:
+      type: object
+      required: [id, connection_id, version, sql_up, sql_down, irreversible, irreversible_reason, status, author_id, author_username, created_at, updated_at, executions, approvals]
+      properties:
+        id:
+          type: integer
+        connection_id:
+          type: integer
+        version:
+          type: integer
+        sql_up:
+          type: string
+        sql_down:
+          type: string
+          nullable: true
+        irreversible:
+          type: boolean
+        irreversible_reason:
+          type: string
+          nullable: true
+        status:
+          $ref: "#/components/schemas/MigrationStatus"
+        author_id:
+          type: integer
+        author_username:
+          type: string
+        batch:
+          $ref: "#/components/schemas/BatchConfig"
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        executions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Execution"
+        approvals:
+          type: array
+          items:
+            $ref: "#/components/schemas/Approval"
+    ApprovalMigrationSummary:
+      type: object
+      required: [id, version, sql_up, status, author_username]
+      properties:
+        id:
+          type: integer
+        version:
+          type: integer
+        sql_up:
+          type: string
+        status:
+          $ref: "#/components/schemas/MigrationStatus"
+        author_username:
+          type: string
+    ApprovalStatus:
+      type: string
+      enum: [pending, approved, rejected]
+    Approval:
+      type: object
+      required: [id, migration_id, group_id, group_name, leader_id, leader_username, status, created_at]
+      properties:
+        id:
+          type: integer
+        migration_id:
+          type: integer
+        migration:
+          $ref: "#/components/schemas/ApprovalMigrationSummary"
+        group_id:
+          type: integer
+        group_name:
+          type: string
+        leader_id:
+          type: integer
+        leader_username:
+          type: string
+        status:
+          $ref: "#/components/schemas/ApprovalStatus"
+        decided_by_id:
+          type: integer
+          nullable: true
+          description: Actual leader who approved; may differ from leader_id when leadership rotated
+        decided_at:
+          type: string
+          format: date-time
+          nullable: true
+        comment:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+    RejectRequest:
+      type: object
+      properties:
+        comment:
+          type: string
+          maxLength: 2000
+          description: Reason returned to the migration author
+    JobStatus:
+      type: string
+      enum: [queued, running, success, failed, cancelled, cancelling, partial]
+    Job:
+      type: object
+      required: [id, execution_id, migration_id, connection_id, status, created_at]
+      properties:
+        id:
+          type: integer
+        execution_id:
+          type: integer
+        migration_id:
+          type: integer
+        connection_id:
+          type: integer
+        status:
+          $ref: "#/components/schemas/JobStatus"
+        attempts:
+          type: integer
+        batch_cursor:
+          type: integer
+          format: int64
+          nullable: true
+        batches_done:
+          type: integer
+        rows_done:
+          type: integer
+          format: int64
+        error:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        finished_at:
+          type: string
+          format: date-time
+          nullable: true
     MyDatabase:
       type: object
       required: [connection_id, name, host, database_name, access_level]

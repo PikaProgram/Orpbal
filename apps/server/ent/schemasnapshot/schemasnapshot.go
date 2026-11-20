@@ -16,12 +16,16 @@ const (
 	FieldID = "id"
 	// FieldMigrationID holds the string denoting the migration_id field in the database.
 	FieldMigrationID = "migration_id"
+	// FieldExecutionID holds the string denoting the execution_id field in the database.
+	FieldExecutionID = "execution_id"
 	// FieldPhase holds the string denoting the phase field in the database.
 	FieldPhase = "phase"
 	// FieldJSON holds the string denoting the json field in the database.
 	FieldJSON = "json"
 	// EdgeMigration holds the string denoting the migration edge name in mutations.
 	EdgeMigration = "migration"
+	// EdgeExecution holds the string denoting the execution edge name in mutations.
+	EdgeExecution = "execution"
 	// Table holds the table name of the schemasnapshot in the database.
 	Table = "schema_snapshots"
 	// MigrationTable is the table that holds the migration relation/edge.
@@ -31,12 +35,20 @@ const (
 	MigrationInverseTable = "migrations"
 	// MigrationColumn is the table column denoting the migration relation/edge.
 	MigrationColumn = "migration_id"
+	// ExecutionTable is the table that holds the execution relation/edge.
+	ExecutionTable = "schema_snapshots"
+	// ExecutionInverseTable is the table name for the MigrationExecution entity.
+	// It exists in this package in order to avoid circular dependency with the "migrationexecution" package.
+	ExecutionInverseTable = "migration_executions"
+	// ExecutionColumn is the table column denoting the execution relation/edge.
+	ExecutionColumn = "execution_id"
 )
 
 // Columns holds all SQL columns for schemasnapshot fields.
 var Columns = []string{
 	FieldID,
 	FieldMigrationID,
+	FieldExecutionID,
 	FieldPhase,
 	FieldJSON,
 }
@@ -92,6 +104,11 @@ func ByMigrationID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldMigrationID, opts...).ToFunc()
 }
 
+// ByExecutionID orders the results by the execution_id field.
+func ByExecutionID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldExecutionID, opts...).ToFunc()
+}
+
 // ByPhase orders the results by the phase field.
 func ByPhase(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldPhase, opts...).ToFunc()
@@ -108,10 +125,24 @@ func ByMigrationField(field string, opts ...sql.OrderTermOption) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newMigrationStep(), sql.OrderByField(field, opts...))
 	}
 }
+
+// ByExecutionField orders the results by execution field.
+func ByExecutionField(field string, opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newExecutionStep(), sql.OrderByField(field, opts...))
+	}
+}
 func newMigrationStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(MigrationInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.M2O, true, MigrationTable, MigrationColumn),
+	)
+}
+func newExecutionStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(ExecutionInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.M2O, true, ExecutionTable, ExecutionColumn),
 	)
 }

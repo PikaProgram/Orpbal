@@ -22,6 +22,12 @@ type Tx struct {
 	GroupMembership *GroupMembershipClient
 	// Migration is the client for interacting with the Migration builders.
 	Migration *MigrationClient
+	// MigrationApproval is the client for interacting with the MigrationApproval builders.
+	MigrationApproval *MigrationApprovalClient
+	// MigrationExecution is the client for interacting with the MigrationExecution builders.
+	MigrationExecution *MigrationExecutionClient
+	// MigrationJob is the client for interacting with the MigrationJob builders.
+	MigrationJob *MigrationJobClient
 	// PlatformUser is the client for interacting with the PlatformUser builders.
 	PlatformUser *PlatformUserClient
 	// SchemaSnapshot is the client for interacting with the SchemaSnapshot builders.
@@ -164,6 +170,9 @@ func (tx *Tx) init() {
 	tx.Group = NewGroupClient(tx.config)
 	tx.GroupMembership = NewGroupMembershipClient(tx.config)
 	tx.Migration = NewMigrationClient(tx.config)
+	tx.MigrationApproval = NewMigrationApprovalClient(tx.config)
+	tx.MigrationExecution = NewMigrationExecutionClient(tx.config)
+	tx.MigrationJob = NewMigrationJobClient(tx.config)
 	tx.PlatformUser = NewPlatformUserClient(tx.config)
 	tx.SchemaSnapshot = NewSchemaSnapshotClient(tx.config)
 	tx.Session = NewSessionClient(tx.config)

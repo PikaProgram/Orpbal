@@ -34,6 +34,20 @@ func (gmc *GroupMembershipCreate) SetGroupID(i int) *GroupMembershipCreate {
 	return gmc
 }
 
+// SetRole sets the "role" field.
+func (gmc *GroupMembershipCreate) SetRole(gr groupmembership.Role) *GroupMembershipCreate {
+	gmc.mutation.SetRole(gr)
+	return gmc
+}
+
+// SetNillableRole sets the "role" field if the given value is not nil.
+func (gmc *GroupMembershipCreate) SetNillableRole(gr *groupmembership.Role) *GroupMembershipCreate {
+	if gr != nil {
+		gmc.SetRole(*gr)
+	}
+	return gmc
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (gmc *GroupMembershipCreate) SetCreatedAt(t time.Time) *GroupMembershipCreate {
 	gmc.mutation.SetCreatedAt(t)
@@ -93,6 +107,10 @@ func (gmc *GroupMembershipCreate) ExecX(ctx context.Context) {
 
 // defaults sets the default values of the builder before save.
 func (gmc *GroupMembershipCreate) defaults() {
+	if _, ok := gmc.mutation.Role(); !ok {
+		v := groupmembership.DefaultRole
+		gmc.mutation.SetRole(v)
+	}
 	if _, ok := gmc.mutation.CreatedAt(); !ok {
 		v := groupmembership.DefaultCreatedAt()
 		gmc.mutation.SetCreatedAt(v)
@@ -106,6 +124,14 @@ func (gmc *GroupMembershipCreate) check() error {
 	}
 	if _, ok := gmc.mutation.GroupID(); !ok {
 		return &ValidationError{Name: "group_id", err: errors.New(`ent: missing required field "GroupMembership.group_id"`)}
+	}
+	if _, ok := gmc.mutation.Role(); !ok {
+		return &ValidationError{Name: "role", err: errors.New(`ent: missing required field "GroupMembership.role"`)}
+	}
+	if v, ok := gmc.mutation.Role(); ok {
+		if err := groupmembership.RoleValidator(v); err != nil {
+			return &ValidationError{Name: "role", err: fmt.Errorf(`ent: validator failed for field "GroupMembership.role": %w`, err)}
+		}
 	}
 	if _, ok := gmc.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "GroupMembership.created_at"`)}
@@ -142,6 +168,10 @@ func (gmc *GroupMembershipCreate) createSpec() (*GroupMembership, *sqlgraph.Crea
 		_node = &GroupMembership{config: gmc.config}
 		_spec = sqlgraph.NewCreateSpec(groupmembership.Table, sqlgraph.NewFieldSpec(groupmembership.FieldID, field.TypeInt))
 	)
+	if value, ok := gmc.mutation.Role(); ok {
+		_spec.SetField(groupmembership.FieldRole, field.TypeEnum, value)
+		_node.Role = value
+	}
 	if value, ok := gmc.mutation.CreatedAt(); ok {
 		_spec.SetField(groupmembership.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value

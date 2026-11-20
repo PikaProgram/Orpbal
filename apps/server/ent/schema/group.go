@@ -35,5 +35,7 @@ func (Group) Edges() []ent.Edge {
 	return []ent.Edge{
 		edge.To("memberships", GroupMembership.Type),
 		edge.To("grants", DatabaseGrant.Type),
+		edge.
+			To("approvals", MigrationApproval.Type),
 	}
 }

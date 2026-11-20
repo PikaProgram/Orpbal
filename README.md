@@ -35,7 +35,8 @@ Rencanakan query dari SQL runner atau migration yang masih `pending` sebelum die
 Orpbal/
 ├── .github/
 │   └── workflows/
-│       └── ci.yml               
+│       ├── ci.yml               
+│       └── codeql.yml           
 ├── apps/
 │   ├── server/                  
 │   │   ├── api/                
@@ -107,11 +108,11 @@ Orpbal/
 
 ## Prerequisites
 
-
 - **[Bun](https://bun.sh/)** `>= 1.4.0`
 - **[Go](https://go.dev/)** `>= 1.25.0` 
-- **[Docker](https://www.docker.com/)** and **Docker Compose** 
+- **[Docker](https://www.docker.com/)** and **Docker Compose** — worker dijalankan sebagai service compose terpisah (`worker`) yang mengeksekusi job migration dari queue
 - **Git** and **Bash** (Git Bash on Windows)
+- Untuk demo dataset besar: `psql` client. Seed script: `scripts/native/task-5.sh` (mengisi ~2–5 juta baris dan mengukur durasi UPDATE tanpa batching; jumlah row + durasi dicatat untuk laporan M2)
 
 ---
 
@@ -253,6 +254,15 @@ same-origin (cookie sesi otomatis terlampir tanpa konfigurasi CORS).
 | `ORPBAL_SESSION_ROTATION_INTERVAL` | Tidak | `15m` | Interval waktu rotasi token sesi otomatis |
 | `ORPBAL_SESSION_GRACE_PERIOD` | Tidak | `30s` | Periode toleransi token lama tetap valid untuk mencegah *race condition* |
 
+### Worker (`apps/server/cmd/worker`)
+
+| Variabel | Wajib | Default | Deskripsi |
+|---|---|---|---|
+| `DATABASE_URL` | **Ya** | - | Platform PostgreSQL yang menyimpan tabel job queue |
+| `ORPBAL_ENCRYPTION_KEY` | **Ya** | - | Kunci yang sama dengan server (dekripsi kredensial target) |
+| `WORKER_ID` | Tidak | hostname | Identitas worker untuk claim/heartbeat baris job |
+| `ORPBAL_POLL_INTERVAL` | Tidak | `1s` | Jeda polling queue ketika tidak ada job |
+
 ### Frontend (`apps/web/.env`)
 
 Hanya relevan untuk **server pengembangan** (dev). Pada produksi, nginx
@@ -286,6 +296,59 @@ Dikonfigurasi pada `apps/server/internal/security/session/policy.go`:
 
 ---
 
+## Arsitektur Migration M2 (Asynchronous Workflow)
+
+Milestone 2 mengubah eksekusi migration menjadi pipeline asinkron:
+
+```mermaid
+flowchart LR
+  A[Draft] -->|submit| P[Pending Review]
+  P -->|semua leader approve| Q[Queued]
+  P -->|reject| A
+  Q -->|worker: SKIP LOCKED + advisory lock| R[Running]
+  R --> S[Success]
+  R --> F[Failed / retry]
+  R --> Part[Partial - batch]
+  Part -->|resume| R
+  S -->|rollback| RB[Rollback eksekusi]
+  RB -->|forward| FW[Forward eksekusi]
+```
+
+Komponen:
+
+| Komponen | Lokasi | Peran |
+| :--- | :--- | :--- |
+| Queue | `apps/server/internal/queue` | Job queue di PostgreSQL (`FOR UPDATE SKIP LOCKED`), heartbeat, checkpoint, retry transient (maks 3 attempt), stale-claim recovery, advisory lock per connection (`pg_try_advisory_lock`), propagation `traceparent` API→worker |
+| Worker | `apps/server/cmd/worker` + `internal/worker` | Proses terpisah (service compose `worker`) yang meng-claim job, menjalankan SQL up/down, snapshot schema, dan mode batch dengan cursor |
+| Workflow service | `apps/server/internal/service/migration.go` | Draft → submit → pending_review → approval (semua leader group yang punya grant view/view_edit) → queued; rollback hanya pada migration aktif terakhir yang reversible; forward/retry; batch revert |
+| Handler SPA | `apps/server/internal/handler/migration2_handler.go` | Endpoint API baru (submit/rollback/forward/revert-batches/approvals/jobs) |
+| SPA | `apps/web` | Halaman Migrations (authoring + history + filter Hide rollback), JobDetail (polling 2s), Approvals (inbox leader) |
+
+Keputusan desain penting:
+
+- **Checkpoint per batch** ditulis ke database platform **setelah** commit batch di target (cross-DB 2PC ditolak); crash di antara keduanya berarti satu batch idempoten dijalankan ulang — template batch wajib idempoten.
+- **Rollback memakai SQL down asli** dari revisi migration yang dieksekusi (immutable); SQL yang pernah dieksekusi disalin ke `sql_executed` dan tidak pernah diubah.
+- **Riwayat eksekusi tidak pernah dihapus**: attempt gagal tetap terlihat; filter *Hide rollback* murni view filter berbasis pasangan execution ID (`reverted_execution_id`).
+- **Lock recovery**: worker mati terdeteksi lewat `heartbeat_at` kedaluwarsa (`lockTTL`); job di-claim ulang worker lain, checkpoint/eksekusi diverifikasi sebelum retry.
+
+### Dataset besar untuk pengujian batch
+
+`scripts/native/task-5.sh` mengisi tabel `orpbal_demo_events` (~2 juta baris default, `SEED_ROWS` untuk override) dan mengukur durasi UPDATE tanpa batching (dalam transaksi yang di-ROLLBACK, jadi tidak mengubah data):
+
+```
+Rows seeded. Unbatched UPDATE timing (spec requires > 1s; probe runs in a rolled-back transaction):
+UPDATE ... WHERE tenant_id = 1 → Time: 2400.123 ms
+```
+
+Angka terukur di lingkungan demo (2.000.000 baris, batch 10.000):
+
+| Mode | Durasi | Catatan |
+| :--- | :--- | :--- |
+| UPDATE tanpa batching | diisi setelah demo dijalankan | spesifikasi: > 1 detik |
+| Migration per batch (10k/batch) | diisi setelah demo dijalankan | progres terlihat per batch di SPA |
+
+---
+
 ## Role-Based Access Control (RBAC)
 
 Orpbal menerapkan pembagian kontrol akses berjenjang:
@@ -313,6 +376,80 @@ Orpbal menerapkan pembagian kontrol akses berjenjang:
 | Merancang Migrasi Baru (DDL) | ✓ | X | ✓ |
 | Mengeksekusi Migrasi yang Telah Dirancang | ✓ | X | ✓ |
 | Melihat Riwayat Migrasi & Snapshot Diff | ✓ | ✓ | ✓ |
+
+---
+
+## Security: SAST (CodeQL)
+
+Analisis statis keamanan (*Static Application Security Testing* / SAST) diaktifkan pada repository ini menggunakan **GitHub CodeQL**. Workflow-nya berada di [`.github/workflows/codeql.yml`](.github/workflows/codeql.yml) dan berjalan otomatis saat:
+
+- `push` ke branch `main` (dan `master`),
+- `pull_request` terhadap branch `main` (dan `master`),
+- penjadwalan mingguan (`schedule` cron, setiap Minggu pukul 00:00 UTC).
+
+### Cakupan Analisis
+
+Analisis ditargetkan pada **backend Go** (`apps/server`, path sumber `apps/server`) menggunakan build mode `autobuild`. Paket query yang dijalankan:
+
+- `security-extended` — seluruh query keamanan bawaan plus query tambahan yang tidak selalu diaktifkan secara default.
+- `security-and-quality` — query keamanan ditambah query kualitas kode.
+
+Hasil upload ke GitHub Code Scanning dan ditampilkan di tab *Security* repository.
+
+### Proses Penanganan Temuan (*Findings*)
+
+Setiap temuan CodeQL didokumentasikan dan diputuskan secara terstruktur. Untuk setiap finding, dicatat:
+
+1. **Rule** — nama query / aturan CodeQL yang menghasilkan temuan.
+2. **Severity** — level temuan (mis. `error` / `warning`) sebagaimana dilaporkan CodeQL.
+3. **Location** — berkas, fungsi, dan baris kode tempat temuan terjadi.
+4. **Impact** — dampak keamanan/risiko nyata terhadap sistem jika temuan dibiarkan.
+5. **Keputusan: *fix* atau *accept*** — disertai justifikasi:
+   - *Fix*: dilakukan perbaikan, dicatat commit-nya.
+   - *Accept*: temuan diterima (mis. false positive atau risiko yang memang tidak berlaku pada konteks Orpbal), dicatat alasannya.
+6. **Bukti rescan** — setelah commit perbaikan (jika ada), temuan diverifikasi ulang melalui scan CodeQL berikutnya dan dibuktikan bahwa temuan tidak lagi muncul pada rescan tersebut.
+
+### Scan results
+
+Hasil scan pertama direkam di sini setelah workflow CodeQL pertama kali berjalan pada `push` ke `main`. Setiap finding baru (atau perubahan status dari *fix*/*accept*) akan ditambahkan ke daftar berikut beserta rule, severity, location, impact, keputusan, dan link bukti rescan.
+
+---
+
+## Stress Testing (k6)
+
+Pengujian beban menggunakan **k6** dengan skenario bertahap: naik ke beban normal → ditahan di atas beban normal (*peak*) → diturunkan kembali untuk mengamati pemulihan sistem. Script-nya ada di [`k6/stress.js`](k6/stress.js).
+
+### Skenario
+
+Dua skenario paralel:
+
+| Skenario | Executor | Tahapan |
+| :--- | :--- | :--- |
+| `reads` | `ramping-vus` | 2m naik ke 10 VU (beban normal) → 1m tahan → 3m naik ke 50 VU (peak) → 2m tahan → 2m turun ke 0 |
+| `jobs` | `ramping-arrival-rate` | 2m naik ke 1 job/10s → 3m naik ke 6 job/10s → 2m turun ke 0 |
+
+Yang diuji: akses API baca (schema, migration history dengan filter `hide_rollback`) dan pengiriman job migration (rollback migration yang sudah approved) secara bersamaan. Respons pengiriman job (HTTP 202) **tidak** dihitung sebagai keberhasilan eksekusi migration — eksekusi dipantau lewat status job.
+
+### Threshold
+
+- `http_req_duration`: `p(95) < 500ms` (dan `p(50) < 200ms` sebagai pemantauan).
+- `http_req_failed`: `rate < 5%`.
+
+### Cara menjalankan
+
+```bash
+k6 run \
+  -e BASE_URL=http://localhost:3000 \
+  -e USERNAME=admin -e PASSWORD=... \
+  -e CONNECTION_ID=1 \
+  k6/stress.js
+```
+
+Prasyarat: service berjalan (docker compose up), minimal satu migration berstatus `success` yang reversible pada database target.
+
+### Hasil & Analisis
+
+Hasil per tingkat beban (p50, p95, throughput, error rate, waktu tunggu queue, durasi dan throughput penyelesaian job) direkam di bagian ini setelah pengujian dijalankan pada lingkungan demo. Bagian ini diisi dengan angka hasil pengukuran, bukan perkiraan.
 
 ---
 

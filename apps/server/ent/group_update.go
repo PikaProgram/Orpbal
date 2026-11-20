@@ -6,6 +6,7 @@ import (
 	"Orpbal/ent/databasegrant"
 	"Orpbal/ent/group"
 	"Orpbal/ent/groupmembership"
+	"Orpbal/ent/migrationapproval"
 	"Orpbal/ent/predicate"
 	"context"
 	"errors"
@@ -94,6 +95,21 @@ func (gu *GroupUpdate) AddGrants(d ...*DatabaseGrant) *GroupUpdate {
 	return gu.AddGrantIDs(ids...)
 }
 
+// AddApprovalIDs adds the "approvals" edge to the MigrationApproval entity by IDs.
+func (gu *GroupUpdate) AddApprovalIDs(ids ...int) *GroupUpdate {
+	gu.mutation.AddApprovalIDs(ids...)
+	return gu
+}
+
+// AddApprovals adds the "approvals" edges to the MigrationApproval entity.
+func (gu *GroupUpdate) AddApprovals(m ...*MigrationApproval) *GroupUpdate {
+	ids := make([]int, len(m))
+	for i := range m {
+		ids[i] = m[i].ID
+	}
+	return gu.AddApprovalIDs(ids...)
+}
+
 // Mutation returns the GroupMutation object of the builder.
 func (gu *GroupUpdate) Mutation() *GroupMutation {
 	return gu.mutation
@@ -139,6 +155,27 @@ func (gu *GroupUpdate) RemoveGrants(d ...*DatabaseGrant) *GroupUpdate {
 		ids[i] = d[i].ID
 	}
 	return gu.RemoveGrantIDs(ids...)
+}
+
+// ClearApprovals clears all "approvals" edges to the MigrationApproval entity.
+func (gu *GroupUpdate) ClearApprovals() *GroupUpdate {
+	gu.mutation.ClearApprovals()
+	return gu
+}
+
+// RemoveApprovalIDs removes the "approvals" edge to MigrationApproval entities by IDs.
+func (gu *GroupUpdate) RemoveApprovalIDs(ids ...int) *GroupUpdate {
+	gu.mutation.RemoveApprovalIDs(ids...)
+	return gu
+}
+
+// RemoveApprovals removes "approvals" edges to MigrationApproval entities.
+func (gu *GroupUpdate) RemoveApprovals(m ...*MigrationApproval) *GroupUpdate {
+	ids := make([]int, len(m))
+	for i := range m {
+		ids[i] = m[i].ID
+	}
+	return gu.RemoveApprovalIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -298,6 +335,51 @@ func (gu *GroupUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
+	if gu.mutation.ApprovalsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   group.ApprovalsTable,
+			Columns: []string{group.ApprovalsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(migrationapproval.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := gu.mutation.RemovedApprovalsIDs(); len(nodes) > 0 && !gu.mutation.ApprovalsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   group.ApprovalsTable,
+			Columns: []string{group.ApprovalsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(migrationapproval.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := gu.mutation.ApprovalsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   group.ApprovalsTable,
+			Columns: []string{group.ApprovalsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(migrationapproval.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
 	if n, err = sqlgraph.UpdateNodes(ctx, gu.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{group.Label}
@@ -382,6 +464,21 @@ func (guo *GroupUpdateOne) AddGrants(d ...*DatabaseGrant) *GroupUpdateOne {
 	return guo.AddGrantIDs(ids...)
 }
 
+// AddApprovalIDs adds the "approvals" edge to the MigrationApproval entity by IDs.
+func (guo *GroupUpdateOne) AddApprovalIDs(ids ...int) *GroupUpdateOne {
+	guo.mutation.AddApprovalIDs(ids...)
+	return guo
+}
+
+// AddApprovals adds the "approvals" edges to the MigrationApproval entity.
+func (guo *GroupUpdateOne) AddApprovals(m ...*MigrationApproval) *GroupUpdateOne {
+	ids := make([]int, len(m))
+	for i := range m {
+		ids[i] = m[i].ID
+	}
+	return guo.AddApprovalIDs(ids...)
+}
+
 // Mutation returns the GroupMutation object of the builder.
 func (guo *GroupUpdateOne) Mutation() *GroupMutation {
 	return guo.mutation
@@ -427,6 +524,27 @@ func (guo *GroupUpdateOne) RemoveGrants(d ...*DatabaseGrant) *GroupUpdateOne {
 		ids[i] = d[i].ID
 	}
 	return guo.RemoveGrantIDs(ids...)
+}
+
+// ClearApprovals clears all "approvals" edges to the MigrationApproval entity.
+func (guo *GroupUpdateOne) ClearApprovals() *GroupUpdateOne {
+	guo.mutation.ClearApprovals()
+	return guo
+}
+
+// RemoveApprovalIDs removes the "approvals" edge to MigrationApproval entities by IDs.
+func (guo *GroupUpdateOne) RemoveApprovalIDs(ids ...int) *GroupUpdateOne {
+	guo.mutation.RemoveApprovalIDs(ids...)
+	return guo
+}
+
+// RemoveApprovals removes "approvals" edges to MigrationApproval entities.
+func (guo *GroupUpdateOne) RemoveApprovals(m ...*MigrationApproval) *GroupUpdateOne {
+	ids := make([]int, len(m))
+	for i := range m {
+		ids[i] = m[i].ID
+	}
+	return guo.RemoveApprovalIDs(ids...)
 }
 
 // Where appends a list predicates to the GroupUpdate builder.
@@ -609,6 +727,51 @@ func (guo *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(databasegrant.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if guo.mutation.ApprovalsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   group.ApprovalsTable,
+			Columns: []string{group.ApprovalsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(migrationapproval.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := guo.mutation.RemovedApprovalsIDs(); len(nodes) > 0 && !guo.mutation.ApprovalsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   group.ApprovalsTable,
+			Columns: []string{group.ApprovalsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(migrationapproval.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := guo.mutation.ApprovalsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   group.ApprovalsTable,
+			Columns: []string{group.ApprovalsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(migrationapproval.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {

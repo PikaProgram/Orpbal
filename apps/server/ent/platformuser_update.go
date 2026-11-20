@@ -4,6 +4,7 @@ package ent
 
 import (
 	"Orpbal/ent/groupmembership"
+	"Orpbal/ent/migrationapproval"
 	"Orpbal/ent/platformuser"
 	"Orpbal/ent/predicate"
 	"Orpbal/ent/session"
@@ -108,6 +109,21 @@ func (puu *PlatformUserUpdate) AddSessions(s ...*Session) *PlatformUserUpdate {
 	return puu.AddSessionIDs(ids...)
 }
 
+// AddApprovalIDs adds the "approvals" edge to the MigrationApproval entity by IDs.
+func (puu *PlatformUserUpdate) AddApprovalIDs(ids ...int) *PlatformUserUpdate {
+	puu.mutation.AddApprovalIDs(ids...)
+	return puu
+}
+
+// AddApprovals adds the "approvals" edges to the MigrationApproval entity.
+func (puu *PlatformUserUpdate) AddApprovals(m ...*MigrationApproval) *PlatformUserUpdate {
+	ids := make([]int, len(m))
+	for i := range m {
+		ids[i] = m[i].ID
+	}
+	return puu.AddApprovalIDs(ids...)
+}
+
 // Mutation returns the PlatformUserMutation object of the builder.
 func (puu *PlatformUserUpdate) Mutation() *PlatformUserMutation {
 	return puu.mutation
@@ -153,6 +169,27 @@ func (puu *PlatformUserUpdate) RemoveSessions(s ...*Session) *PlatformUserUpdate
 		ids[i] = s[i].ID
 	}
 	return puu.RemoveSessionIDs(ids...)
+}
+
+// ClearApprovals clears all "approvals" edges to the MigrationApproval entity.
+func (puu *PlatformUserUpdate) ClearApprovals() *PlatformUserUpdate {
+	puu.mutation.ClearApprovals()
+	return puu
+}
+
+// RemoveApprovalIDs removes the "approvals" edge to MigrationApproval entities by IDs.
+func (puu *PlatformUserUpdate) RemoveApprovalIDs(ids ...int) *PlatformUserUpdate {
+	puu.mutation.RemoveApprovalIDs(ids...)
+	return puu
+}
+
+// RemoveApprovals removes "approvals" edges to MigrationApproval entities.
+func (puu *PlatformUserUpdate) RemoveApprovals(m ...*MigrationApproval) *PlatformUserUpdate {
+	ids := make([]int, len(m))
+	for i := range m {
+		ids[i] = m[i].ID
+	}
+	return puu.RemoveApprovalIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -315,6 +352,51 @@ func (puu *PlatformUserUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
+	if puu.mutation.ApprovalsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   platformuser.ApprovalsTable,
+			Columns: []string{platformuser.ApprovalsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(migrationapproval.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := puu.mutation.RemovedApprovalsIDs(); len(nodes) > 0 && !puu.mutation.ApprovalsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   platformuser.ApprovalsTable,
+			Columns: []string{platformuser.ApprovalsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(migrationapproval.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := puu.mutation.ApprovalsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   platformuser.ApprovalsTable,
+			Columns: []string{platformuser.ApprovalsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(migrationapproval.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
 	if n, err = sqlgraph.UpdateNodes(ctx, puu.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{platformuser.Label}
@@ -413,6 +495,21 @@ func (puuo *PlatformUserUpdateOne) AddSessions(s ...*Session) *PlatformUserUpdat
 	return puuo.AddSessionIDs(ids...)
 }
 
+// AddApprovalIDs adds the "approvals" edge to the MigrationApproval entity by IDs.
+func (puuo *PlatformUserUpdateOne) AddApprovalIDs(ids ...int) *PlatformUserUpdateOne {
+	puuo.mutation.AddApprovalIDs(ids...)
+	return puuo
+}
+
+// AddApprovals adds the "approvals" edges to the MigrationApproval entity.
+func (puuo *PlatformUserUpdateOne) AddApprovals(m ...*MigrationApproval) *PlatformUserUpdateOne {
+	ids := make([]int, len(m))
+	for i := range m {
+		ids[i] = m[i].ID
+	}
+	return puuo.AddApprovalIDs(ids...)
+}
+
 // Mutation returns the PlatformUserMutation object of the builder.
 func (puuo *PlatformUserUpdateOne) Mutation() *PlatformUserMutation {
 	return puuo.mutation
@@ -458,6 +555,27 @@ func (puuo *PlatformUserUpdateOne) RemoveSessions(s ...*Session) *PlatformUserUp
 		ids[i] = s[i].ID
 	}
 	return puuo.RemoveSessionIDs(ids...)
+}
+
+// ClearApprovals clears all "approvals" edges to the MigrationApproval entity.
+func (puuo *PlatformUserUpdateOne) ClearApprovals() *PlatformUserUpdateOne {
+	puuo.mutation.ClearApprovals()
+	return puuo
+}
+
+// RemoveApprovalIDs removes the "approvals" edge to MigrationApproval entities by IDs.
+func (puuo *PlatformUserUpdateOne) RemoveApprovalIDs(ids ...int) *PlatformUserUpdateOne {
+	puuo.mutation.RemoveApprovalIDs(ids...)
+	return puuo
+}
+
+// RemoveApprovals removes "approvals" edges to MigrationApproval entities.
+func (puuo *PlatformUserUpdateOne) RemoveApprovals(m ...*MigrationApproval) *PlatformUserUpdateOne {
+	ids := make([]int, len(m))
+	for i := range m {
+		ids[i] = m[i].ID
+	}
+	return puuo.RemoveApprovalIDs(ids...)
 }
 
 // Where appends a list predicates to the PlatformUserUpdate builder.
@@ -643,6 +761,51 @@ func (puuo *PlatformUserUpdateOne) sqlSave(ctx context.Context) (_node *Platform
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(session.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if puuo.mutation.ApprovalsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   platformuser.ApprovalsTable,
+			Columns: []string{platformuser.ApprovalsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(migrationapproval.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := puuo.mutation.RemovedApprovalsIDs(); len(nodes) > 0 && !puuo.mutation.ApprovalsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   platformuser.ApprovalsTable,
+			Columns: []string{platformuser.ApprovalsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(migrationapproval.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := puuo.mutation.ApprovalsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   platformuser.ApprovalsTable,
+			Columns: []string{platformuser.ApprovalsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(migrationapproval.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {

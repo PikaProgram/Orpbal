@@ -5,13 +5,14 @@ package ent
 import (
 	"Orpbal/ent/databaseconnection"
 	"Orpbal/ent/migration"
+	"Orpbal/ent/migrationapproval"
+	"Orpbal/ent/migrationexecution"
 	"Orpbal/ent/platformuser"
 	"Orpbal/ent/predicate"
 	"Orpbal/ent/schemasnapshot"
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
@@ -66,45 +67,71 @@ func (mu *MigrationUpdate) AddVersion(i int) *MigrationUpdate {
 	return mu
 }
 
-// SetSQL sets the "sql" field.
-func (mu *MigrationUpdate) SetSQL(s string) *MigrationUpdate {
-	mu.mutation.SetSQL(s)
+// SetSQLUp sets the "sql_up" field.
+func (mu *MigrationUpdate) SetSQLUp(s string) *MigrationUpdate {
+	mu.mutation.SetSQLUp(s)
 	return mu
 }
 
-// SetNillableSQL sets the "sql" field if the given value is not nil.
-func (mu *MigrationUpdate) SetNillableSQL(s *string) *MigrationUpdate {
+// SetNillableSQLUp sets the "sql_up" field if the given value is not nil.
+func (mu *MigrationUpdate) SetNillableSQLUp(s *string) *MigrationUpdate {
 	if s != nil {
-		mu.SetSQL(*s)
+		mu.SetSQLUp(*s)
 	}
 	return mu
 }
 
-// SetExecutorID sets the "executor_id" field.
-func (mu *MigrationUpdate) SetExecutorID(i int) *MigrationUpdate {
-	mu.mutation.SetExecutorID(i)
+// SetSQLDown sets the "sql_down" field.
+func (mu *MigrationUpdate) SetSQLDown(s string) *MigrationUpdate {
+	mu.mutation.SetSQLDown(s)
 	return mu
 }
 
-// SetNillableExecutorID sets the "executor_id" field if the given value is not nil.
-func (mu *MigrationUpdate) SetNillableExecutorID(i *int) *MigrationUpdate {
-	if i != nil {
-		mu.SetExecutorID(*i)
+// SetNillableSQLDown sets the "sql_down" field if the given value is not nil.
+func (mu *MigrationUpdate) SetNillableSQLDown(s *string) *MigrationUpdate {
+	if s != nil {
+		mu.SetSQLDown(*s)
 	}
 	return mu
 }
 
-// SetExecutedAt sets the "executed_at" field.
-func (mu *MigrationUpdate) SetExecutedAt(t time.Time) *MigrationUpdate {
-	mu.mutation.SetExecutedAt(t)
+// ClearSQLDown clears the value of the "sql_down" field.
+func (mu *MigrationUpdate) ClearSQLDown() *MigrationUpdate {
+	mu.mutation.ClearSQLDown()
 	return mu
 }
 
-// SetNillableExecutedAt sets the "executed_at" field if the given value is not nil.
-func (mu *MigrationUpdate) SetNillableExecutedAt(t *time.Time) *MigrationUpdate {
-	if t != nil {
-		mu.SetExecutedAt(*t)
+// SetIrreversible sets the "irreversible" field.
+func (mu *MigrationUpdate) SetIrreversible(b bool) *MigrationUpdate {
+	mu.mutation.SetIrreversible(b)
+	return mu
+}
+
+// SetNillableIrreversible sets the "irreversible" field if the given value is not nil.
+func (mu *MigrationUpdate) SetNillableIrreversible(b *bool) *MigrationUpdate {
+	if b != nil {
+		mu.SetIrreversible(*b)
 	}
+	return mu
+}
+
+// SetIrreversibleReason sets the "irreversible_reason" field.
+func (mu *MigrationUpdate) SetIrreversibleReason(s string) *MigrationUpdate {
+	mu.mutation.SetIrreversibleReason(s)
+	return mu
+}
+
+// SetNillableIrreversibleReason sets the "irreversible_reason" field if the given value is not nil.
+func (mu *MigrationUpdate) SetNillableIrreversibleReason(s *string) *MigrationUpdate {
+	if s != nil {
+		mu.SetIrreversibleReason(*s)
+	}
+	return mu
+}
+
+// ClearIrreversibleReason clears the value of the "irreversible_reason" field.
+func (mu *MigrationUpdate) ClearIrreversibleReason() *MigrationUpdate {
+	mu.mutation.ClearIrreversibleReason()
 	return mu
 }
 
@@ -122,14 +149,199 @@ func (mu *MigrationUpdate) SetNillableStatus(m *migration.Status) *MigrationUpda
 	return mu
 }
 
+// SetAuthorID sets the "author_id" field.
+func (mu *MigrationUpdate) SetAuthorID(i int) *MigrationUpdate {
+	mu.mutation.SetAuthorID(i)
+	return mu
+}
+
+// SetNillableAuthorID sets the "author_id" field if the given value is not nil.
+func (mu *MigrationUpdate) SetNillableAuthorID(i *int) *MigrationUpdate {
+	if i != nil {
+		mu.SetAuthorID(*i)
+	}
+	return mu
+}
+
+// SetBatchSize sets the "batch_size" field.
+func (mu *MigrationUpdate) SetBatchSize(i int) *MigrationUpdate {
+	mu.mutation.ResetBatchSize()
+	mu.mutation.SetBatchSize(i)
+	return mu
+}
+
+// SetNillableBatchSize sets the "batch_size" field if the given value is not nil.
+func (mu *MigrationUpdate) SetNillableBatchSize(i *int) *MigrationUpdate {
+	if i != nil {
+		mu.SetBatchSize(*i)
+	}
+	return mu
+}
+
+// AddBatchSize adds i to the "batch_size" field.
+func (mu *MigrationUpdate) AddBatchSize(i int) *MigrationUpdate {
+	mu.mutation.AddBatchSize(i)
+	return mu
+}
+
+// ClearBatchSize clears the value of the "batch_size" field.
+func (mu *MigrationUpdate) ClearBatchSize() *MigrationUpdate {
+	mu.mutation.ClearBatchSize()
+	return mu
+}
+
+// SetCursorColumn sets the "cursor_column" field.
+func (mu *MigrationUpdate) SetCursorColumn(s string) *MigrationUpdate {
+	mu.mutation.SetCursorColumn(s)
+	return mu
+}
+
+// SetNillableCursorColumn sets the "cursor_column" field if the given value is not nil.
+func (mu *MigrationUpdate) SetNillableCursorColumn(s *string) *MigrationUpdate {
+	if s != nil {
+		mu.SetCursorColumn(*s)
+	}
+	return mu
+}
+
+// ClearCursorColumn clears the value of the "cursor_column" field.
+func (mu *MigrationUpdate) ClearCursorColumn() *MigrationUpdate {
+	mu.mutation.ClearCursorColumn()
+	return mu
+}
+
+// SetBatchTable sets the "batch_table" field.
+func (mu *MigrationUpdate) SetBatchTable(s string) *MigrationUpdate {
+	mu.mutation.SetBatchTable(s)
+	return mu
+}
+
+// SetNillableBatchTable sets the "batch_table" field if the given value is not nil.
+func (mu *MigrationUpdate) SetNillableBatchTable(s *string) *MigrationUpdate {
+	if s != nil {
+		mu.SetBatchTable(*s)
+	}
+	return mu
+}
+
+// ClearBatchTable clears the value of the "batch_table" field.
+func (mu *MigrationUpdate) ClearBatchTable() *MigrationUpdate {
+	mu.mutation.ClearBatchTable()
+	return mu
+}
+
+// SetMinID sets the "min_id" field.
+func (mu *MigrationUpdate) SetMinID(i int64) *MigrationUpdate {
+	mu.mutation.ResetMinID()
+	mu.mutation.SetMinID(i)
+	return mu
+}
+
+// SetNillableMinID sets the "min_id" field if the given value is not nil.
+func (mu *MigrationUpdate) SetNillableMinID(i *int64) *MigrationUpdate {
+	if i != nil {
+		mu.SetMinID(*i)
+	}
+	return mu
+}
+
+// AddMinID adds i to the "min_id" field.
+func (mu *MigrationUpdate) AddMinID(i int64) *MigrationUpdate {
+	mu.mutation.AddMinID(i)
+	return mu
+}
+
+// ClearMinID clears the value of the "min_id" field.
+func (mu *MigrationUpdate) ClearMinID() *MigrationUpdate {
+	mu.mutation.ClearMinID()
+	return mu
+}
+
+// SetMaxID sets the "max_id" field.
+func (mu *MigrationUpdate) SetMaxID(i int64) *MigrationUpdate {
+	mu.mutation.ResetMaxID()
+	mu.mutation.SetMaxID(i)
+	return mu
+}
+
+// SetNillableMaxID sets the "max_id" field if the given value is not nil.
+func (mu *MigrationUpdate) SetNillableMaxID(i *int64) *MigrationUpdate {
+	if i != nil {
+		mu.SetMaxID(*i)
+	}
+	return mu
+}
+
+// AddMaxID adds i to the "max_id" field.
+func (mu *MigrationUpdate) AddMaxID(i int64) *MigrationUpdate {
+	mu.mutation.AddMaxID(i)
+	return mu
+}
+
+// ClearMaxID clears the value of the "max_id" field.
+func (mu *MigrationUpdate) ClearMaxID() *MigrationUpdate {
+	mu.mutation.ClearMaxID()
+	return mu
+}
+
+// SetTemplate sets the "template" field.
+func (mu *MigrationUpdate) SetTemplate(s string) *MigrationUpdate {
+	mu.mutation.SetTemplate(s)
+	return mu
+}
+
+// SetNillableTemplate sets the "template" field if the given value is not nil.
+func (mu *MigrationUpdate) SetNillableTemplate(s *string) *MigrationUpdate {
+	if s != nil {
+		mu.SetTemplate(*s)
+	}
+	return mu
+}
+
+// ClearTemplate clears the value of the "template" field.
+func (mu *MigrationUpdate) ClearTemplate() *MigrationUpdate {
+	mu.mutation.ClearTemplate()
+	return mu
+}
+
 // SetConnection sets the "connection" edge to the DatabaseConnection entity.
 func (mu *MigrationUpdate) SetConnection(d *DatabaseConnection) *MigrationUpdate {
 	return mu.SetConnectionID(d.ID)
 }
 
-// SetExecutor sets the "executor" edge to the PlatformUser entity.
-func (mu *MigrationUpdate) SetExecutor(p *PlatformUser) *MigrationUpdate {
-	return mu.SetExecutorID(p.ID)
+// SetAuthor sets the "author" edge to the PlatformUser entity.
+func (mu *MigrationUpdate) SetAuthor(p *PlatformUser) *MigrationUpdate {
+	return mu.SetAuthorID(p.ID)
+}
+
+// AddExecutionIDs adds the "executions" edge to the MigrationExecution entity by IDs.
+func (mu *MigrationUpdate) AddExecutionIDs(ids ...int) *MigrationUpdate {
+	mu.mutation.AddExecutionIDs(ids...)
+	return mu
+}
+
+// AddExecutions adds the "executions" edges to the MigrationExecution entity.
+func (mu *MigrationUpdate) AddExecutions(m ...*MigrationExecution) *MigrationUpdate {
+	ids := make([]int, len(m))
+	for i := range m {
+		ids[i] = m[i].ID
+	}
+	return mu.AddExecutionIDs(ids...)
+}
+
+// AddApprovalIDs adds the "approvals" edge to the MigrationApproval entity by IDs.
+func (mu *MigrationUpdate) AddApprovalIDs(ids ...int) *MigrationUpdate {
+	mu.mutation.AddApprovalIDs(ids...)
+	return mu
+}
+
+// AddApprovals adds the "approvals" edges to the MigrationApproval entity.
+func (mu *MigrationUpdate) AddApprovals(m ...*MigrationApproval) *MigrationUpdate {
+	ids := make([]int, len(m))
+	for i := range m {
+		ids[i] = m[i].ID
+	}
+	return mu.AddApprovalIDs(ids...)
 }
 
 // AddSnapshotIDs adds the "snapshots" edge to the SchemaSnapshot entity by IDs.
@@ -158,10 +370,52 @@ func (mu *MigrationUpdate) ClearConnection() *MigrationUpdate {
 	return mu
 }
 
-// ClearExecutor clears the "executor" edge to the PlatformUser entity.
-func (mu *MigrationUpdate) ClearExecutor() *MigrationUpdate {
-	mu.mutation.ClearExecutor()
+// ClearAuthor clears the "author" edge to the PlatformUser entity.
+func (mu *MigrationUpdate) ClearAuthor() *MigrationUpdate {
+	mu.mutation.ClearAuthor()
 	return mu
+}
+
+// ClearExecutions clears all "executions" edges to the MigrationExecution entity.
+func (mu *MigrationUpdate) ClearExecutions() *MigrationUpdate {
+	mu.mutation.ClearExecutions()
+	return mu
+}
+
+// RemoveExecutionIDs removes the "executions" edge to MigrationExecution entities by IDs.
+func (mu *MigrationUpdate) RemoveExecutionIDs(ids ...int) *MigrationUpdate {
+	mu.mutation.RemoveExecutionIDs(ids...)
+	return mu
+}
+
+// RemoveExecutions removes "executions" edges to MigrationExecution entities.
+func (mu *MigrationUpdate) RemoveExecutions(m ...*MigrationExecution) *MigrationUpdate {
+	ids := make([]int, len(m))
+	for i := range m {
+		ids[i] = m[i].ID
+	}
+	return mu.RemoveExecutionIDs(ids...)
+}
+
+// ClearApprovals clears all "approvals" edges to the MigrationApproval entity.
+func (mu *MigrationUpdate) ClearApprovals() *MigrationUpdate {
+	mu.mutation.ClearApprovals()
+	return mu
+}
+
+// RemoveApprovalIDs removes the "approvals" edge to MigrationApproval entities by IDs.
+func (mu *MigrationUpdate) RemoveApprovalIDs(ids ...int) *MigrationUpdate {
+	mu.mutation.RemoveApprovalIDs(ids...)
+	return mu
+}
+
+// RemoveApprovals removes "approvals" edges to MigrationApproval entities.
+func (mu *MigrationUpdate) RemoveApprovals(m ...*MigrationApproval) *MigrationUpdate {
+	ids := make([]int, len(m))
+	for i := range m {
+		ids[i] = m[i].ID
+	}
+	return mu.RemoveApprovalIDs(ids...)
 }
 
 // ClearSnapshots clears all "snapshots" edges to the SchemaSnapshot entity.
@@ -224,21 +478,26 @@ func (mu *MigrationUpdate) check() error {
 			return &ValidationError{Name: "version", err: fmt.Errorf(`ent: validator failed for field "Migration.version": %w`, err)}
 		}
 	}
-	if v, ok := mu.mutation.ExecutorID(); ok {
-		if err := migration.ExecutorIDValidator(v); err != nil {
-			return &ValidationError{Name: "executor_id", err: fmt.Errorf(`ent: validator failed for field "Migration.executor_id": %w`, err)}
-		}
-	}
 	if v, ok := mu.mutation.Status(); ok {
 		if err := migration.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Migration.status": %w`, err)}
 		}
 	}
+	if v, ok := mu.mutation.AuthorID(); ok {
+		if err := migration.AuthorIDValidator(v); err != nil {
+			return &ValidationError{Name: "author_id", err: fmt.Errorf(`ent: validator failed for field "Migration.author_id": %w`, err)}
+		}
+	}
+	if v, ok := mu.mutation.BatchSize(); ok {
+		if err := migration.BatchSizeValidator(v); err != nil {
+			return &ValidationError{Name: "batch_size", err: fmt.Errorf(`ent: validator failed for field "Migration.batch_size": %w`, err)}
+		}
+	}
 	if mu.mutation.ConnectionCleared() && len(mu.mutation.ConnectionIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "Migration.connection"`)
 	}
-	if mu.mutation.ExecutorCleared() && len(mu.mutation.ExecutorIDs()) > 0 {
-		return errors.New(`ent: clearing a required unique edge "Migration.executor"`)
+	if mu.mutation.AuthorCleared() && len(mu.mutation.AuthorIDs()) > 0 {
+		return errors.New(`ent: clearing a required unique edge "Migration.author"`)
 	}
 	return nil
 }
@@ -261,14 +520,71 @@ func (mu *MigrationUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if value, ok := mu.mutation.AddedVersion(); ok {
 		_spec.AddField(migration.FieldVersion, field.TypeInt, value)
 	}
-	if value, ok := mu.mutation.SQL(); ok {
-		_spec.SetField(migration.FieldSQL, field.TypeString, value)
+	if value, ok := mu.mutation.SQLUp(); ok {
+		_spec.SetField(migration.FieldSQLUp, field.TypeString, value)
 	}
-	if value, ok := mu.mutation.ExecutedAt(); ok {
-		_spec.SetField(migration.FieldExecutedAt, field.TypeTime, value)
+	if value, ok := mu.mutation.SQLDown(); ok {
+		_spec.SetField(migration.FieldSQLDown, field.TypeString, value)
+	}
+	if mu.mutation.SQLDownCleared() {
+		_spec.ClearField(migration.FieldSQLDown, field.TypeString)
+	}
+	if value, ok := mu.mutation.Irreversible(); ok {
+		_spec.SetField(migration.FieldIrreversible, field.TypeBool, value)
+	}
+	if value, ok := mu.mutation.IrreversibleReason(); ok {
+		_spec.SetField(migration.FieldIrreversibleReason, field.TypeString, value)
+	}
+	if mu.mutation.IrreversibleReasonCleared() {
+		_spec.ClearField(migration.FieldIrreversibleReason, field.TypeString)
 	}
 	if value, ok := mu.mutation.Status(); ok {
 		_spec.SetField(migration.FieldStatus, field.TypeEnum, value)
+	}
+	if value, ok := mu.mutation.BatchSize(); ok {
+		_spec.SetField(migration.FieldBatchSize, field.TypeInt, value)
+	}
+	if value, ok := mu.mutation.AddedBatchSize(); ok {
+		_spec.AddField(migration.FieldBatchSize, field.TypeInt, value)
+	}
+	if mu.mutation.BatchSizeCleared() {
+		_spec.ClearField(migration.FieldBatchSize, field.TypeInt)
+	}
+	if value, ok := mu.mutation.CursorColumn(); ok {
+		_spec.SetField(migration.FieldCursorColumn, field.TypeString, value)
+	}
+	if mu.mutation.CursorColumnCleared() {
+		_spec.ClearField(migration.FieldCursorColumn, field.TypeString)
+	}
+	if value, ok := mu.mutation.BatchTable(); ok {
+		_spec.SetField(migration.FieldBatchTable, field.TypeString, value)
+	}
+	if mu.mutation.BatchTableCleared() {
+		_spec.ClearField(migration.FieldBatchTable, field.TypeString)
+	}
+	if value, ok := mu.mutation.MinID(); ok {
+		_spec.SetField(migration.FieldMinID, field.TypeInt64, value)
+	}
+	if value, ok := mu.mutation.AddedMinID(); ok {
+		_spec.AddField(migration.FieldMinID, field.TypeInt64, value)
+	}
+	if mu.mutation.MinIDCleared() {
+		_spec.ClearField(migration.FieldMinID, field.TypeInt64)
+	}
+	if value, ok := mu.mutation.MaxID(); ok {
+		_spec.SetField(migration.FieldMaxID, field.TypeInt64, value)
+	}
+	if value, ok := mu.mutation.AddedMaxID(); ok {
+		_spec.AddField(migration.FieldMaxID, field.TypeInt64, value)
+	}
+	if mu.mutation.MaxIDCleared() {
+		_spec.ClearField(migration.FieldMaxID, field.TypeInt64)
+	}
+	if value, ok := mu.mutation.Template(); ok {
+		_spec.SetField(migration.FieldTemplate, field.TypeString, value)
+	}
+	if mu.mutation.TemplateCleared() {
+		_spec.ClearField(migration.FieldTemplate, field.TypeString)
 	}
 	if mu.mutation.ConnectionCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -299,12 +615,12 @@ func (mu *MigrationUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	if mu.mutation.ExecutorCleared() {
+	if mu.mutation.AuthorCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: false,
-			Table:   migration.ExecutorTable,
-			Columns: []string{migration.ExecutorColumn},
+			Table:   migration.AuthorTable,
+			Columns: []string{migration.AuthorColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(platformuser.FieldID, field.TypeInt),
@@ -312,15 +628,105 @@ func (mu *MigrationUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := mu.mutation.ExecutorIDs(); len(nodes) > 0 {
+	if nodes := mu.mutation.AuthorIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: false,
-			Table:   migration.ExecutorTable,
-			Columns: []string{migration.ExecutorColumn},
+			Table:   migration.AuthorTable,
+			Columns: []string{migration.AuthorColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(platformuser.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if mu.mutation.ExecutionsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   migration.ExecutionsTable,
+			Columns: []string{migration.ExecutionsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(migrationexecution.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := mu.mutation.RemovedExecutionsIDs(); len(nodes) > 0 && !mu.mutation.ExecutionsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   migration.ExecutionsTable,
+			Columns: []string{migration.ExecutionsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(migrationexecution.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := mu.mutation.ExecutionsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   migration.ExecutionsTable,
+			Columns: []string{migration.ExecutionsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(migrationexecution.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if mu.mutation.ApprovalsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   migration.ApprovalsTable,
+			Columns: []string{migration.ApprovalsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(migrationapproval.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := mu.mutation.RemovedApprovalsIDs(); len(nodes) > 0 && !mu.mutation.ApprovalsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   migration.ApprovalsTable,
+			Columns: []string{migration.ApprovalsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(migrationapproval.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := mu.mutation.ApprovalsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   migration.ApprovalsTable,
+			Columns: []string{migration.ApprovalsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(migrationapproval.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {
@@ -428,45 +834,71 @@ func (muo *MigrationUpdateOne) AddVersion(i int) *MigrationUpdateOne {
 	return muo
 }
 
-// SetSQL sets the "sql" field.
-func (muo *MigrationUpdateOne) SetSQL(s string) *MigrationUpdateOne {
-	muo.mutation.SetSQL(s)
+// SetSQLUp sets the "sql_up" field.
+func (muo *MigrationUpdateOne) SetSQLUp(s string) *MigrationUpdateOne {
+	muo.mutation.SetSQLUp(s)
 	return muo
 }
 
-// SetNillableSQL sets the "sql" field if the given value is not nil.
-func (muo *MigrationUpdateOne) SetNillableSQL(s *string) *MigrationUpdateOne {
+// SetNillableSQLUp sets the "sql_up" field if the given value is not nil.
+func (muo *MigrationUpdateOne) SetNillableSQLUp(s *string) *MigrationUpdateOne {
 	if s != nil {
-		muo.SetSQL(*s)
+		muo.SetSQLUp(*s)
 	}
 	return muo
 }
 
-// SetExecutorID sets the "executor_id" field.
-func (muo *MigrationUpdateOne) SetExecutorID(i int) *MigrationUpdateOne {
-	muo.mutation.SetExecutorID(i)
+// SetSQLDown sets the "sql_down" field.
+func (muo *MigrationUpdateOne) SetSQLDown(s string) *MigrationUpdateOne {
+	muo.mutation.SetSQLDown(s)
 	return muo
 }
 
-// SetNillableExecutorID sets the "executor_id" field if the given value is not nil.
-func (muo *MigrationUpdateOne) SetNillableExecutorID(i *int) *MigrationUpdateOne {
-	if i != nil {
-		muo.SetExecutorID(*i)
+// SetNillableSQLDown sets the "sql_down" field if the given value is not nil.
+func (muo *MigrationUpdateOne) SetNillableSQLDown(s *string) *MigrationUpdateOne {
+	if s != nil {
+		muo.SetSQLDown(*s)
 	}
 	return muo
 }
 
-// SetExecutedAt sets the "executed_at" field.
-func (muo *MigrationUpdateOne) SetExecutedAt(t time.Time) *MigrationUpdateOne {
-	muo.mutation.SetExecutedAt(t)
+// ClearSQLDown clears the value of the "sql_down" field.
+func (muo *MigrationUpdateOne) ClearSQLDown() *MigrationUpdateOne {
+	muo.mutation.ClearSQLDown()
 	return muo
 }
 
-// SetNillableExecutedAt sets the "executed_at" field if the given value is not nil.
-func (muo *MigrationUpdateOne) SetNillableExecutedAt(t *time.Time) *MigrationUpdateOne {
-	if t != nil {
-		muo.SetExecutedAt(*t)
+// SetIrreversible sets the "irreversible" field.
+func (muo *MigrationUpdateOne) SetIrreversible(b bool) *MigrationUpdateOne {
+	muo.mutation.SetIrreversible(b)
+	return muo
+}
+
+// SetNillableIrreversible sets the "irreversible" field if the given value is not nil.
+func (muo *MigrationUpdateOne) SetNillableIrreversible(b *bool) *MigrationUpdateOne {
+	if b != nil {
+		muo.SetIrreversible(*b)
 	}
+	return muo
+}
+
+// SetIrreversibleReason sets the "irreversible_reason" field.
+func (muo *MigrationUpdateOne) SetIrreversibleReason(s string) *MigrationUpdateOne {
+	muo.mutation.SetIrreversibleReason(s)
+	return muo
+}
+
+// SetNillableIrreversibleReason sets the "irreversible_reason" field if the given value is not nil.
+func (muo *MigrationUpdateOne) SetNillableIrreversibleReason(s *string) *MigrationUpdateOne {
+	if s != nil {
+		muo.SetIrreversibleReason(*s)
+	}
+	return muo
+}
+
+// ClearIrreversibleReason clears the value of the "irreversible_reason" field.
+func (muo *MigrationUpdateOne) ClearIrreversibleReason() *MigrationUpdateOne {
+	muo.mutation.ClearIrreversibleReason()
 	return muo
 }
 
@@ -484,14 +916,199 @@ func (muo *MigrationUpdateOne) SetNillableStatus(m *migration.Status) *Migration
 	return muo
 }
 
+// SetAuthorID sets the "author_id" field.
+func (muo *MigrationUpdateOne) SetAuthorID(i int) *MigrationUpdateOne {
+	muo.mutation.SetAuthorID(i)
+	return muo
+}
+
+// SetNillableAuthorID sets the "author_id" field if the given value is not nil.
+func (muo *MigrationUpdateOne) SetNillableAuthorID(i *int) *MigrationUpdateOne {
+	if i != nil {
+		muo.SetAuthorID(*i)
+	}
+	return muo
+}
+
+// SetBatchSize sets the "batch_size" field.
+func (muo *MigrationUpdateOne) SetBatchSize(i int) *MigrationUpdateOne {
+	muo.mutation.ResetBatchSize()
+	muo.mutation.SetBatchSize(i)
+	return muo
+}
+
+// SetNillableBatchSize sets the "batch_size" field if the given value is not nil.
+func (muo *MigrationUpdateOne) SetNillableBatchSize(i *int) *MigrationUpdateOne {
+	if i != nil {
+		muo.SetBatchSize(*i)
+	}
+	return muo
+}
+
+// AddBatchSize adds i to the "batch_size" field.
+func (muo *MigrationUpdateOne) AddBatchSize(i int) *MigrationUpdateOne {
+	muo.mutation.AddBatchSize(i)
+	return muo
+}
+
+// ClearBatchSize clears the value of the "batch_size" field.
+func (muo *MigrationUpdateOne) ClearBatchSize() *MigrationUpdateOne {
+	muo.mutation.ClearBatchSize()
+	return muo
+}
+
+// SetCursorColumn sets the "cursor_column" field.
+func (muo *MigrationUpdateOne) SetCursorColumn(s string) *MigrationUpdateOne {
+	muo.mutation.SetCursorColumn(s)
+	return muo
+}
+
+// SetNillableCursorColumn sets the "cursor_column" field if the given value is not nil.
+func (muo *MigrationUpdateOne) SetNillableCursorColumn(s *string) *MigrationUpdateOne {
+	if s != nil {
+		muo.SetCursorColumn(*s)
+	}
+	return muo
+}
+
+// ClearCursorColumn clears the value of the "cursor_column" field.
+func (muo *MigrationUpdateOne) ClearCursorColumn() *MigrationUpdateOne {
+	muo.mutation.ClearCursorColumn()
+	return muo
+}
+
+// SetBatchTable sets the "batch_table" field.
+func (muo *MigrationUpdateOne) SetBatchTable(s string) *MigrationUpdateOne {
+	muo.mutation.SetBatchTable(s)
+	return muo
+}
+
+// SetNillableBatchTable sets the "batch_table" field if the given value is not nil.
+func (muo *MigrationUpdateOne) SetNillableBatchTable(s *string) *MigrationUpdateOne {
+	if s != nil {
+		muo.SetBatchTable(*s)
+	}
+	return muo
+}
+
+// ClearBatchTable clears the value of the "batch_table" field.
+func (muo *MigrationUpdateOne) ClearBatchTable() *MigrationUpdateOne {
+	muo.mutation.ClearBatchTable()
+	return muo
+}
+
+// SetMinID sets the "min_id" field.
+func (muo *MigrationUpdateOne) SetMinID(i int64) *MigrationUpdateOne {
+	muo.mutation.ResetMinID()
+	muo.mutation.SetMinID(i)
+	return muo
+}
+
+// SetNillableMinID sets the "min_id" field if the given value is not nil.
+func (muo *MigrationUpdateOne) SetNillableMinID(i *int64) *MigrationUpdateOne {
+	if i != nil {
+		muo.SetMinID(*i)
+	}
+	return muo
+}
+
+// AddMinID adds i to the "min_id" field.
+func (muo *MigrationUpdateOne) AddMinID(i int64) *MigrationUpdateOne {
+	muo.mutation.AddMinID(i)
+	return muo
+}
+
+// ClearMinID clears the value of the "min_id" field.
+func (muo *MigrationUpdateOne) ClearMinID() *MigrationUpdateOne {
+	muo.mutation.ClearMinID()
+	return muo
+}
+
+// SetMaxID sets the "max_id" field.
+func (muo *MigrationUpdateOne) SetMaxID(i int64) *MigrationUpdateOne {
+	muo.mutation.ResetMaxID()
+	muo.mutation.SetMaxID(i)
+	return muo
+}
+
+// SetNillableMaxID sets the "max_id" field if the given value is not nil.
+func (muo *MigrationUpdateOne) SetNillableMaxID(i *int64) *MigrationUpdateOne {
+	if i != nil {
+		muo.SetMaxID(*i)
+	}
+	return muo
+}
+
+// AddMaxID adds i to the "max_id" field.
+func (muo *MigrationUpdateOne) AddMaxID(i int64) *MigrationUpdateOne {
+	muo.mutation.AddMaxID(i)
+	return muo
+}
+
+// ClearMaxID clears the value of the "max_id" field.
+func (muo *MigrationUpdateOne) ClearMaxID() *MigrationUpdateOne {
+	muo.mutation.ClearMaxID()
+	return muo
+}
+
+// SetTemplate sets the "template" field.
+func (muo *MigrationUpdateOne) SetTemplate(s string) *MigrationUpdateOne {
+	muo.mutation.SetTemplate(s)
+	return muo
+}
+
+// SetNillableTemplate sets the "template" field if the given value is not nil.
+func (muo *MigrationUpdateOne) SetNillableTemplate(s *string) *MigrationUpdateOne {
+	if s != nil {
+		muo.SetTemplate(*s)
+	}
+	return muo
+}
+
+// ClearTemplate clears the value of the "template" field.
+func (muo *MigrationUpdateOne) ClearTemplate() *MigrationUpdateOne {
+	muo.mutation.ClearTemplate()
+	return muo
+}
+
 // SetConnection sets the "connection" edge to the DatabaseConnection entity.
 func (muo *MigrationUpdateOne) SetConnection(d *DatabaseConnection) *MigrationUpdateOne {
 	return muo.SetConnectionID(d.ID)
 }
 
-// SetExecutor sets the "executor" edge to the PlatformUser entity.
-func (muo *MigrationUpdateOne) SetExecutor(p *PlatformUser) *MigrationUpdateOne {
-	return muo.SetExecutorID(p.ID)
+// SetAuthor sets the "author" edge to the PlatformUser entity.
+func (muo *MigrationUpdateOne) SetAuthor(p *PlatformUser) *MigrationUpdateOne {
+	return muo.SetAuthorID(p.ID)
+}
+
+// AddExecutionIDs adds the "executions" edge to the MigrationExecution entity by IDs.
+func (muo *MigrationUpdateOne) AddExecutionIDs(ids ...int) *MigrationUpdateOne {
+	muo.mutation.AddExecutionIDs(ids...)
+	return muo
+}
+
+// AddExecutions adds the "executions" edges to the MigrationExecution entity.
+func (muo *MigrationUpdateOne) AddExecutions(m ...*MigrationExecution) *MigrationUpdateOne {
+	ids := make([]int, len(m))
+	for i := range m {
+		ids[i] = m[i].ID
+	}
+	return muo.AddExecutionIDs(ids...)
+}
+
+// AddApprovalIDs adds the "approvals" edge to the MigrationApproval entity by IDs.
+func (muo *MigrationUpdateOne) AddApprovalIDs(ids ...int) *MigrationUpdateOne {
+	muo.mutation.AddApprovalIDs(ids...)
+	return muo
+}
+
+// AddApprovals adds the "approvals" edges to the MigrationApproval entity.
+func (muo *MigrationUpdateOne) AddApprovals(m ...*MigrationApproval) *MigrationUpdateOne {
+	ids := make([]int, len(m))
+	for i := range m {
+		ids[i] = m[i].ID
+	}
+	return muo.AddApprovalIDs(ids...)
 }
 
 // AddSnapshotIDs adds the "snapshots" edge to the SchemaSnapshot entity by IDs.
@@ -520,10 +1137,52 @@ func (muo *MigrationUpdateOne) ClearConnection() *MigrationUpdateOne {
 	return muo
 }
 
-// ClearExecutor clears the "executor" edge to the PlatformUser entity.
-func (muo *MigrationUpdateOne) ClearExecutor() *MigrationUpdateOne {
-	muo.mutation.ClearExecutor()
+// ClearAuthor clears the "author" edge to the PlatformUser entity.
+func (muo *MigrationUpdateOne) ClearAuthor() *MigrationUpdateOne {
+	muo.mutation.ClearAuthor()
 	return muo
+}
+
+// ClearExecutions clears all "executions" edges to the MigrationExecution entity.
+func (muo *MigrationUpdateOne) ClearExecutions() *MigrationUpdateOne {
+	muo.mutation.ClearExecutions()
+	return muo
+}
+
+// RemoveExecutionIDs removes the "executions" edge to MigrationExecution entities by IDs.
+func (muo *MigrationUpdateOne) RemoveExecutionIDs(ids ...int) *MigrationUpdateOne {
+	muo.mutation.RemoveExecutionIDs(ids...)
+	return muo
+}
+
+// RemoveExecutions removes "executions" edges to MigrationExecution entities.
+func (muo *MigrationUpdateOne) RemoveExecutions(m ...*MigrationExecution) *MigrationUpdateOne {
+	ids := make([]int, len(m))
+	for i := range m {
+		ids[i] = m[i].ID
+	}
+	return muo.RemoveExecutionIDs(ids...)
+}
+
+// ClearApprovals clears all "approvals" edges to the MigrationApproval entity.
+func (muo *MigrationUpdateOne) ClearApprovals() *MigrationUpdateOne {
+	muo.mutation.ClearApprovals()
+	return muo
+}
+
+// RemoveApprovalIDs removes the "approvals" edge to MigrationApproval entities by IDs.
+func (muo *MigrationUpdateOne) RemoveApprovalIDs(ids ...int) *MigrationUpdateOne {
+	muo.mutation.RemoveApprovalIDs(ids...)
+	return muo
+}
+
+// RemoveApprovals removes "approvals" edges to MigrationApproval entities.
+func (muo *MigrationUpdateOne) RemoveApprovals(m ...*MigrationApproval) *MigrationUpdateOne {
+	ids := make([]int, len(m))
+	for i := range m {
+		ids[i] = m[i].ID
+	}
+	return muo.RemoveApprovalIDs(ids...)
 }
 
 // ClearSnapshots clears all "snapshots" edges to the SchemaSnapshot entity.
@@ -599,21 +1258,26 @@ func (muo *MigrationUpdateOne) check() error {
 			return &ValidationError{Name: "version", err: fmt.Errorf(`ent: validator failed for field "Migration.version": %w`, err)}
 		}
 	}
-	if v, ok := muo.mutation.ExecutorID(); ok {
-		if err := migration.ExecutorIDValidator(v); err != nil {
-			return &ValidationError{Name: "executor_id", err: fmt.Errorf(`ent: validator failed for field "Migration.executor_id": %w`, err)}
-		}
-	}
 	if v, ok := muo.mutation.Status(); ok {
 		if err := migration.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Migration.status": %w`, err)}
 		}
 	}
+	if v, ok := muo.mutation.AuthorID(); ok {
+		if err := migration.AuthorIDValidator(v); err != nil {
+			return &ValidationError{Name: "author_id", err: fmt.Errorf(`ent: validator failed for field "Migration.author_id": %w`, err)}
+		}
+	}
+	if v, ok := muo.mutation.BatchSize(); ok {
+		if err := migration.BatchSizeValidator(v); err != nil {
+			return &ValidationError{Name: "batch_size", err: fmt.Errorf(`ent: validator failed for field "Migration.batch_size": %w`, err)}
+		}
+	}
 	if muo.mutation.ConnectionCleared() && len(muo.mutation.ConnectionIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "Migration.connection"`)
 	}
-	if muo.mutation.ExecutorCleared() && len(muo.mutation.ExecutorIDs()) > 0 {
-		return errors.New(`ent: clearing a required unique edge "Migration.executor"`)
+	if muo.mutation.AuthorCleared() && len(muo.mutation.AuthorIDs()) > 0 {
+		return errors.New(`ent: clearing a required unique edge "Migration.author"`)
 	}
 	return nil
 }
@@ -653,14 +1317,71 @@ func (muo *MigrationUpdateOne) sqlSave(ctx context.Context) (_node *Migration, e
 	if value, ok := muo.mutation.AddedVersion(); ok {
 		_spec.AddField(migration.FieldVersion, field.TypeInt, value)
 	}
-	if value, ok := muo.mutation.SQL(); ok {
-		_spec.SetField(migration.FieldSQL, field.TypeString, value)
+	if value, ok := muo.mutation.SQLUp(); ok {
+		_spec.SetField(migration.FieldSQLUp, field.TypeString, value)
 	}
-	if value, ok := muo.mutation.ExecutedAt(); ok {
-		_spec.SetField(migration.FieldExecutedAt, field.TypeTime, value)
+	if value, ok := muo.mutation.SQLDown(); ok {
+		_spec.SetField(migration.FieldSQLDown, field.TypeString, value)
+	}
+	if muo.mutation.SQLDownCleared() {
+		_spec.ClearField(migration.FieldSQLDown, field.TypeString)
+	}
+	if value, ok := muo.mutation.Irreversible(); ok {
+		_spec.SetField(migration.FieldIrreversible, field.TypeBool, value)
+	}
+	if value, ok := muo.mutation.IrreversibleReason(); ok {
+		_spec.SetField(migration.FieldIrreversibleReason, field.TypeString, value)
+	}
+	if muo.mutation.IrreversibleReasonCleared() {
+		_spec.ClearField(migration.FieldIrreversibleReason, field.TypeString)
 	}
 	if value, ok := muo.mutation.Status(); ok {
 		_spec.SetField(migration.FieldStatus, field.TypeEnum, value)
+	}
+	if value, ok := muo.mutation.BatchSize(); ok {
+		_spec.SetField(migration.FieldBatchSize, field.TypeInt, value)
+	}
+	if value, ok := muo.mutation.AddedBatchSize(); ok {
+		_spec.AddField(migration.FieldBatchSize, field.TypeInt, value)
+	}
+	if muo.mutation.BatchSizeCleared() {
+		_spec.ClearField(migration.FieldBatchSize, field.TypeInt)
+	}
+	if value, ok := muo.mutation.CursorColumn(); ok {
+		_spec.SetField(migration.FieldCursorColumn, field.TypeString, value)
+	}
+	if muo.mutation.CursorColumnCleared() {
+		_spec.ClearField(migration.FieldCursorColumn, field.TypeString)
+	}
+	if value, ok := muo.mutation.BatchTable(); ok {
+		_spec.SetField(migration.FieldBatchTable, field.TypeString, value)
+	}
+	if muo.mutation.BatchTableCleared() {
+		_spec.ClearField(migration.FieldBatchTable, field.TypeString)
+	}
+	if value, ok := muo.mutation.MinID(); ok {
+		_spec.SetField(migration.FieldMinID, field.TypeInt64, value)
+	}
+	if value, ok := muo.mutation.AddedMinID(); ok {
+		_spec.AddField(migration.FieldMinID, field.TypeInt64, value)
+	}
+	if muo.mutation.MinIDCleared() {
+		_spec.ClearField(migration.FieldMinID, field.TypeInt64)
+	}
+	if value, ok := muo.mutation.MaxID(); ok {
+		_spec.SetField(migration.FieldMaxID, field.TypeInt64, value)
+	}
+	if value, ok := muo.mutation.AddedMaxID(); ok {
+		_spec.AddField(migration.FieldMaxID, field.TypeInt64, value)
+	}
+	if muo.mutation.MaxIDCleared() {
+		_spec.ClearField(migration.FieldMaxID, field.TypeInt64)
+	}
+	if value, ok := muo.mutation.Template(); ok {
+		_spec.SetField(migration.FieldTemplate, field.TypeString, value)
+	}
+	if muo.mutation.TemplateCleared() {
+		_spec.ClearField(migration.FieldTemplate, field.TypeString)
 	}
 	if muo.mutation.ConnectionCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -691,12 +1412,12 @@ func (muo *MigrationUpdateOne) sqlSave(ctx context.Context) (_node *Migration, e
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	if muo.mutation.ExecutorCleared() {
+	if muo.mutation.AuthorCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: false,
-			Table:   migration.ExecutorTable,
-			Columns: []string{migration.ExecutorColumn},
+			Table:   migration.AuthorTable,
+			Columns: []string{migration.AuthorColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(platformuser.FieldID, field.TypeInt),
@@ -704,15 +1425,105 @@ func (muo *MigrationUpdateOne) sqlSave(ctx context.Context) (_node *Migration, e
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := muo.mutation.ExecutorIDs(); len(nodes) > 0 {
+	if nodes := muo.mutation.AuthorIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: false,
-			Table:   migration.ExecutorTable,
-			Columns: []string{migration.ExecutorColumn},
+			Table:   migration.AuthorTable,
+			Columns: []string{migration.AuthorColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(platformuser.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if muo.mutation.ExecutionsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   migration.ExecutionsTable,
+			Columns: []string{migration.ExecutionsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(migrationexecution.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := muo.mutation.RemovedExecutionsIDs(); len(nodes) > 0 && !muo.mutation.ExecutionsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   migration.ExecutionsTable,
+			Columns: []string{migration.ExecutionsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(migrationexecution.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := muo.mutation.ExecutionsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   migration.ExecutionsTable,
+			Columns: []string{migration.ExecutionsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(migrationexecution.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if muo.mutation.ApprovalsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   migration.ApprovalsTable,
+			Columns: []string{migration.ApprovalsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(migrationapproval.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := muo.mutation.RemovedApprovalsIDs(); len(nodes) > 0 && !muo.mutation.ApprovalsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   migration.ApprovalsTable,
+			Columns: []string{migration.ApprovalsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(migrationapproval.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := muo.mutation.ApprovalsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   migration.ApprovalsTable,
+			Columns: []string{migration.ApprovalsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(migrationapproval.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {

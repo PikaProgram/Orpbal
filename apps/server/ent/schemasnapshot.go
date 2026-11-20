@@ -4,6 +4,7 @@ package ent
 
 import (
 	"Orpbal/ent/migration"
+	"Orpbal/ent/migrationexecution"
 	"Orpbal/ent/schemasnapshot"
 	"fmt"
 	"strings"
@@ -19,6 +20,8 @@ type SchemaSnapshot struct {
 	ID int `json:"id,omitempty"`
 	// FK to migration; snapshot pair belongs to one migration
 	MigrationID int `json:"migration_id,omitempty"`
+	// FK to migration_execution; set once the execution exists
+	ExecutionID *int `json:"execution_id,omitempty"`
 	// Which side of the execution this snapshot captures
 	Phase schemasnapshot.Phase `json:"phase,omitempty"`
 	// Full DatabaseSchema JSON of the target at capture time
@@ -33,9 +36,11 @@ type SchemaSnapshot struct {
 type SchemaSnapshotEdges struct {
 	// Migration holds the value of the migration edge.
 	Migration *Migration `json:"migration,omitempty"`
+	// Execution holds the value of the execution edge.
+	Execution *MigrationExecution `json:"execution,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [1]bool
+	loadedTypes [2]bool
 }
 
 // MigrationOrErr returns the Migration value or an error if the edge
@@ -49,12 +54,23 @@ func (e SchemaSnapshotEdges) MigrationOrErr() (*Migration, error) {
 	return nil, &NotLoadedError{edge: "migration"}
 }
 
+// ExecutionOrErr returns the Execution value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e SchemaSnapshotEdges) ExecutionOrErr() (*MigrationExecution, error) {
+	if e.Execution != nil {
+		return e.Execution, nil
+	} else if e.loadedTypes[1] {
+		return nil, &NotFoundError{label: migrationexecution.Label}
+	}
+	return nil, &NotLoadedError{edge: "execution"}
+}
+
 // scanValues returns the types for scanning values from sql.Rows.
 func (*SchemaSnapshot) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case schemasnapshot.FieldID, schemasnapshot.FieldMigrationID:
+		case schemasnapshot.FieldID, schemasnapshot.FieldMigrationID, schemasnapshot.FieldExecutionID:
 			values[i] = new(sql.NullInt64)
 		case schemasnapshot.FieldPhase, schemasnapshot.FieldJSON:
 			values[i] = new(sql.NullString)
@@ -84,6 +100,13 @@ func (ss *SchemaSnapshot) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field migration_id", values[i])
 			} else if value.Valid {
 				ss.MigrationID = int(value.Int64)
+			}
+		case schemasnapshot.FieldExecutionID:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field execution_id", values[i])
+			} else if value.Valid {
+				ss.ExecutionID = new(int)
+				*ss.ExecutionID = int(value.Int64)
 			}
 		case schemasnapshot.FieldPhase:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -115,6 +138,11 @@ func (ss *SchemaSnapshot) QueryMigration() *MigrationQuery {
 	return NewSchemaSnapshotClient(ss.config).QueryMigration(ss)
 }
 
+// QueryExecution queries the "execution" edge of the SchemaSnapshot entity.
+func (ss *SchemaSnapshot) QueryExecution() *MigrationExecutionQuery {
+	return NewSchemaSnapshotClient(ss.config).QueryExecution(ss)
+}
+
 // Update returns a builder for updating this SchemaSnapshot.
 // Note that you need to call SchemaSnapshot.Unwrap() before calling this method if this SchemaSnapshot
 // was returned from a transaction, and the transaction was committed or rolled back.
@@ -140,6 +168,11 @@ func (ss *SchemaSnapshot) String() string {
 	builder.WriteString(fmt.Sprintf("id=%v, ", ss.ID))
 	builder.WriteString("migration_id=")
 	builder.WriteString(fmt.Sprintf("%v", ss.MigrationID))
+	builder.WriteString(", ")
+	if v := ss.ExecutionID; v != nil {
+		builder.WriteString("execution_id=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
 	builder.WriteString(", ")
 	builder.WriteString("phase=")
 	builder.WriteString(fmt.Sprintf("%v", ss.Phase))

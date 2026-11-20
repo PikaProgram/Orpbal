@@ -57,6 +57,20 @@ func (gmu *GroupMembershipUpdate) SetNillableGroupID(i *int) *GroupMembershipUpd
 	return gmu
 }
 
+// SetRole sets the "role" field.
+func (gmu *GroupMembershipUpdate) SetRole(gr groupmembership.Role) *GroupMembershipUpdate {
+	gmu.mutation.SetRole(gr)
+	return gmu
+}
+
+// SetNillableRole sets the "role" field if the given value is not nil.
+func (gmu *GroupMembershipUpdate) SetNillableRole(gr *groupmembership.Role) *GroupMembershipUpdate {
+	if gr != nil {
+		gmu.SetRole(*gr)
+	}
+	return gmu
+}
+
 // SetUser sets the "user" edge to the PlatformUser entity.
 func (gmu *GroupMembershipUpdate) SetUser(p *PlatformUser) *GroupMembershipUpdate {
 	return gmu.SetUserID(p.ID)
@@ -113,6 +127,11 @@ func (gmu *GroupMembershipUpdate) ExecX(ctx context.Context) {
 
 // check runs all checks and user-defined validators on the builder.
 func (gmu *GroupMembershipUpdate) check() error {
+	if v, ok := gmu.mutation.Role(); ok {
+		if err := groupmembership.RoleValidator(v); err != nil {
+			return &ValidationError{Name: "role", err: fmt.Errorf(`ent: validator failed for field "GroupMembership.role": %w`, err)}
+		}
+	}
 	if gmu.mutation.UserCleared() && len(gmu.mutation.UserIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "GroupMembership.user"`)
 	}
@@ -133,6 +152,9 @@ func (gmu *GroupMembershipUpdate) sqlSave(ctx context.Context) (n int, err error
 				ps[i](selector)
 			}
 		}
+	}
+	if value, ok := gmu.mutation.Role(); ok {
+		_spec.SetField(groupmembership.FieldRole, field.TypeEnum, value)
 	}
 	if gmu.mutation.UserCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -240,6 +262,20 @@ func (gmuo *GroupMembershipUpdateOne) SetNillableGroupID(i *int) *GroupMembershi
 	return gmuo
 }
 
+// SetRole sets the "role" field.
+func (gmuo *GroupMembershipUpdateOne) SetRole(gr groupmembership.Role) *GroupMembershipUpdateOne {
+	gmuo.mutation.SetRole(gr)
+	return gmuo
+}
+
+// SetNillableRole sets the "role" field if the given value is not nil.
+func (gmuo *GroupMembershipUpdateOne) SetNillableRole(gr *groupmembership.Role) *GroupMembershipUpdateOne {
+	if gr != nil {
+		gmuo.SetRole(*gr)
+	}
+	return gmuo
+}
+
 // SetUser sets the "user" edge to the PlatformUser entity.
 func (gmuo *GroupMembershipUpdateOne) SetUser(p *PlatformUser) *GroupMembershipUpdateOne {
 	return gmuo.SetUserID(p.ID)
@@ -309,6 +345,11 @@ func (gmuo *GroupMembershipUpdateOne) ExecX(ctx context.Context) {
 
 // check runs all checks and user-defined validators on the builder.
 func (gmuo *GroupMembershipUpdateOne) check() error {
+	if v, ok := gmuo.mutation.Role(); ok {
+		if err := groupmembership.RoleValidator(v); err != nil {
+			return &ValidationError{Name: "role", err: fmt.Errorf(`ent: validator failed for field "GroupMembership.role": %w`, err)}
+		}
+	}
 	if gmuo.mutation.UserCleared() && len(gmuo.mutation.UserIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "GroupMembership.user"`)
 	}
@@ -346,6 +387,9 @@ func (gmuo *GroupMembershipUpdateOne) sqlSave(ctx context.Context) (_node *Group
 				ps[i](selector)
 			}
 		}
+	}
+	if value, ok := gmuo.mutation.Role(); ok {
+		_spec.SetField(groupmembership.FieldRole, field.TypeEnum, value)
 	}
 	if gmuo.mutation.UserCleared() {
 		edge := &sqlgraph.EdgeSpec{

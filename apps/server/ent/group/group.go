@@ -26,6 +26,8 @@ const (
 	EdgeMemberships = "memberships"
 	// EdgeGrants holds the string denoting the grants edge name in mutations.
 	EdgeGrants = "grants"
+	// EdgeApprovals holds the string denoting the approvals edge name in mutations.
+	EdgeApprovals = "approvals"
 	// Table holds the table name of the group in the database.
 	Table = "groups"
 	// MembershipsTable is the table that holds the memberships relation/edge.
@@ -42,6 +44,13 @@ const (
 	GrantsInverseTable = "database_grants"
 	// GrantsColumn is the table column denoting the grants relation/edge.
 	GrantsColumn = "group_id"
+	// ApprovalsTable is the table that holds the approvals relation/edge.
+	ApprovalsTable = "migration_approvals"
+	// ApprovalsInverseTable is the table name for the MigrationApproval entity.
+	// It exists in this package in order to avoid circular dependency with the "migrationapproval" package.
+	ApprovalsInverseTable = "migration_approvals"
+	// ApprovalsColumn is the table column denoting the approvals relation/edge.
+	ApprovalsColumn = "group_id"
 )
 
 // Columns holds all SQL columns for group fields.
@@ -131,6 +140,20 @@ func ByGrants(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newGrantsStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
+
+// ByApprovalsCount orders the results by approvals count.
+func ByApprovalsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newApprovalsStep(), opts...)
+	}
+}
+
+// ByApprovals orders the results by approvals terms.
+func ByApprovals(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newApprovalsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
 func newMembershipsStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
@@ -143,5 +166,12 @@ func newGrantsStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(GrantsInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, GrantsTable, GrantsColumn),
+	)
+}
+func newApprovalsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(ApprovalsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, ApprovalsTable, ApprovalsColumn),
 	)
 }

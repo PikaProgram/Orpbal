@@ -5,6 +5,8 @@ package ent
 import (
 	"Orpbal/ent/databaseconnection"
 	"Orpbal/ent/migration"
+	"Orpbal/ent/migrationapproval"
+	"Orpbal/ent/migrationexecution"
 	"Orpbal/ent/platformuser"
 	"Orpbal/ent/predicate"
 	"Orpbal/ent/schemasnapshot"
@@ -27,7 +29,9 @@ type MigrationQuery struct {
 	inters         []Interceptor
 	predicates     []predicate.Migration
 	withConnection *DatabaseConnectionQuery
-	withExecutor   *PlatformUserQuery
+	withAuthor     *PlatformUserQuery
+	withExecutions *MigrationExecutionQuery
+	withApprovals  *MigrationApprovalQuery
 	withSnapshots  *SchemaSnapshotQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
@@ -87,8 +91,8 @@ func (mq *MigrationQuery) QueryConnection() *DatabaseConnectionQuery {
 	return query
 }
 
-// QueryExecutor chains the current query on the "executor" edge.
-func (mq *MigrationQuery) QueryExecutor() *PlatformUserQuery {
+// QueryAuthor chains the current query on the "author" edge.
+func (mq *MigrationQuery) QueryAuthor() *PlatformUserQuery {
 	query := (&PlatformUserClient{config: mq.config}).Query()
 	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
 		if err := mq.prepareQuery(ctx); err != nil {
@@ -101,7 +105,51 @@ func (mq *MigrationQuery) QueryExecutor() *PlatformUserQuery {
 		step := sqlgraph.NewStep(
 			sqlgraph.From(migration.Table, migration.FieldID, selector),
 			sqlgraph.To(platformuser.Table, platformuser.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, false, migration.ExecutorTable, migration.ExecutorColumn),
+			sqlgraph.Edge(sqlgraph.M2O, false, migration.AuthorTable, migration.AuthorColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(mq.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryExecutions chains the current query on the "executions" edge.
+func (mq *MigrationQuery) QueryExecutions() *MigrationExecutionQuery {
+	query := (&MigrationExecutionClient{config: mq.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := mq.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := mq.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(migration.Table, migration.FieldID, selector),
+			sqlgraph.To(migrationexecution.Table, migrationexecution.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, migration.ExecutionsTable, migration.ExecutionsColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(mq.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryApprovals chains the current query on the "approvals" edge.
+func (mq *MigrationQuery) QueryApprovals() *MigrationApprovalQuery {
+	query := (&MigrationApprovalClient{config: mq.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := mq.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := mq.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(migration.Table, migration.FieldID, selector),
+			sqlgraph.To(migrationapproval.Table, migrationapproval.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, migration.ApprovalsTable, migration.ApprovalsColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(mq.driver.Dialect(), step)
 		return fromU, nil
@@ -324,7 +372,9 @@ func (mq *MigrationQuery) Clone() *MigrationQuery {
 		inters:         append([]Interceptor{}, mq.inters...),
 		predicates:     append([]predicate.Migration{}, mq.predicates...),
 		withConnection: mq.withConnection.Clone(),
-		withExecutor:   mq.withExecutor.Clone(),
+		withAuthor:     mq.withAuthor.Clone(),
+		withExecutions: mq.withExecutions.Clone(),
+		withApprovals:  mq.withApprovals.Clone(),
 		withSnapshots:  mq.withSnapshots.Clone(),
 		// clone intermediate query.
 		sql:  mq.sql.Clone(),
@@ -343,14 +393,36 @@ func (mq *MigrationQuery) WithConnection(opts ...func(*DatabaseConnectionQuery))
 	return mq
 }
 
-// WithExecutor tells the query-builder to eager-load the nodes that are connected to
-// the "executor" edge. The optional arguments are used to configure the query builder of the edge.
-func (mq *MigrationQuery) WithExecutor(opts ...func(*PlatformUserQuery)) *MigrationQuery {
+// WithAuthor tells the query-builder to eager-load the nodes that are connected to
+// the "author" edge. The optional arguments are used to configure the query builder of the edge.
+func (mq *MigrationQuery) WithAuthor(opts ...func(*PlatformUserQuery)) *MigrationQuery {
 	query := (&PlatformUserClient{config: mq.config}).Query()
 	for _, opt := range opts {
 		opt(query)
 	}
-	mq.withExecutor = query
+	mq.withAuthor = query
+	return mq
+}
+
+// WithExecutions tells the query-builder to eager-load the nodes that are connected to
+// the "executions" edge. The optional arguments are used to configure the query builder of the edge.
+func (mq *MigrationQuery) WithExecutions(opts ...func(*MigrationExecutionQuery)) *MigrationQuery {
+	query := (&MigrationExecutionClient{config: mq.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	mq.withExecutions = query
+	return mq
+}
+
+// WithApprovals tells the query-builder to eager-load the nodes that are connected to
+// the "approvals" edge. The optional arguments are used to configure the query builder of the edge.
+func (mq *MigrationQuery) WithApprovals(opts ...func(*MigrationApprovalQuery)) *MigrationQuery {
+	query := (&MigrationApprovalClient{config: mq.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	mq.withApprovals = query
 	return mq
 }
 
@@ -443,9 +515,11 @@ func (mq *MigrationQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Mi
 	var (
 		nodes       = []*Migration{}
 		_spec       = mq.querySpec()
-		loadedTypes = [3]bool{
+		loadedTypes = [5]bool{
 			mq.withConnection != nil,
-			mq.withExecutor != nil,
+			mq.withAuthor != nil,
+			mq.withExecutions != nil,
+			mq.withApprovals != nil,
 			mq.withSnapshots != nil,
 		}
 	)
@@ -473,9 +547,23 @@ func (mq *MigrationQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Mi
 			return nil, err
 		}
 	}
-	if query := mq.withExecutor; query != nil {
-		if err := mq.loadExecutor(ctx, query, nodes, nil,
-			func(n *Migration, e *PlatformUser) { n.Edges.Executor = e }); err != nil {
+	if query := mq.withAuthor; query != nil {
+		if err := mq.loadAuthor(ctx, query, nodes, nil,
+			func(n *Migration, e *PlatformUser) { n.Edges.Author = e }); err != nil {
+			return nil, err
+		}
+	}
+	if query := mq.withExecutions; query != nil {
+		if err := mq.loadExecutions(ctx, query, nodes,
+			func(n *Migration) { n.Edges.Executions = []*MigrationExecution{} },
+			func(n *Migration, e *MigrationExecution) { n.Edges.Executions = append(n.Edges.Executions, e) }); err != nil {
+			return nil, err
+		}
+	}
+	if query := mq.withApprovals; query != nil {
+		if err := mq.loadApprovals(ctx, query, nodes,
+			func(n *Migration) { n.Edges.Approvals = []*MigrationApproval{} },
+			func(n *Migration, e *MigrationApproval) { n.Edges.Approvals = append(n.Edges.Approvals, e) }); err != nil {
 			return nil, err
 		}
 	}
@@ -518,11 +606,11 @@ func (mq *MigrationQuery) loadConnection(ctx context.Context, query *DatabaseCon
 	}
 	return nil
 }
-func (mq *MigrationQuery) loadExecutor(ctx context.Context, query *PlatformUserQuery, nodes []*Migration, init func(*Migration), assign func(*Migration, *PlatformUser)) error {
+func (mq *MigrationQuery) loadAuthor(ctx context.Context, query *PlatformUserQuery, nodes []*Migration, init func(*Migration), assign func(*Migration, *PlatformUser)) error {
 	ids := make([]int, 0, len(nodes))
 	nodeids := make(map[int][]*Migration)
 	for i := range nodes {
-		fk := nodes[i].ExecutorID
+		fk := nodes[i].AuthorID
 		if _, ok := nodeids[fk]; !ok {
 			ids = append(ids, fk)
 		}
@@ -539,11 +627,71 @@ func (mq *MigrationQuery) loadExecutor(ctx context.Context, query *PlatformUserQ
 	for _, n := range neighbors {
 		nodes, ok := nodeids[n.ID]
 		if !ok {
-			return fmt.Errorf(`unexpected foreign-key "executor_id" returned %v`, n.ID)
+			return fmt.Errorf(`unexpected foreign-key "author_id" returned %v`, n.ID)
 		}
 		for i := range nodes {
 			assign(nodes[i], n)
 		}
+	}
+	return nil
+}
+func (mq *MigrationQuery) loadExecutions(ctx context.Context, query *MigrationExecutionQuery, nodes []*Migration, init func(*Migration), assign func(*Migration, *MigrationExecution)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int]*Migration)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(migrationexecution.FieldMigrationID)
+	}
+	query.Where(predicate.MigrationExecution(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(migration.ExecutionsColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.MigrationID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "migration_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+func (mq *MigrationQuery) loadApprovals(ctx context.Context, query *MigrationApprovalQuery, nodes []*Migration, init func(*Migration), assign func(*Migration, *MigrationApproval)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int]*Migration)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(migrationapproval.FieldMigrationID)
+	}
+	query.Where(predicate.MigrationApproval(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(migration.ApprovalsColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.MigrationID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "migration_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
 	}
 	return nil
 }
@@ -606,8 +754,8 @@ func (mq *MigrationQuery) querySpec() *sqlgraph.QuerySpec {
 		if mq.withConnection != nil {
 			_spec.Node.AddColumnOnce(migration.FieldConnectionID)
 		}
-		if mq.withExecutor != nil {
-			_spec.Node.AddColumnOnce(migration.FieldExecutorID)
+		if mq.withAuthor != nil {
+			_spec.Node.AddColumnOnce(migration.FieldAuthorID)
 		}
 	}
 	if ps := mq.predicates; len(ps) > 0 {

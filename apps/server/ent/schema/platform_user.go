@@ -41,5 +41,7 @@ func (PlatformUser) Edges() []ent.Edge {
 	return []ent.Edge{
 		edge.To("memberships", GroupMembership.Type),
 		edge.To("sessions", Session.Type),
+		edge.
+			To("approvals", MigrationApproval.Type),
 	}
 }

@@ -18,6 +18,10 @@ func (SchemaSnapshot) Fields() []ent.Field {
 		field.Int("migration_id").
 			Positive().
 			Comment("FK to migration; snapshot pair belongs to one migration"),
+		field.Int("execution_id").
+			Optional().
+			Nillable().
+			Comment("FK to migration_execution; set once the execution exists"),
 		field.Enum("phase").
 			Values("before", "after").
 			Comment("Which side of the execution this snapshot captures"),
@@ -34,11 +38,16 @@ func (SchemaSnapshot) Edges() []ent.Edge {
 			Ref("snapshots").
 			Unique().
 			Required(),
+		edge.
+			From("execution", MigrationExecution.Type).
+			Field("execution_id").
+			Ref("snapshots").
+			Unique(),
 	}
 }
 
 func (SchemaSnapshot) Indexes() []ent.Index {
 	return []ent.Index{
-		index.Fields("migration_id", "phase").Unique(),
+		index.Fields("execution_id", "phase").Unique(),
 	}
 }

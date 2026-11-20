@@ -23,6 +23,8 @@ type GroupMembership struct {
 	UserID int `json:"user_id,omitempty"`
 	// GroupID holds the value of the "group_id" field.
 	GroupID int `json:"group_id,omitempty"`
+	// Leader decides migration approvals for the group
+	Role groupmembership.Role `json:"role,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
@@ -71,6 +73,8 @@ func (*GroupMembership) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case groupmembership.FieldID, groupmembership.FieldUserID, groupmembership.FieldGroupID:
 			values[i] = new(sql.NullInt64)
+		case groupmembership.FieldRole:
+			values[i] = new(sql.NullString)
 		case groupmembership.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
 		default:
@@ -105,6 +109,12 @@ func (gm *GroupMembership) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field group_id", values[i])
 			} else if value.Valid {
 				gm.GroupID = int(value.Int64)
+			}
+		case groupmembership.FieldRole:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field role", values[i])
+			} else if value.Valid {
+				gm.Role = groupmembership.Role(value.String)
 			}
 		case groupmembership.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -163,6 +173,9 @@ func (gm *GroupMembership) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("group_id=")
 	builder.WriteString(fmt.Sprintf("%v", gm.GroupID))
+	builder.WriteString(", ")
+	builder.WriteString("role=")
+	builder.WriteString(fmt.Sprintf("%v", gm.Role))
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
 	builder.WriteString(gm.CreatedAt.Format(time.ANSIC))

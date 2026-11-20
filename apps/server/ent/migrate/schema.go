@@ -82,6 +82,7 @@ var (
 	// GroupMembershipsColumns holds the columns for the "group_memberships" table.
 	GroupMembershipsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "role", Type: field.TypeEnum, Enums: []string{"member", "leader"}, Default: "member"},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "group_id", Type: field.TypeInt},
 		{Name: "user_id", Type: field.TypeInt},
@@ -94,13 +95,13 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "group_memberships_groups_memberships",
-				Columns:    []*schema.Column{GroupMembershipsColumns[2]},
+				Columns:    []*schema.Column{GroupMembershipsColumns[3]},
 				RefColumns: []*schema.Column{GroupsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 			{
 				Symbol:     "group_memberships_platform_users_memberships",
-				Columns:    []*schema.Column{GroupMembershipsColumns[3]},
+				Columns:    []*schema.Column{GroupMembershipsColumns[4]},
 				RefColumns: []*schema.Column{PlatformUsersColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -109,7 +110,7 @@ var (
 			{
 				Name:    "groupmembership_user_id_group_id",
 				Unique:  true,
-				Columns: []*schema.Column{GroupMembershipsColumns[3], GroupMembershipsColumns[2]},
+				Columns: []*schema.Column{GroupMembershipsColumns[4], GroupMembershipsColumns[3]},
 			},
 		},
 	}
@@ -117,11 +118,19 @@ var (
 	MigrationsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
 		{Name: "version", Type: field.TypeInt},
-		{Name: "sql", Type: field.TypeString, Size: 2147483647},
-		{Name: "executed_at", Type: field.TypeTime},
-		{Name: "status", Type: field.TypeEnum, Enums: []string{"pending", "success", "failed"}},
+		{Name: "sql_up", Type: field.TypeString, Size: 2147483647},
+		{Name: "sql_down", Type: field.TypeString, Nullable: true, Size: 2147483647},
+		{Name: "irreversible", Type: field.TypeBool, Default: false},
+		{Name: "irreversible_reason", Type: field.TypeString, Nullable: true},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"draft", "pending_review", "approved", "queued", "running", "success", "failed", "partial", "cancelled"}},
+		{Name: "batch_size", Type: field.TypeInt, Nullable: true},
+		{Name: "cursor_column", Type: field.TypeString, Nullable: true},
+		{Name: "batch_table", Type: field.TypeString, Nullable: true},
+		{Name: "min_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "max_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "template", Type: field.TypeString, Nullable: true, Size: 2147483647},
 		{Name: "connection_id", Type: field.TypeInt},
-		{Name: "executor_id", Type: field.TypeInt},
+		{Name: "author_id", Type: field.TypeInt},
 	}
 	// MigrationsTable holds the schema information for the "migrations" table.
 	MigrationsTable = &schema.Table{
@@ -131,13 +140,13 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "migrations_database_connections_connection",
-				Columns:    []*schema.Column{MigrationsColumns[5]},
+				Columns:    []*schema.Column{MigrationsColumns[13]},
 				RefColumns: []*schema.Column{DatabaseConnectionsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 			{
-				Symbol:     "migrations_platform_users_executor",
-				Columns:    []*schema.Column{MigrationsColumns[6]},
+				Symbol:     "migrations_platform_users_author",
+				Columns:    []*schema.Column{MigrationsColumns[14]},
 				RefColumns: []*schema.Column{PlatformUsersColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -146,7 +155,144 @@ var (
 			{
 				Name:    "migration_connection_id_version",
 				Unique:  true,
-				Columns: []*schema.Column{MigrationsColumns[5], MigrationsColumns[1]},
+				Columns: []*schema.Column{MigrationsColumns[13], MigrationsColumns[1]},
+			},
+		},
+	}
+	// MigrationApprovalsColumns holds the columns for the "migration_approvals" table.
+	MigrationApprovalsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"pending", "approved", "rejected"}, Default: "pending"},
+		{Name: "decided_by_id", Type: field.TypeInt, Nullable: true},
+		{Name: "comment", Type: field.TypeString, Nullable: true, Size: 2147483647},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "decided_at", Type: field.TypeTime, Nullable: true},
+		{Name: "group_id", Type: field.TypeInt},
+		{Name: "migration_id", Type: field.TypeInt},
+		{Name: "leader_id", Type: field.TypeInt},
+	}
+	// MigrationApprovalsTable holds the schema information for the "migration_approvals" table.
+	MigrationApprovalsTable = &schema.Table{
+		Name:       "migration_approvals",
+		Columns:    MigrationApprovalsColumns,
+		PrimaryKey: []*schema.Column{MigrationApprovalsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "migration_approvals_groups_approvals",
+				Columns:    []*schema.Column{MigrationApprovalsColumns[6]},
+				RefColumns: []*schema.Column{GroupsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+			{
+				Symbol:     "migration_approvals_migrations_approvals",
+				Columns:    []*schema.Column{MigrationApprovalsColumns[7]},
+				RefColumns: []*schema.Column{MigrationsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+			{
+				Symbol:     "migration_approvals_platform_users_approvals",
+				Columns:    []*schema.Column{MigrationApprovalsColumns[8]},
+				RefColumns: []*schema.Column{PlatformUsersColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "migrationapproval_migration_id_group_id",
+				Unique:  true,
+				Columns: []*schema.Column{MigrationApprovalsColumns[7], MigrationApprovalsColumns[6]},
+			},
+		},
+	}
+	// MigrationExecutionsColumns holds the columns for the "migration_executions" table.
+	MigrationExecutionsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "connection_id", Type: field.TypeInt},
+		{Name: "kind", Type: field.TypeEnum, Enums: []string{"up", "rollback", "forward", "retry", "batch_revert"}},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"draft", "pending_review", "approved", "queued", "running", "success", "failed", "partial", "cancelled"}},
+		{Name: "sql_executed", Type: field.TypeString, Nullable: true, Size: 2147483647},
+		{Name: "sql_down_executed", Type: field.TypeString, Nullable: true, Size: 2147483647},
+		{Name: "error", Type: field.TypeString, Nullable: true, Size: 2147483647},
+		{Name: "batch_cursor", Type: field.TypeInt64, Nullable: true},
+		{Name: "batches_done", Type: field.TypeInt, Default: 0},
+		{Name: "rows_done", Type: field.TypeInt64, Default: 0},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "finished_at", Type: field.TypeTime, Nullable: true},
+		{Name: "migration_id", Type: field.TypeInt},
+		{Name: "actor_id", Type: field.TypeInt},
+		{Name: "reverted_execution_id", Type: field.TypeInt, Unique: true, Nullable: true},
+	}
+	// MigrationExecutionsTable holds the schema information for the "migration_executions" table.
+	MigrationExecutionsTable = &schema.Table{
+		Name:       "migration_executions",
+		Columns:    MigrationExecutionsColumns,
+		PrimaryKey: []*schema.Column{MigrationExecutionsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "migration_executions_migrations_executions",
+				Columns:    []*schema.Column{MigrationExecutionsColumns[12]},
+				RefColumns: []*schema.Column{MigrationsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+			{
+				Symbol:     "migration_executions_platform_users_actor",
+				Columns:    []*schema.Column{MigrationExecutionsColumns[13]},
+				RefColumns: []*schema.Column{PlatformUsersColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+			{
+				Symbol:     "migration_executions_migration_executions_reverted",
+				Columns:    []*schema.Column{MigrationExecutionsColumns[14]},
+				RefColumns: []*schema.Column{MigrationExecutionsColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "migrationexecution_migration_id_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{MigrationExecutionsColumns[12], MigrationExecutionsColumns[10]},
+			},
+		},
+	}
+	// MigrationJobsColumns holds the columns for the "migration_jobs" table.
+	MigrationJobsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "connection_id", Type: field.TypeInt},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"queued", "running", "success", "failed", "cancelled", "cancelling", "partial"}, Default: "queued"},
+		{Name: "attempts", Type: field.TypeInt, Default: 0},
+		{Name: "traceparent", Type: field.TypeString, Nullable: true},
+		{Name: "locked_by", Type: field.TypeString, Nullable: true},
+		{Name: "locked_at", Type: field.TypeTime, Nullable: true},
+		{Name: "heartbeat_at", Type: field.TypeTime, Nullable: true},
+		{Name: "claimed_at", Type: field.TypeTime, Nullable: true},
+		{Name: "error", Type: field.TypeString, Nullable: true, Size: 2147483647},
+		{Name: "batch_cursor", Type: field.TypeInt64, Nullable: true},
+		{Name: "batches_done", Type: field.TypeInt, Default: 0},
+		{Name: "rows_done", Type: field.TypeInt64, Default: 0},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "started_at", Type: field.TypeTime, Nullable: true},
+		{Name: "finished_at", Type: field.TypeTime, Nullable: true},
+		{Name: "execution_id", Type: field.TypeInt},
+	}
+	// MigrationJobsTable holds the schema information for the "migration_jobs" table.
+	MigrationJobsTable = &schema.Table{
+		Name:       "migration_jobs",
+		Columns:    MigrationJobsColumns,
+		PrimaryKey: []*schema.Column{MigrationJobsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "migration_jobs_migration_executions_jobs",
+				Columns:    []*schema.Column{MigrationJobsColumns[16]},
+				RefColumns: []*schema.Column{MigrationExecutionsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "migrationjob_status_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{MigrationJobsColumns[2], MigrationJobsColumns[13]},
 			},
 		},
 	}
@@ -172,6 +318,7 @@ var (
 		{Name: "phase", Type: field.TypeEnum, Enums: []string{"before", "after"}},
 		{Name: "json", Type: field.TypeString, Size: 2147483647},
 		{Name: "migration_id", Type: field.TypeInt},
+		{Name: "execution_id", Type: field.TypeInt, Nullable: true},
 	}
 	// SchemaSnapshotsTable holds the schema information for the "schema_snapshots" table.
 	SchemaSnapshotsTable = &schema.Table{
@@ -185,12 +332,18 @@ var (
 				RefColumns: []*schema.Column{MigrationsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
+			{
+				Symbol:     "schema_snapshots_migration_executions_snapshots",
+				Columns:    []*schema.Column{SchemaSnapshotsColumns[4]},
+				RefColumns: []*schema.Column{MigrationExecutionsColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
 		},
 		Indexes: []*schema.Index{
 			{
-				Name:    "schemasnapshot_migration_id_phase",
+				Name:    "schemasnapshot_execution_id_phase",
 				Unique:  true,
-				Columns: []*schema.Column{SchemaSnapshotsColumns[3], SchemaSnapshotsColumns[1]},
+				Columns: []*schema.Column{SchemaSnapshotsColumns[4], SchemaSnapshotsColumns[1]},
 			},
 		},
 	}
@@ -241,6 +394,9 @@ var (
 		GroupsTable,
 		GroupMembershipsTable,
 		MigrationsTable,
+		MigrationApprovalsTable,
+		MigrationExecutionsTable,
+		MigrationJobsTable,
 		PlatformUsersTable,
 		SchemaSnapshotsTable,
 		SessionsTable,
@@ -254,6 +410,14 @@ func init() {
 	GroupMembershipsTable.ForeignKeys[1].RefTable = PlatformUsersTable
 	MigrationsTable.ForeignKeys[0].RefTable = DatabaseConnectionsTable
 	MigrationsTable.ForeignKeys[1].RefTable = PlatformUsersTable
+	MigrationApprovalsTable.ForeignKeys[0].RefTable = GroupsTable
+	MigrationApprovalsTable.ForeignKeys[1].RefTable = MigrationsTable
+	MigrationApprovalsTable.ForeignKeys[2].RefTable = PlatformUsersTable
+	MigrationExecutionsTable.ForeignKeys[0].RefTable = MigrationsTable
+	MigrationExecutionsTable.ForeignKeys[1].RefTable = PlatformUsersTable
+	MigrationExecutionsTable.ForeignKeys[2].RefTable = MigrationExecutionsTable
+	MigrationJobsTable.ForeignKeys[0].RefTable = MigrationExecutionsTable
 	SchemaSnapshotsTable.ForeignKeys[0].RefTable = MigrationsTable
+	SchemaSnapshotsTable.ForeignKeys[1].RefTable = MigrationExecutionsTable
 	SessionsTable.ForeignKeys[0].RefTable = PlatformUsersTable
 }

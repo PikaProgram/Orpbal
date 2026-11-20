@@ -8,7 +8,8 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/server ./cmd/server
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/server ./cmd/server \
+    && CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/worker ./cmd/worker
 
 FROM alpine:3.20 AS app
 
@@ -18,6 +19,7 @@ RUN apk add --no-cache ca-certificates \
     && adduser -D -H -u 10001 app
 
 COPY --from=builder /out/server /app/server
+COPY --from=builder /out/worker /app/worker
 
 ENV HOST=0.0.0.0 \
     PORT=8080

@@ -361,6 +361,29 @@ func HasSessionsWith(preds ...predicate.Session) predicate.PlatformUser {
 	})
 }
 
+// HasApprovals applies the HasEdge predicate on the "approvals" edge.
+func HasApprovals() predicate.PlatformUser {
+	return predicate.PlatformUser(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, ApprovalsTable, ApprovalsColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasApprovalsWith applies the HasEdge predicate on the "approvals" edge with a given conditions (other predicates).
+func HasApprovalsWith(preds ...predicate.MigrationApproval) predicate.PlatformUser {
+	return predicate.PlatformUser(func(s *sql.Selector) {
+		step := newApprovalsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
 // And groups predicates with the AND operator between them.
 func And(predicates ...predicate.PlatformUser) predicate.PlatformUser {
 	return predicate.PlatformUser(sql.AndPredicates(predicates...))

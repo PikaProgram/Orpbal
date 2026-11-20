@@ -8,6 +8,9 @@ import (
 	"Orpbal/ent/group"
 	"Orpbal/ent/groupmembership"
 	"Orpbal/ent/migration"
+	"Orpbal/ent/migrationapproval"
+	"Orpbal/ent/migrationexecution"
+	"Orpbal/ent/migrationjob"
 	"Orpbal/ent/platformuser"
 	"Orpbal/ent/schema"
 	"Orpbal/ent/schemasnapshot"
@@ -92,7 +95,7 @@ func init() {
 	groupmembershipFields := schema.GroupMembership{}.Fields()
 	_ = groupmembershipFields
 	// groupmembershipDescCreatedAt is the schema descriptor for created_at field.
-	groupmembershipDescCreatedAt := groupmembershipFields[2].Descriptor()
+	groupmembershipDescCreatedAt := groupmembershipFields[3].Descriptor()
 	// groupmembership.DefaultCreatedAt holds the default value on creation for the created_at field.
 	groupmembership.DefaultCreatedAt = groupmembershipDescCreatedAt.Default.(func() time.Time)
 	migrationFields := schema.Migration{}.Fields()
@@ -105,14 +108,88 @@ func init() {
 	migrationDescVersion := migrationFields[1].Descriptor()
 	// migration.VersionValidator is a validator for the "version" field. It is called by the builders before save.
 	migration.VersionValidator = migrationDescVersion.Validators[0].(func(int) error)
-	// migrationDescExecutorID is the schema descriptor for executor_id field.
-	migrationDescExecutorID := migrationFields[3].Descriptor()
-	// migration.ExecutorIDValidator is a validator for the "executor_id" field. It is called by the builders before save.
-	migration.ExecutorIDValidator = migrationDescExecutorID.Validators[0].(func(int) error)
-	// migrationDescExecutedAt is the schema descriptor for executed_at field.
-	migrationDescExecutedAt := migrationFields[4].Descriptor()
-	// migration.DefaultExecutedAt holds the default value on creation for the executed_at field.
-	migration.DefaultExecutedAt = migrationDescExecutedAt.Default.(func() time.Time)
+	// migrationDescIrreversible is the schema descriptor for irreversible field.
+	migrationDescIrreversible := migrationFields[4].Descriptor()
+	// migration.DefaultIrreversible holds the default value on creation for the irreversible field.
+	migration.DefaultIrreversible = migrationDescIrreversible.Default.(bool)
+	// migrationDescAuthorID is the schema descriptor for author_id field.
+	migrationDescAuthorID := migrationFields[7].Descriptor()
+	// migration.AuthorIDValidator is a validator for the "author_id" field. It is called by the builders before save.
+	migration.AuthorIDValidator = migrationDescAuthorID.Validators[0].(func(int) error)
+	// migrationDescBatchSize is the schema descriptor for batch_size field.
+	migrationDescBatchSize := migrationFields[8].Descriptor()
+	// migration.BatchSizeValidator is a validator for the "batch_size" field. It is called by the builders before save.
+	migration.BatchSizeValidator = migrationDescBatchSize.Validators[0].(func(int) error)
+	migrationapprovalFields := schema.MigrationApproval{}.Fields()
+	_ = migrationapprovalFields
+	// migrationapprovalDescMigrationID is the schema descriptor for migration_id field.
+	migrationapprovalDescMigrationID := migrationapprovalFields[0].Descriptor()
+	// migrationapproval.MigrationIDValidator is a validator for the "migration_id" field. It is called by the builders before save.
+	migrationapproval.MigrationIDValidator = migrationapprovalDescMigrationID.Validators[0].(func(int) error)
+	// migrationapprovalDescGroupID is the schema descriptor for group_id field.
+	migrationapprovalDescGroupID := migrationapprovalFields[1].Descriptor()
+	// migrationapproval.GroupIDValidator is a validator for the "group_id" field. It is called by the builders before save.
+	migrationapproval.GroupIDValidator = migrationapprovalDescGroupID.Validators[0].(func(int) error)
+	// migrationapprovalDescLeaderID is the schema descriptor for leader_id field.
+	migrationapprovalDescLeaderID := migrationapprovalFields[2].Descriptor()
+	// migrationapproval.LeaderIDValidator is a validator for the "leader_id" field. It is called by the builders before save.
+	migrationapproval.LeaderIDValidator = migrationapprovalDescLeaderID.Validators[0].(func(int) error)
+	// migrationapprovalDescCreatedAt is the schema descriptor for created_at field.
+	migrationapprovalDescCreatedAt := migrationapprovalFields[6].Descriptor()
+	// migrationapproval.DefaultCreatedAt holds the default value on creation for the created_at field.
+	migrationapproval.DefaultCreatedAt = migrationapprovalDescCreatedAt.Default.(func() time.Time)
+	migrationexecutionFields := schema.MigrationExecution{}.Fields()
+	_ = migrationexecutionFields
+	// migrationexecutionDescMigrationID is the schema descriptor for migration_id field.
+	migrationexecutionDescMigrationID := migrationexecutionFields[0].Descriptor()
+	// migrationexecution.MigrationIDValidator is a validator for the "migration_id" field. It is called by the builders before save.
+	migrationexecution.MigrationIDValidator = migrationexecutionDescMigrationID.Validators[0].(func(int) error)
+	// migrationexecutionDescConnectionID is the schema descriptor for connection_id field.
+	migrationexecutionDescConnectionID := migrationexecutionFields[1].Descriptor()
+	// migrationexecution.ConnectionIDValidator is a validator for the "connection_id" field. It is called by the builders before save.
+	migrationexecution.ConnectionIDValidator = migrationexecutionDescConnectionID.Validators[0].(func(int) error)
+	// migrationexecutionDescActorID is the schema descriptor for actor_id field.
+	migrationexecutionDescActorID := migrationexecutionFields[8].Descriptor()
+	// migrationexecution.ActorIDValidator is a validator for the "actor_id" field. It is called by the builders before save.
+	migrationexecution.ActorIDValidator = migrationexecutionDescActorID.Validators[0].(func(int) error)
+	// migrationexecutionDescBatchesDone is the schema descriptor for batches_done field.
+	migrationexecutionDescBatchesDone := migrationexecutionFields[10].Descriptor()
+	// migrationexecution.DefaultBatchesDone holds the default value on creation for the batches_done field.
+	migrationexecution.DefaultBatchesDone = migrationexecutionDescBatchesDone.Default.(int)
+	// migrationexecutionDescRowsDone is the schema descriptor for rows_done field.
+	migrationexecutionDescRowsDone := migrationexecutionFields[11].Descriptor()
+	// migrationexecution.DefaultRowsDone holds the default value on creation for the rows_done field.
+	migrationexecution.DefaultRowsDone = migrationexecutionDescRowsDone.Default.(int64)
+	// migrationexecutionDescCreatedAt is the schema descriptor for created_at field.
+	migrationexecutionDescCreatedAt := migrationexecutionFields[12].Descriptor()
+	// migrationexecution.DefaultCreatedAt holds the default value on creation for the created_at field.
+	migrationexecution.DefaultCreatedAt = migrationexecutionDescCreatedAt.Default.(func() time.Time)
+	migrationjobFields := schema.MigrationJob{}.Fields()
+	_ = migrationjobFields
+	// migrationjobDescExecutionID is the schema descriptor for execution_id field.
+	migrationjobDescExecutionID := migrationjobFields[0].Descriptor()
+	// migrationjob.ExecutionIDValidator is a validator for the "execution_id" field. It is called by the builders before save.
+	migrationjob.ExecutionIDValidator = migrationjobDescExecutionID.Validators[0].(func(int) error)
+	// migrationjobDescConnectionID is the schema descriptor for connection_id field.
+	migrationjobDescConnectionID := migrationjobFields[1].Descriptor()
+	// migrationjob.ConnectionIDValidator is a validator for the "connection_id" field. It is called by the builders before save.
+	migrationjob.ConnectionIDValidator = migrationjobDescConnectionID.Validators[0].(func(int) error)
+	// migrationjobDescAttempts is the schema descriptor for attempts field.
+	migrationjobDescAttempts := migrationjobFields[3].Descriptor()
+	// migrationjob.DefaultAttempts holds the default value on creation for the attempts field.
+	migrationjob.DefaultAttempts = migrationjobDescAttempts.Default.(int)
+	// migrationjobDescBatchesDone is the schema descriptor for batches_done field.
+	migrationjobDescBatchesDone := migrationjobFields[11].Descriptor()
+	// migrationjob.DefaultBatchesDone holds the default value on creation for the batches_done field.
+	migrationjob.DefaultBatchesDone = migrationjobDescBatchesDone.Default.(int)
+	// migrationjobDescRowsDone is the schema descriptor for rows_done field.
+	migrationjobDescRowsDone := migrationjobFields[12].Descriptor()
+	// migrationjob.DefaultRowsDone holds the default value on creation for the rows_done field.
+	migrationjob.DefaultRowsDone = migrationjobDescRowsDone.Default.(int64)
+	// migrationjobDescCreatedAt is the schema descriptor for created_at field.
+	migrationjobDescCreatedAt := migrationjobFields[13].Descriptor()
+	// migrationjob.DefaultCreatedAt holds the default value on creation for the created_at field.
+	migrationjob.DefaultCreatedAt = migrationjobDescCreatedAt.Default.(func() time.Time)
 	platformuserFields := schema.PlatformUser{}.Fields()
 	_ = platformuserFields
 	// platformuserDescUsername is the schema descriptor for username field.

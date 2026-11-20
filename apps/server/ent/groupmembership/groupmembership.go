@@ -3,6 +3,7 @@
 package groupmembership
 
 import (
+	"fmt"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
@@ -18,6 +19,8 @@ const (
 	FieldUserID = "user_id"
 	// FieldGroupID holds the string denoting the group_id field in the database.
 	FieldGroupID = "group_id"
+	// FieldRole holds the string denoting the role field in the database.
+	FieldRole = "role"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
 	// EdgeUser holds the string denoting the user edge name in mutations.
@@ -47,6 +50,7 @@ var Columns = []string{
 	FieldID,
 	FieldUserID,
 	FieldGroupID,
+	FieldRole,
 	FieldCreatedAt,
 }
 
@@ -65,6 +69,32 @@ var (
 	DefaultCreatedAt func() time.Time
 )
 
+// Role defines the type for the "role" enum field.
+type Role string
+
+// RoleMember is the default value of the Role enum.
+const DefaultRole = RoleMember
+
+// Role values.
+const (
+	RoleMember Role = "member"
+	RoleLeader Role = "leader"
+)
+
+func (r Role) String() string {
+	return string(r)
+}
+
+// RoleValidator is a validator for the "role" field enum values. It is called by the builders before save.
+func RoleValidator(r Role) error {
+	switch r {
+	case RoleMember, RoleLeader:
+		return nil
+	default:
+		return fmt.Errorf("groupmembership: invalid enum value for role field: %q", r)
+	}
+}
+
 // OrderOption defines the ordering options for the GroupMembership queries.
 type OrderOption func(*sql.Selector)
 
@@ -81,6 +111,11 @@ func ByUserID(opts ...sql.OrderTermOption) OrderOption {
 // ByGroupID orders the results by the group_id field.
 func ByGroupID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldGroupID, opts...).ToFunc()
+}
+
+// ByRole orders the results by the role field.
+func ByRole(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRole, opts...).ToFunc()
 }
 
 // ByCreatedAt orders the results by the created_at field.

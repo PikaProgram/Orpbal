@@ -4,6 +4,7 @@ package ent
 
 import (
 	"Orpbal/ent/migration"
+	"Orpbal/ent/migrationexecution"
 	"Orpbal/ent/schemasnapshot"
 	"context"
 	"errors"
@@ -26,6 +27,20 @@ func (ssc *SchemaSnapshotCreate) SetMigrationID(i int) *SchemaSnapshotCreate {
 	return ssc
 }
 
+// SetExecutionID sets the "execution_id" field.
+func (ssc *SchemaSnapshotCreate) SetExecutionID(i int) *SchemaSnapshotCreate {
+	ssc.mutation.SetExecutionID(i)
+	return ssc
+}
+
+// SetNillableExecutionID sets the "execution_id" field if the given value is not nil.
+func (ssc *SchemaSnapshotCreate) SetNillableExecutionID(i *int) *SchemaSnapshotCreate {
+	if i != nil {
+		ssc.SetExecutionID(*i)
+	}
+	return ssc
+}
+
 // SetPhase sets the "phase" field.
 func (ssc *SchemaSnapshotCreate) SetPhase(s schemasnapshot.Phase) *SchemaSnapshotCreate {
 	ssc.mutation.SetPhase(s)
@@ -41,6 +56,11 @@ func (ssc *SchemaSnapshotCreate) SetJSON(s string) *SchemaSnapshotCreate {
 // SetMigration sets the "migration" edge to the Migration entity.
 func (ssc *SchemaSnapshotCreate) SetMigration(m *Migration) *SchemaSnapshotCreate {
 	return ssc.SetMigrationID(m.ID)
+}
+
+// SetExecution sets the "execution" edge to the MigrationExecution entity.
+func (ssc *SchemaSnapshotCreate) SetExecution(m *MigrationExecution) *SchemaSnapshotCreate {
+	return ssc.SetExecutionID(m.ID)
 }
 
 // Mutation returns the SchemaSnapshotMutation object of the builder.
@@ -148,6 +168,23 @@ func (ssc *SchemaSnapshotCreate) createSpec() (*SchemaSnapshot, *sqlgraph.Create
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
 		_node.MigrationID = nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := ssc.mutation.ExecutionIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   schemasnapshot.ExecutionTable,
+			Columns: []string{schemasnapshot.ExecutionColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(migrationexecution.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_node.ExecutionID = &nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec

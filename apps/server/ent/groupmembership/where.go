@@ -110,6 +110,26 @@ func GroupIDNotIn(vs ...int) predicate.GroupMembership {
 	return predicate.GroupMembership(sql.FieldNotIn(FieldGroupID, vs...))
 }
 
+// RoleEQ applies the EQ predicate on the "role" field.
+func RoleEQ(v Role) predicate.GroupMembership {
+	return predicate.GroupMembership(sql.FieldEQ(FieldRole, v))
+}
+
+// RoleNEQ applies the NEQ predicate on the "role" field.
+func RoleNEQ(v Role) predicate.GroupMembership {
+	return predicate.GroupMembership(sql.FieldNEQ(FieldRole, v))
+}
+
+// RoleIn applies the In predicate on the "role" field.
+func RoleIn(vs ...Role) predicate.GroupMembership {
+	return predicate.GroupMembership(sql.FieldIn(FieldRole, vs...))
+}
+
+// RoleNotIn applies the NotIn predicate on the "role" field.
+func RoleNotIn(vs ...Role) predicate.GroupMembership {
+	return predicate.GroupMembership(sql.FieldNotIn(FieldRole, vs...))
+}
+
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.
 func CreatedAtEQ(v time.Time) predicate.GroupMembership {
 	return predicate.GroupMembership(sql.FieldEQ(FieldCreatedAt, v))

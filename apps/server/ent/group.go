@@ -37,9 +37,11 @@ type GroupEdges struct {
 	Memberships []*GroupMembership `json:"memberships,omitempty"`
 	// Grants holds the value of the grants edge.
 	Grants []*DatabaseGrant `json:"grants,omitempty"`
+	// Approvals holds the value of the approvals edge.
+	Approvals []*MigrationApproval `json:"approvals,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [2]bool
+	loadedTypes [3]bool
 }
 
 // MembershipsOrErr returns the Memberships value or an error if the edge
@@ -58,6 +60,15 @@ func (e GroupEdges) GrantsOrErr() ([]*DatabaseGrant, error) {
 		return e.Grants, nil
 	}
 	return nil, &NotLoadedError{edge: "grants"}
+}
+
+// ApprovalsOrErr returns the Approvals value or an error if the edge
+// was not loaded in eager-loading.
+func (e GroupEdges) ApprovalsOrErr() ([]*MigrationApproval, error) {
+	if e.loadedTypes[2] {
+		return e.Approvals, nil
+	}
+	return nil, &NotLoadedError{edge: "approvals"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -137,6 +148,11 @@ func (gr *Group) QueryMemberships() *GroupMembershipQuery {
 // QueryGrants queries the "grants" edge of the Group entity.
 func (gr *Group) QueryGrants() *DatabaseGrantQuery {
 	return NewGroupClient(gr.config).QueryGrants(gr)
+}
+
+// QueryApprovals queries the "approvals" edge of the Group entity.
+func (gr *Group) QueryApprovals() *MigrationApprovalQuery {
+	return NewGroupClient(gr.config).QueryApprovals(gr)
 }
 
 // Update returns a builder for updating this Group.

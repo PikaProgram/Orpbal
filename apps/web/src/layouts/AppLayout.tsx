@@ -14,6 +14,7 @@ export function AppLayout() {
 	const links = user
 		? [
 				{ to: "/databases", label: "Databases" },
+				{ to: "/approvals", label: "Approvals" },
 				...(user.is_platform_admin
 					? [
 							{ to: "/admin/users", label: "Users" },

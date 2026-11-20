@@ -4,7 +4,6 @@ package migration
 
 import (
 	"Orpbal/ent/predicate"
-	"time"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
@@ -65,19 +64,59 @@ func Version(v int) predicate.Migration {
 	return predicate.Migration(sql.FieldEQ(FieldVersion, v))
 }
 
-// SQL applies equality check predicate on the "sql" field. It's identical to SQLEQ.
-func SQL(v string) predicate.Migration {
-	return predicate.Migration(sql.FieldEQ(FieldSQL, v))
+// SQLUp applies equality check predicate on the "sql_up" field. It's identical to SQLUpEQ.
+func SQLUp(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldEQ(FieldSQLUp, v))
 }
 
-// ExecutorID applies equality check predicate on the "executor_id" field. It's identical to ExecutorIDEQ.
-func ExecutorID(v int) predicate.Migration {
-	return predicate.Migration(sql.FieldEQ(FieldExecutorID, v))
+// SQLDown applies equality check predicate on the "sql_down" field. It's identical to SQLDownEQ.
+func SQLDown(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldEQ(FieldSQLDown, v))
 }
 
-// ExecutedAt applies equality check predicate on the "executed_at" field. It's identical to ExecutedAtEQ.
-func ExecutedAt(v time.Time) predicate.Migration {
-	return predicate.Migration(sql.FieldEQ(FieldExecutedAt, v))
+// Irreversible applies equality check predicate on the "irreversible" field. It's identical to IrreversibleEQ.
+func Irreversible(v bool) predicate.Migration {
+	return predicate.Migration(sql.FieldEQ(FieldIrreversible, v))
+}
+
+// IrreversibleReason applies equality check predicate on the "irreversible_reason" field. It's identical to IrreversibleReasonEQ.
+func IrreversibleReason(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldEQ(FieldIrreversibleReason, v))
+}
+
+// AuthorID applies equality check predicate on the "author_id" field. It's identical to AuthorIDEQ.
+func AuthorID(v int) predicate.Migration {
+	return predicate.Migration(sql.FieldEQ(FieldAuthorID, v))
+}
+
+// BatchSize applies equality check predicate on the "batch_size" field. It's identical to BatchSizeEQ.
+func BatchSize(v int) predicate.Migration {
+	return predicate.Migration(sql.FieldEQ(FieldBatchSize, v))
+}
+
+// CursorColumn applies equality check predicate on the "cursor_column" field. It's identical to CursorColumnEQ.
+func CursorColumn(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldEQ(FieldCursorColumn, v))
+}
+
+// BatchTable applies equality check predicate on the "batch_table" field. It's identical to BatchTableEQ.
+func BatchTable(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldEQ(FieldBatchTable, v))
+}
+
+// MinID applies equality check predicate on the "min_id" field. It's identical to MinIDEQ.
+func MinID(v int64) predicate.Migration {
+	return predicate.Migration(sql.FieldEQ(FieldMinID, v))
+}
+
+// MaxID applies equality check predicate on the "max_id" field. It's identical to MaxIDEQ.
+func MaxID(v int64) predicate.Migration {
+	return predicate.Migration(sql.FieldEQ(FieldMaxID, v))
+}
+
+// Template applies equality check predicate on the "template" field. It's identical to TemplateEQ.
+func Template(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldEQ(FieldTemplate, v))
 }
 
 // ConnectionIDEQ applies the EQ predicate on the "connection_id" field.
@@ -140,129 +179,229 @@ func VersionLTE(v int) predicate.Migration {
 	return predicate.Migration(sql.FieldLTE(FieldVersion, v))
 }
 
-// SQLEQ applies the EQ predicate on the "sql" field.
-func SQLEQ(v string) predicate.Migration {
-	return predicate.Migration(sql.FieldEQ(FieldSQL, v))
+// SQLUpEQ applies the EQ predicate on the "sql_up" field.
+func SQLUpEQ(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldEQ(FieldSQLUp, v))
 }
 
-// SQLNEQ applies the NEQ predicate on the "sql" field.
-func SQLNEQ(v string) predicate.Migration {
-	return predicate.Migration(sql.FieldNEQ(FieldSQL, v))
+// SQLUpNEQ applies the NEQ predicate on the "sql_up" field.
+func SQLUpNEQ(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldNEQ(FieldSQLUp, v))
 }
 
-// SQLIn applies the In predicate on the "sql" field.
-func SQLIn(vs ...string) predicate.Migration {
-	return predicate.Migration(sql.FieldIn(FieldSQL, vs...))
+// SQLUpIn applies the In predicate on the "sql_up" field.
+func SQLUpIn(vs ...string) predicate.Migration {
+	return predicate.Migration(sql.FieldIn(FieldSQLUp, vs...))
 }
 
-// SQLNotIn applies the NotIn predicate on the "sql" field.
-func SQLNotIn(vs ...string) predicate.Migration {
-	return predicate.Migration(sql.FieldNotIn(FieldSQL, vs...))
+// SQLUpNotIn applies the NotIn predicate on the "sql_up" field.
+func SQLUpNotIn(vs ...string) predicate.Migration {
+	return predicate.Migration(sql.FieldNotIn(FieldSQLUp, vs...))
 }
 
-// SQLGT applies the GT predicate on the "sql" field.
-func SQLGT(v string) predicate.Migration {
-	return predicate.Migration(sql.FieldGT(FieldSQL, v))
+// SQLUpGT applies the GT predicate on the "sql_up" field.
+func SQLUpGT(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldGT(FieldSQLUp, v))
 }
 
-// SQLGTE applies the GTE predicate on the "sql" field.
-func SQLGTE(v string) predicate.Migration {
-	return predicate.Migration(sql.FieldGTE(FieldSQL, v))
+// SQLUpGTE applies the GTE predicate on the "sql_up" field.
+func SQLUpGTE(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldGTE(FieldSQLUp, v))
 }
 
-// SQLLT applies the LT predicate on the "sql" field.
-func SQLLT(v string) predicate.Migration {
-	return predicate.Migration(sql.FieldLT(FieldSQL, v))
+// SQLUpLT applies the LT predicate on the "sql_up" field.
+func SQLUpLT(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldLT(FieldSQLUp, v))
 }
 
-// SQLLTE applies the LTE predicate on the "sql" field.
-func SQLLTE(v string) predicate.Migration {
-	return predicate.Migration(sql.FieldLTE(FieldSQL, v))
+// SQLUpLTE applies the LTE predicate on the "sql_up" field.
+func SQLUpLTE(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldLTE(FieldSQLUp, v))
 }
 
-// SQLContains applies the Contains predicate on the "sql" field.
-func SQLContains(v string) predicate.Migration {
-	return predicate.Migration(sql.FieldContains(FieldSQL, v))
+// SQLUpContains applies the Contains predicate on the "sql_up" field.
+func SQLUpContains(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldContains(FieldSQLUp, v))
 }
 
-// SQLHasPrefix applies the HasPrefix predicate on the "sql" field.
-func SQLHasPrefix(v string) predicate.Migration {
-	return predicate.Migration(sql.FieldHasPrefix(FieldSQL, v))
+// SQLUpHasPrefix applies the HasPrefix predicate on the "sql_up" field.
+func SQLUpHasPrefix(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldHasPrefix(FieldSQLUp, v))
 }
 
-// SQLHasSuffix applies the HasSuffix predicate on the "sql" field.
-func SQLHasSuffix(v string) predicate.Migration {
-	return predicate.Migration(sql.FieldHasSuffix(FieldSQL, v))
+// SQLUpHasSuffix applies the HasSuffix predicate on the "sql_up" field.
+func SQLUpHasSuffix(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldHasSuffix(FieldSQLUp, v))
 }
 
-// SQLEqualFold applies the EqualFold predicate on the "sql" field.
-func SQLEqualFold(v string) predicate.Migration {
-	return predicate.Migration(sql.FieldEqualFold(FieldSQL, v))
+// SQLUpEqualFold applies the EqualFold predicate on the "sql_up" field.
+func SQLUpEqualFold(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldEqualFold(FieldSQLUp, v))
 }
 
-// SQLContainsFold applies the ContainsFold predicate on the "sql" field.
-func SQLContainsFold(v string) predicate.Migration {
-	return predicate.Migration(sql.FieldContainsFold(FieldSQL, v))
+// SQLUpContainsFold applies the ContainsFold predicate on the "sql_up" field.
+func SQLUpContainsFold(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldContainsFold(FieldSQLUp, v))
 }
 
-// ExecutorIDEQ applies the EQ predicate on the "executor_id" field.
-func ExecutorIDEQ(v int) predicate.Migration {
-	return predicate.Migration(sql.FieldEQ(FieldExecutorID, v))
+// SQLDownEQ applies the EQ predicate on the "sql_down" field.
+func SQLDownEQ(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldEQ(FieldSQLDown, v))
 }
 
-// ExecutorIDNEQ applies the NEQ predicate on the "executor_id" field.
-func ExecutorIDNEQ(v int) predicate.Migration {
-	return predicate.Migration(sql.FieldNEQ(FieldExecutorID, v))
+// SQLDownNEQ applies the NEQ predicate on the "sql_down" field.
+func SQLDownNEQ(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldNEQ(FieldSQLDown, v))
 }
 
-// ExecutorIDIn applies the In predicate on the "executor_id" field.
-func ExecutorIDIn(vs ...int) predicate.Migration {
-	return predicate.Migration(sql.FieldIn(FieldExecutorID, vs...))
+// SQLDownIn applies the In predicate on the "sql_down" field.
+func SQLDownIn(vs ...string) predicate.Migration {
+	return predicate.Migration(sql.FieldIn(FieldSQLDown, vs...))
 }
 
-// ExecutorIDNotIn applies the NotIn predicate on the "executor_id" field.
-func ExecutorIDNotIn(vs ...int) predicate.Migration {
-	return predicate.Migration(sql.FieldNotIn(FieldExecutorID, vs...))
+// SQLDownNotIn applies the NotIn predicate on the "sql_down" field.
+func SQLDownNotIn(vs ...string) predicate.Migration {
+	return predicate.Migration(sql.FieldNotIn(FieldSQLDown, vs...))
 }
 
-// ExecutedAtEQ applies the EQ predicate on the "executed_at" field.
-func ExecutedAtEQ(v time.Time) predicate.Migration {
-	return predicate.Migration(sql.FieldEQ(FieldExecutedAt, v))
+// SQLDownGT applies the GT predicate on the "sql_down" field.
+func SQLDownGT(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldGT(FieldSQLDown, v))
 }
 
-// ExecutedAtNEQ applies the NEQ predicate on the "executed_at" field.
-func ExecutedAtNEQ(v time.Time) predicate.Migration {
-	return predicate.Migration(sql.FieldNEQ(FieldExecutedAt, v))
+// SQLDownGTE applies the GTE predicate on the "sql_down" field.
+func SQLDownGTE(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldGTE(FieldSQLDown, v))
 }
 
-// ExecutedAtIn applies the In predicate on the "executed_at" field.
-func ExecutedAtIn(vs ...time.Time) predicate.Migration {
-	return predicate.Migration(sql.FieldIn(FieldExecutedAt, vs...))
+// SQLDownLT applies the LT predicate on the "sql_down" field.
+func SQLDownLT(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldLT(FieldSQLDown, v))
 }
 
-// ExecutedAtNotIn applies the NotIn predicate on the "executed_at" field.
-func ExecutedAtNotIn(vs ...time.Time) predicate.Migration {
-	return predicate.Migration(sql.FieldNotIn(FieldExecutedAt, vs...))
+// SQLDownLTE applies the LTE predicate on the "sql_down" field.
+func SQLDownLTE(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldLTE(FieldSQLDown, v))
 }
 
-// ExecutedAtGT applies the GT predicate on the "executed_at" field.
-func ExecutedAtGT(v time.Time) predicate.Migration {
-	return predicate.Migration(sql.FieldGT(FieldExecutedAt, v))
+// SQLDownContains applies the Contains predicate on the "sql_down" field.
+func SQLDownContains(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldContains(FieldSQLDown, v))
 }
 
-// ExecutedAtGTE applies the GTE predicate on the "executed_at" field.
-func ExecutedAtGTE(v time.Time) predicate.Migration {
-	return predicate.Migration(sql.FieldGTE(FieldExecutedAt, v))
+// SQLDownHasPrefix applies the HasPrefix predicate on the "sql_down" field.
+func SQLDownHasPrefix(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldHasPrefix(FieldSQLDown, v))
 }
 
-// ExecutedAtLT applies the LT predicate on the "executed_at" field.
-func ExecutedAtLT(v time.Time) predicate.Migration {
-	return predicate.Migration(sql.FieldLT(FieldExecutedAt, v))
+// SQLDownHasSuffix applies the HasSuffix predicate on the "sql_down" field.
+func SQLDownHasSuffix(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldHasSuffix(FieldSQLDown, v))
 }
 
-// ExecutedAtLTE applies the LTE predicate on the "executed_at" field.
-func ExecutedAtLTE(v time.Time) predicate.Migration {
-	return predicate.Migration(sql.FieldLTE(FieldExecutedAt, v))
+// SQLDownIsNil applies the IsNil predicate on the "sql_down" field.
+func SQLDownIsNil() predicate.Migration {
+	return predicate.Migration(sql.FieldIsNull(FieldSQLDown))
+}
+
+// SQLDownNotNil applies the NotNil predicate on the "sql_down" field.
+func SQLDownNotNil() predicate.Migration {
+	return predicate.Migration(sql.FieldNotNull(FieldSQLDown))
+}
+
+// SQLDownEqualFold applies the EqualFold predicate on the "sql_down" field.
+func SQLDownEqualFold(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldEqualFold(FieldSQLDown, v))
+}
+
+// SQLDownContainsFold applies the ContainsFold predicate on the "sql_down" field.
+func SQLDownContainsFold(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldContainsFold(FieldSQLDown, v))
+}
+
+// IrreversibleEQ applies the EQ predicate on the "irreversible" field.
+func IrreversibleEQ(v bool) predicate.Migration {
+	return predicate.Migration(sql.FieldEQ(FieldIrreversible, v))
+}
+
+// IrreversibleNEQ applies the NEQ predicate on the "irreversible" field.
+func IrreversibleNEQ(v bool) predicate.Migration {
+	return predicate.Migration(sql.FieldNEQ(FieldIrreversible, v))
+}
+
+// IrreversibleReasonEQ applies the EQ predicate on the "irreversible_reason" field.
+func IrreversibleReasonEQ(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldEQ(FieldIrreversibleReason, v))
+}
+
+// IrreversibleReasonNEQ applies the NEQ predicate on the "irreversible_reason" field.
+func IrreversibleReasonNEQ(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldNEQ(FieldIrreversibleReason, v))
+}
+
+// IrreversibleReasonIn applies the In predicate on the "irreversible_reason" field.
+func IrreversibleReasonIn(vs ...string) predicate.Migration {
+	return predicate.Migration(sql.FieldIn(FieldIrreversibleReason, vs...))
+}
+
+// IrreversibleReasonNotIn applies the NotIn predicate on the "irreversible_reason" field.
+func IrreversibleReasonNotIn(vs ...string) predicate.Migration {
+	return predicate.Migration(sql.FieldNotIn(FieldIrreversibleReason, vs...))
+}
+
+// IrreversibleReasonGT applies the GT predicate on the "irreversible_reason" field.
+func IrreversibleReasonGT(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldGT(FieldIrreversibleReason, v))
+}
+
+// IrreversibleReasonGTE applies the GTE predicate on the "irreversible_reason" field.
+func IrreversibleReasonGTE(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldGTE(FieldIrreversibleReason, v))
+}
+
+// IrreversibleReasonLT applies the LT predicate on the "irreversible_reason" field.
+func IrreversibleReasonLT(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldLT(FieldIrreversibleReason, v))
+}
+
+// IrreversibleReasonLTE applies the LTE predicate on the "irreversible_reason" field.
+func IrreversibleReasonLTE(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldLTE(FieldIrreversibleReason, v))
+}
+
+// IrreversibleReasonContains applies the Contains predicate on the "irreversible_reason" field.
+func IrreversibleReasonContains(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldContains(FieldIrreversibleReason, v))
+}
+
+// IrreversibleReasonHasPrefix applies the HasPrefix predicate on the "irreversible_reason" field.
+func IrreversibleReasonHasPrefix(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldHasPrefix(FieldIrreversibleReason, v))
+}
+
+// IrreversibleReasonHasSuffix applies the HasSuffix predicate on the "irreversible_reason" field.
+func IrreversibleReasonHasSuffix(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldHasSuffix(FieldIrreversibleReason, v))
+}
+
+// IrreversibleReasonIsNil applies the IsNil predicate on the "irreversible_reason" field.
+func IrreversibleReasonIsNil() predicate.Migration {
+	return predicate.Migration(sql.FieldIsNull(FieldIrreversibleReason))
+}
+
+// IrreversibleReasonNotNil applies the NotNil predicate on the "irreversible_reason" field.
+func IrreversibleReasonNotNil() predicate.Migration {
+	return predicate.Migration(sql.FieldNotNull(FieldIrreversibleReason))
+}
+
+// IrreversibleReasonEqualFold applies the EqualFold predicate on the "irreversible_reason" field.
+func IrreversibleReasonEqualFold(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldEqualFold(FieldIrreversibleReason, v))
+}
+
+// IrreversibleReasonContainsFold applies the ContainsFold predicate on the "irreversible_reason" field.
+func IrreversibleReasonContainsFold(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldContainsFold(FieldIrreversibleReason, v))
 }
 
 // StatusEQ applies the EQ predicate on the "status" field.
@@ -283,6 +422,401 @@ func StatusIn(vs ...Status) predicate.Migration {
 // StatusNotIn applies the NotIn predicate on the "status" field.
 func StatusNotIn(vs ...Status) predicate.Migration {
 	return predicate.Migration(sql.FieldNotIn(FieldStatus, vs...))
+}
+
+// AuthorIDEQ applies the EQ predicate on the "author_id" field.
+func AuthorIDEQ(v int) predicate.Migration {
+	return predicate.Migration(sql.FieldEQ(FieldAuthorID, v))
+}
+
+// AuthorIDNEQ applies the NEQ predicate on the "author_id" field.
+func AuthorIDNEQ(v int) predicate.Migration {
+	return predicate.Migration(sql.FieldNEQ(FieldAuthorID, v))
+}
+
+// AuthorIDIn applies the In predicate on the "author_id" field.
+func AuthorIDIn(vs ...int) predicate.Migration {
+	return predicate.Migration(sql.FieldIn(FieldAuthorID, vs...))
+}
+
+// AuthorIDNotIn applies the NotIn predicate on the "author_id" field.
+func AuthorIDNotIn(vs ...int) predicate.Migration {
+	return predicate.Migration(sql.FieldNotIn(FieldAuthorID, vs...))
+}
+
+// BatchSizeEQ applies the EQ predicate on the "batch_size" field.
+func BatchSizeEQ(v int) predicate.Migration {
+	return predicate.Migration(sql.FieldEQ(FieldBatchSize, v))
+}
+
+// BatchSizeNEQ applies the NEQ predicate on the "batch_size" field.
+func BatchSizeNEQ(v int) predicate.Migration {
+	return predicate.Migration(sql.FieldNEQ(FieldBatchSize, v))
+}
+
+// BatchSizeIn applies the In predicate on the "batch_size" field.
+func BatchSizeIn(vs ...int) predicate.Migration {
+	return predicate.Migration(sql.FieldIn(FieldBatchSize, vs...))
+}
+
+// BatchSizeNotIn applies the NotIn predicate on the "batch_size" field.
+func BatchSizeNotIn(vs ...int) predicate.Migration {
+	return predicate.Migration(sql.FieldNotIn(FieldBatchSize, vs...))
+}
+
+// BatchSizeGT applies the GT predicate on the "batch_size" field.
+func BatchSizeGT(v int) predicate.Migration {
+	return predicate.Migration(sql.FieldGT(FieldBatchSize, v))
+}
+
+// BatchSizeGTE applies the GTE predicate on the "batch_size" field.
+func BatchSizeGTE(v int) predicate.Migration {
+	return predicate.Migration(sql.FieldGTE(FieldBatchSize, v))
+}
+
+// BatchSizeLT applies the LT predicate on the "batch_size" field.
+func BatchSizeLT(v int) predicate.Migration {
+	return predicate.Migration(sql.FieldLT(FieldBatchSize, v))
+}
+
+// BatchSizeLTE applies the LTE predicate on the "batch_size" field.
+func BatchSizeLTE(v int) predicate.Migration {
+	return predicate.Migration(sql.FieldLTE(FieldBatchSize, v))
+}
+
+// BatchSizeIsNil applies the IsNil predicate on the "batch_size" field.
+func BatchSizeIsNil() predicate.Migration {
+	return predicate.Migration(sql.FieldIsNull(FieldBatchSize))
+}
+
+// BatchSizeNotNil applies the NotNil predicate on the "batch_size" field.
+func BatchSizeNotNil() predicate.Migration {
+	return predicate.Migration(sql.FieldNotNull(FieldBatchSize))
+}
+
+// CursorColumnEQ applies the EQ predicate on the "cursor_column" field.
+func CursorColumnEQ(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldEQ(FieldCursorColumn, v))
+}
+
+// CursorColumnNEQ applies the NEQ predicate on the "cursor_column" field.
+func CursorColumnNEQ(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldNEQ(FieldCursorColumn, v))
+}
+
+// CursorColumnIn applies the In predicate on the "cursor_column" field.
+func CursorColumnIn(vs ...string) predicate.Migration {
+	return predicate.Migration(sql.FieldIn(FieldCursorColumn, vs...))
+}
+
+// CursorColumnNotIn applies the NotIn predicate on the "cursor_column" field.
+func CursorColumnNotIn(vs ...string) predicate.Migration {
+	return predicate.Migration(sql.FieldNotIn(FieldCursorColumn, vs...))
+}
+
+// CursorColumnGT applies the GT predicate on the "cursor_column" field.
+func CursorColumnGT(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldGT(FieldCursorColumn, v))
+}
+
+// CursorColumnGTE applies the GTE predicate on the "cursor_column" field.
+func CursorColumnGTE(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldGTE(FieldCursorColumn, v))
+}
+
+// CursorColumnLT applies the LT predicate on the "cursor_column" field.
+func CursorColumnLT(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldLT(FieldCursorColumn, v))
+}
+
+// CursorColumnLTE applies the LTE predicate on the "cursor_column" field.
+func CursorColumnLTE(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldLTE(FieldCursorColumn, v))
+}
+
+// CursorColumnContains applies the Contains predicate on the "cursor_column" field.
+func CursorColumnContains(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldContains(FieldCursorColumn, v))
+}
+
+// CursorColumnHasPrefix applies the HasPrefix predicate on the "cursor_column" field.
+func CursorColumnHasPrefix(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldHasPrefix(FieldCursorColumn, v))
+}
+
+// CursorColumnHasSuffix applies the HasSuffix predicate on the "cursor_column" field.
+func CursorColumnHasSuffix(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldHasSuffix(FieldCursorColumn, v))
+}
+
+// CursorColumnIsNil applies the IsNil predicate on the "cursor_column" field.
+func CursorColumnIsNil() predicate.Migration {
+	return predicate.Migration(sql.FieldIsNull(FieldCursorColumn))
+}
+
+// CursorColumnNotNil applies the NotNil predicate on the "cursor_column" field.
+func CursorColumnNotNil() predicate.Migration {
+	return predicate.Migration(sql.FieldNotNull(FieldCursorColumn))
+}
+
+// CursorColumnEqualFold applies the EqualFold predicate on the "cursor_column" field.
+func CursorColumnEqualFold(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldEqualFold(FieldCursorColumn, v))
+}
+
+// CursorColumnContainsFold applies the ContainsFold predicate on the "cursor_column" field.
+func CursorColumnContainsFold(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldContainsFold(FieldCursorColumn, v))
+}
+
+// BatchTableEQ applies the EQ predicate on the "batch_table" field.
+func BatchTableEQ(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldEQ(FieldBatchTable, v))
+}
+
+// BatchTableNEQ applies the NEQ predicate on the "batch_table" field.
+func BatchTableNEQ(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldNEQ(FieldBatchTable, v))
+}
+
+// BatchTableIn applies the In predicate on the "batch_table" field.
+func BatchTableIn(vs ...string) predicate.Migration {
+	return predicate.Migration(sql.FieldIn(FieldBatchTable, vs...))
+}
+
+// BatchTableNotIn applies the NotIn predicate on the "batch_table" field.
+func BatchTableNotIn(vs ...string) predicate.Migration {
+	return predicate.Migration(sql.FieldNotIn(FieldBatchTable, vs...))
+}
+
+// BatchTableGT applies the GT predicate on the "batch_table" field.
+func BatchTableGT(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldGT(FieldBatchTable, v))
+}
+
+// BatchTableGTE applies the GTE predicate on the "batch_table" field.
+func BatchTableGTE(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldGTE(FieldBatchTable, v))
+}
+
+// BatchTableLT applies the LT predicate on the "batch_table" field.
+func BatchTableLT(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldLT(FieldBatchTable, v))
+}
+
+// BatchTableLTE applies the LTE predicate on the "batch_table" field.
+func BatchTableLTE(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldLTE(FieldBatchTable, v))
+}
+
+// BatchTableContains applies the Contains predicate on the "batch_table" field.
+func BatchTableContains(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldContains(FieldBatchTable, v))
+}
+
+// BatchTableHasPrefix applies the HasPrefix predicate on the "batch_table" field.
+func BatchTableHasPrefix(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldHasPrefix(FieldBatchTable, v))
+}
+
+// BatchTableHasSuffix applies the HasSuffix predicate on the "batch_table" field.
+func BatchTableHasSuffix(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldHasSuffix(FieldBatchTable, v))
+}
+
+// BatchTableIsNil applies the IsNil predicate on the "batch_table" field.
+func BatchTableIsNil() predicate.Migration {
+	return predicate.Migration(sql.FieldIsNull(FieldBatchTable))
+}
+
+// BatchTableNotNil applies the NotNil predicate on the "batch_table" field.
+func BatchTableNotNil() predicate.Migration {
+	return predicate.Migration(sql.FieldNotNull(FieldBatchTable))
+}
+
+// BatchTableEqualFold applies the EqualFold predicate on the "batch_table" field.
+func BatchTableEqualFold(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldEqualFold(FieldBatchTable, v))
+}
+
+// BatchTableContainsFold applies the ContainsFold predicate on the "batch_table" field.
+func BatchTableContainsFold(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldContainsFold(FieldBatchTable, v))
+}
+
+// MinIDEQ applies the EQ predicate on the "min_id" field.
+func MinIDEQ(v int64) predicate.Migration {
+	return predicate.Migration(sql.FieldEQ(FieldMinID, v))
+}
+
+// MinIDNEQ applies the NEQ predicate on the "min_id" field.
+func MinIDNEQ(v int64) predicate.Migration {
+	return predicate.Migration(sql.FieldNEQ(FieldMinID, v))
+}
+
+// MinIDIn applies the In predicate on the "min_id" field.
+func MinIDIn(vs ...int64) predicate.Migration {
+	return predicate.Migration(sql.FieldIn(FieldMinID, vs...))
+}
+
+// MinIDNotIn applies the NotIn predicate on the "min_id" field.
+func MinIDNotIn(vs ...int64) predicate.Migration {
+	return predicate.Migration(sql.FieldNotIn(FieldMinID, vs...))
+}
+
+// MinIDGT applies the GT predicate on the "min_id" field.
+func MinIDGT(v int64) predicate.Migration {
+	return predicate.Migration(sql.FieldGT(FieldMinID, v))
+}
+
+// MinIDGTE applies the GTE predicate on the "min_id" field.
+func MinIDGTE(v int64) predicate.Migration {
+	return predicate.Migration(sql.FieldGTE(FieldMinID, v))
+}
+
+// MinIDLT applies the LT predicate on the "min_id" field.
+func MinIDLT(v int64) predicate.Migration {
+	return predicate.Migration(sql.FieldLT(FieldMinID, v))
+}
+
+// MinIDLTE applies the LTE predicate on the "min_id" field.
+func MinIDLTE(v int64) predicate.Migration {
+	return predicate.Migration(sql.FieldLTE(FieldMinID, v))
+}
+
+// MinIDIsNil applies the IsNil predicate on the "min_id" field.
+func MinIDIsNil() predicate.Migration {
+	return predicate.Migration(sql.FieldIsNull(FieldMinID))
+}
+
+// MinIDNotNil applies the NotNil predicate on the "min_id" field.
+func MinIDNotNil() predicate.Migration {
+	return predicate.Migration(sql.FieldNotNull(FieldMinID))
+}
+
+// MaxIDEQ applies the EQ predicate on the "max_id" field.
+func MaxIDEQ(v int64) predicate.Migration {
+	return predicate.Migration(sql.FieldEQ(FieldMaxID, v))
+}
+
+// MaxIDNEQ applies the NEQ predicate on the "max_id" field.
+func MaxIDNEQ(v int64) predicate.Migration {
+	return predicate.Migration(sql.FieldNEQ(FieldMaxID, v))
+}
+
+// MaxIDIn applies the In predicate on the "max_id" field.
+func MaxIDIn(vs ...int64) predicate.Migration {
+	return predicate.Migration(sql.FieldIn(FieldMaxID, vs...))
+}
+
+// MaxIDNotIn applies the NotIn predicate on the "max_id" field.
+func MaxIDNotIn(vs ...int64) predicate.Migration {
+	return predicate.Migration(sql.FieldNotIn(FieldMaxID, vs...))
+}
+
+// MaxIDGT applies the GT predicate on the "max_id" field.
+func MaxIDGT(v int64) predicate.Migration {
+	return predicate.Migration(sql.FieldGT(FieldMaxID, v))
+}
+
+// MaxIDGTE applies the GTE predicate on the "max_id" field.
+func MaxIDGTE(v int64) predicate.Migration {
+	return predicate.Migration(sql.FieldGTE(FieldMaxID, v))
+}
+
+// MaxIDLT applies the LT predicate on the "max_id" field.
+func MaxIDLT(v int64) predicate.Migration {
+	return predicate.Migration(sql.FieldLT(FieldMaxID, v))
+}
+
+// MaxIDLTE applies the LTE predicate on the "max_id" field.
+func MaxIDLTE(v int64) predicate.Migration {
+	return predicate.Migration(sql.FieldLTE(FieldMaxID, v))
+}
+
+// MaxIDIsNil applies the IsNil predicate on the "max_id" field.
+func MaxIDIsNil() predicate.Migration {
+	return predicate.Migration(sql.FieldIsNull(FieldMaxID))
+}
+
+// MaxIDNotNil applies the NotNil predicate on the "max_id" field.
+func MaxIDNotNil() predicate.Migration {
+	return predicate.Migration(sql.FieldNotNull(FieldMaxID))
+}
+
+// TemplateEQ applies the EQ predicate on the "template" field.
+func TemplateEQ(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldEQ(FieldTemplate, v))
+}
+
+// TemplateNEQ applies the NEQ predicate on the "template" field.
+func TemplateNEQ(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldNEQ(FieldTemplate, v))
+}
+
+// TemplateIn applies the In predicate on the "template" field.
+func TemplateIn(vs ...string) predicate.Migration {
+	return predicate.Migration(sql.FieldIn(FieldTemplate, vs...))
+}
+
+// TemplateNotIn applies the NotIn predicate on the "template" field.
+func TemplateNotIn(vs ...string) predicate.Migration {
+	return predicate.Migration(sql.FieldNotIn(FieldTemplate, vs...))
+}
+
+// TemplateGT applies the GT predicate on the "template" field.
+func TemplateGT(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldGT(FieldTemplate, v))
+}
+
+// TemplateGTE applies the GTE predicate on the "template" field.
+func TemplateGTE(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldGTE(FieldTemplate, v))
+}
+
+// TemplateLT applies the LT predicate on the "template" field.
+func TemplateLT(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldLT(FieldTemplate, v))
+}
+
+// TemplateLTE applies the LTE predicate on the "template" field.
+func TemplateLTE(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldLTE(FieldTemplate, v))
+}
+
+// TemplateContains applies the Contains predicate on the "template" field.
+func TemplateContains(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldContains(FieldTemplate, v))
+}
+
+// TemplateHasPrefix applies the HasPrefix predicate on the "template" field.
+func TemplateHasPrefix(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldHasPrefix(FieldTemplate, v))
+}
+
+// TemplateHasSuffix applies the HasSuffix predicate on the "template" field.
+func TemplateHasSuffix(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldHasSuffix(FieldTemplate, v))
+}
+
+// TemplateIsNil applies the IsNil predicate on the "template" field.
+func TemplateIsNil() predicate.Migration {
+	return predicate.Migration(sql.FieldIsNull(FieldTemplate))
+}
+
+// TemplateNotNil applies the NotNil predicate on the "template" field.
+func TemplateNotNil() predicate.Migration {
+	return predicate.Migration(sql.FieldNotNull(FieldTemplate))
+}
+
+// TemplateEqualFold applies the EqualFold predicate on the "template" field.
+func TemplateEqualFold(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldEqualFold(FieldTemplate, v))
+}
+
+// TemplateContainsFold applies the ContainsFold predicate on the "template" field.
+func TemplateContainsFold(v string) predicate.Migration {
+	return predicate.Migration(sql.FieldContainsFold(FieldTemplate, v))
 }
 
 // HasConnection applies the HasEdge predicate on the "connection" edge.
@@ -308,21 +842,67 @@ func HasConnectionWith(preds ...predicate.DatabaseConnection) predicate.Migratio
 	})
 }
 
-// HasExecutor applies the HasEdge predicate on the "executor" edge.
-func HasExecutor() predicate.Migration {
+// HasAuthor applies the HasEdge predicate on the "author" edge.
+func HasAuthor() predicate.Migration {
 	return predicate.Migration(func(s *sql.Selector) {
 		step := sqlgraph.NewStep(
 			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, false, ExecutorTable, ExecutorColumn),
+			sqlgraph.Edge(sqlgraph.M2O, false, AuthorTable, AuthorColumn),
 		)
 		sqlgraph.HasNeighbors(s, step)
 	})
 }
 
-// HasExecutorWith applies the HasEdge predicate on the "executor" edge with a given conditions (other predicates).
-func HasExecutorWith(preds ...predicate.PlatformUser) predicate.Migration {
+// HasAuthorWith applies the HasEdge predicate on the "author" edge with a given conditions (other predicates).
+func HasAuthorWith(preds ...predicate.PlatformUser) predicate.Migration {
 	return predicate.Migration(func(s *sql.Selector) {
-		step := newExecutorStep()
+		step := newAuthorStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasExecutions applies the HasEdge predicate on the "executions" edge.
+func HasExecutions() predicate.Migration {
+	return predicate.Migration(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, ExecutionsTable, ExecutionsColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasExecutionsWith applies the HasEdge predicate on the "executions" edge with a given conditions (other predicates).
+func HasExecutionsWith(preds ...predicate.MigrationExecution) predicate.Migration {
+	return predicate.Migration(func(s *sql.Selector) {
+		step := newExecutionsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasApprovals applies the HasEdge predicate on the "approvals" edge.
+func HasApprovals() predicate.Migration {
+	return predicate.Migration(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, ApprovalsTable, ApprovalsColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasApprovalsWith applies the HasEdge predicate on the "approvals" edge with a given conditions (other predicates).
+func HasApprovalsWith(preds ...predicate.MigrationApproval) predicate.Migration {
+	return predicate.Migration(func(s *sql.Selector) {
+		step := newApprovalsStep()
 		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
 			for _, p := range preds {
 				p(s)

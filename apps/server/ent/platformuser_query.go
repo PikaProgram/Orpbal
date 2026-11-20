@@ -4,6 +4,7 @@ package ent
 
 import (
 	"Orpbal/ent/groupmembership"
+	"Orpbal/ent/migrationapproval"
 	"Orpbal/ent/platformuser"
 	"Orpbal/ent/predicate"
 	"Orpbal/ent/session"
@@ -27,6 +28,7 @@ type PlatformUserQuery struct {
 	predicates      []predicate.PlatformUser
 	withMemberships *GroupMembershipQuery
 	withSessions    *SessionQuery
+	withApprovals   *MigrationApprovalQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -100,6 +102,28 @@ func (puq *PlatformUserQuery) QuerySessions() *SessionQuery {
 			sqlgraph.From(platformuser.Table, platformuser.FieldID, selector),
 			sqlgraph.To(session.Table, session.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, platformuser.SessionsTable, platformuser.SessionsColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(puq.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryApprovals chains the current query on the "approvals" edge.
+func (puq *PlatformUserQuery) QueryApprovals() *MigrationApprovalQuery {
+	query := (&MigrationApprovalClient{config: puq.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := puq.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := puq.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(platformuser.Table, platformuser.FieldID, selector),
+			sqlgraph.To(migrationapproval.Table, migrationapproval.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, platformuser.ApprovalsTable, platformuser.ApprovalsColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(puq.driver.Dialect(), step)
 		return fromU, nil
@@ -301,6 +325,7 @@ func (puq *PlatformUserQuery) Clone() *PlatformUserQuery {
 		predicates:      append([]predicate.PlatformUser{}, puq.predicates...),
 		withMemberships: puq.withMemberships.Clone(),
 		withSessions:    puq.withSessions.Clone(),
+		withApprovals:   puq.withApprovals.Clone(),
 		// clone intermediate query.
 		sql:  puq.sql.Clone(),
 		path: puq.path,
@@ -326,6 +351,17 @@ func (puq *PlatformUserQuery) WithSessions(opts ...func(*SessionQuery)) *Platfor
 		opt(query)
 	}
 	puq.withSessions = query
+	return puq
+}
+
+// WithApprovals tells the query-builder to eager-load the nodes that are connected to
+// the "approvals" edge. The optional arguments are used to configure the query builder of the edge.
+func (puq *PlatformUserQuery) WithApprovals(opts ...func(*MigrationApprovalQuery)) *PlatformUserQuery {
+	query := (&MigrationApprovalClient{config: puq.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	puq.withApprovals = query
 	return puq
 }
 
@@ -407,9 +443,10 @@ func (puq *PlatformUserQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([
 	var (
 		nodes       = []*PlatformUser{}
 		_spec       = puq.querySpec()
-		loadedTypes = [2]bool{
+		loadedTypes = [3]bool{
 			puq.withMemberships != nil,
 			puq.withSessions != nil,
+			puq.withApprovals != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
@@ -441,6 +478,13 @@ func (puq *PlatformUserQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([
 		if err := puq.loadSessions(ctx, query, nodes,
 			func(n *PlatformUser) { n.Edges.Sessions = []*Session{} },
 			func(n *PlatformUser, e *Session) { n.Edges.Sessions = append(n.Edges.Sessions, e) }); err != nil {
+			return nil, err
+		}
+	}
+	if query := puq.withApprovals; query != nil {
+		if err := puq.loadApprovals(ctx, query, nodes,
+			func(n *PlatformUser) { n.Edges.Approvals = []*MigrationApproval{} },
+			func(n *PlatformUser, e *MigrationApproval) { n.Edges.Approvals = append(n.Edges.Approvals, e) }); err != nil {
 			return nil, err
 		}
 	}
@@ -502,6 +546,36 @@ func (puq *PlatformUserQuery) loadSessions(ctx context.Context, query *SessionQu
 		node, ok := nodeids[fk]
 		if !ok {
 			return fmt.Errorf(`unexpected referenced foreign-key "user_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+func (puq *PlatformUserQuery) loadApprovals(ctx context.Context, query *MigrationApprovalQuery, nodes []*PlatformUser, init func(*PlatformUser), assign func(*PlatformUser, *MigrationApproval)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int]*PlatformUser)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(migrationapproval.FieldLeaderID)
+	}
+	query.Where(predicate.MigrationApproval(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(platformuser.ApprovalsColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.LeaderID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "leader_id" returned %v for node %v`, fk, n.ID)
 		}
 		assign(node, n)
 	}

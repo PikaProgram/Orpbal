@@ -4,7 +4,6 @@ package migration
 
 import (
 	"fmt"
-	"time"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
@@ -19,18 +18,38 @@ const (
 	FieldConnectionID = "connection_id"
 	// FieldVersion holds the string denoting the version field in the database.
 	FieldVersion = "version"
-	// FieldSQL holds the string denoting the sql field in the database.
-	FieldSQL = "sql"
-	// FieldExecutorID holds the string denoting the executor_id field in the database.
-	FieldExecutorID = "executor_id"
-	// FieldExecutedAt holds the string denoting the executed_at field in the database.
-	FieldExecutedAt = "executed_at"
+	// FieldSQLUp holds the string denoting the sql_up field in the database.
+	FieldSQLUp = "sql_up"
+	// FieldSQLDown holds the string denoting the sql_down field in the database.
+	FieldSQLDown = "sql_down"
+	// FieldIrreversible holds the string denoting the irreversible field in the database.
+	FieldIrreversible = "irreversible"
+	// FieldIrreversibleReason holds the string denoting the irreversible_reason field in the database.
+	FieldIrreversibleReason = "irreversible_reason"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
+	// FieldAuthorID holds the string denoting the author_id field in the database.
+	FieldAuthorID = "author_id"
+	// FieldBatchSize holds the string denoting the batch_size field in the database.
+	FieldBatchSize = "batch_size"
+	// FieldCursorColumn holds the string denoting the cursor_column field in the database.
+	FieldCursorColumn = "cursor_column"
+	// FieldBatchTable holds the string denoting the batch_table field in the database.
+	FieldBatchTable = "batch_table"
+	// FieldMinID holds the string denoting the min_id field in the database.
+	FieldMinID = "min_id"
+	// FieldMaxID holds the string denoting the max_id field in the database.
+	FieldMaxID = "max_id"
+	// FieldTemplate holds the string denoting the template field in the database.
+	FieldTemplate = "template"
 	// EdgeConnection holds the string denoting the connection edge name in mutations.
 	EdgeConnection = "connection"
-	// EdgeExecutor holds the string denoting the executor edge name in mutations.
-	EdgeExecutor = "executor"
+	// EdgeAuthor holds the string denoting the author edge name in mutations.
+	EdgeAuthor = "author"
+	// EdgeExecutions holds the string denoting the executions edge name in mutations.
+	EdgeExecutions = "executions"
+	// EdgeApprovals holds the string denoting the approvals edge name in mutations.
+	EdgeApprovals = "approvals"
 	// EdgeSnapshots holds the string denoting the snapshots edge name in mutations.
 	EdgeSnapshots = "snapshots"
 	// Table holds the table name of the migration in the database.
@@ -42,13 +61,27 @@ const (
 	ConnectionInverseTable = "database_connections"
 	// ConnectionColumn is the table column denoting the connection relation/edge.
 	ConnectionColumn = "connection_id"
-	// ExecutorTable is the table that holds the executor relation/edge.
-	ExecutorTable = "migrations"
-	// ExecutorInverseTable is the table name for the PlatformUser entity.
+	// AuthorTable is the table that holds the author relation/edge.
+	AuthorTable = "migrations"
+	// AuthorInverseTable is the table name for the PlatformUser entity.
 	// It exists in this package in order to avoid circular dependency with the "platformuser" package.
-	ExecutorInverseTable = "platform_users"
-	// ExecutorColumn is the table column denoting the executor relation/edge.
-	ExecutorColumn = "executor_id"
+	AuthorInverseTable = "platform_users"
+	// AuthorColumn is the table column denoting the author relation/edge.
+	AuthorColumn = "author_id"
+	// ExecutionsTable is the table that holds the executions relation/edge.
+	ExecutionsTable = "migration_executions"
+	// ExecutionsInverseTable is the table name for the MigrationExecution entity.
+	// It exists in this package in order to avoid circular dependency with the "migrationexecution" package.
+	ExecutionsInverseTable = "migration_executions"
+	// ExecutionsColumn is the table column denoting the executions relation/edge.
+	ExecutionsColumn = "migration_id"
+	// ApprovalsTable is the table that holds the approvals relation/edge.
+	ApprovalsTable = "migration_approvals"
+	// ApprovalsInverseTable is the table name for the MigrationApproval entity.
+	// It exists in this package in order to avoid circular dependency with the "migrationapproval" package.
+	ApprovalsInverseTable = "migration_approvals"
+	// ApprovalsColumn is the table column denoting the approvals relation/edge.
+	ApprovalsColumn = "migration_id"
 	// SnapshotsTable is the table that holds the snapshots relation/edge.
 	SnapshotsTable = "schema_snapshots"
 	// SnapshotsInverseTable is the table name for the SchemaSnapshot entity.
@@ -63,10 +96,18 @@ var Columns = []string{
 	FieldID,
 	FieldConnectionID,
 	FieldVersion,
-	FieldSQL,
-	FieldExecutorID,
-	FieldExecutedAt,
+	FieldSQLUp,
+	FieldSQLDown,
+	FieldIrreversible,
+	FieldIrreversibleReason,
 	FieldStatus,
+	FieldAuthorID,
+	FieldBatchSize,
+	FieldCursorColumn,
+	FieldBatchTable,
+	FieldMinID,
+	FieldMaxID,
+	FieldTemplate,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -84,10 +125,12 @@ var (
 	ConnectionIDValidator func(int) error
 	// VersionValidator is a validator for the "version" field. It is called by the builders before save.
 	VersionValidator func(int) error
-	// ExecutorIDValidator is a validator for the "executor_id" field. It is called by the builders before save.
-	ExecutorIDValidator func(int) error
-	// DefaultExecutedAt holds the default value on creation for the "executed_at" field.
-	DefaultExecutedAt func() time.Time
+	// DefaultIrreversible holds the default value on creation for the "irreversible" field.
+	DefaultIrreversible bool
+	// AuthorIDValidator is a validator for the "author_id" field. It is called by the builders before save.
+	AuthorIDValidator func(int) error
+	// BatchSizeValidator is a validator for the "batch_size" field. It is called by the builders before save.
+	BatchSizeValidator func(int) error
 )
 
 // Status defines the type for the "status" enum field.
@@ -95,9 +138,15 @@ type Status string
 
 // Status values.
 const (
-	StatusPending Status = "pending"
-	StatusSuccess Status = "success"
-	StatusFailed  Status = "failed"
+	StatusDraft         Status = "draft"
+	StatusPendingReview Status = "pending_review"
+	StatusApproved      Status = "approved"
+	StatusQueued        Status = "queued"
+	StatusRunning       Status = "running"
+	StatusSuccess       Status = "success"
+	StatusFailed        Status = "failed"
+	StatusPartial       Status = "partial"
+	StatusCancelled     Status = "cancelled"
 )
 
 func (s Status) String() string {
@@ -107,7 +156,7 @@ func (s Status) String() string {
 // StatusValidator is a validator for the "status" field enum values. It is called by the builders before save.
 func StatusValidator(s Status) error {
 	switch s {
-	case StatusPending, StatusSuccess, StatusFailed:
+	case StatusDraft, StatusPendingReview, StatusApproved, StatusQueued, StatusRunning, StatusSuccess, StatusFailed, StatusPartial, StatusCancelled:
 		return nil
 	default:
 		return fmt.Errorf("migration: invalid enum value for status field: %q", s)
@@ -132,24 +181,64 @@ func ByVersion(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldVersion, opts...).ToFunc()
 }
 
-// BySQL orders the results by the sql field.
-func BySQL(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldSQL, opts...).ToFunc()
+// BySQLUp orders the results by the sql_up field.
+func BySQLUp(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSQLUp, opts...).ToFunc()
 }
 
-// ByExecutorID orders the results by the executor_id field.
-func ByExecutorID(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldExecutorID, opts...).ToFunc()
+// BySQLDown orders the results by the sql_down field.
+func BySQLDown(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSQLDown, opts...).ToFunc()
 }
 
-// ByExecutedAt orders the results by the executed_at field.
-func ByExecutedAt(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldExecutedAt, opts...).ToFunc()
+// ByIrreversible orders the results by the irreversible field.
+func ByIrreversible(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldIrreversible, opts...).ToFunc()
+}
+
+// ByIrreversibleReason orders the results by the irreversible_reason field.
+func ByIrreversibleReason(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldIrreversibleReason, opts...).ToFunc()
 }
 
 // ByStatus orders the results by the status field.
 func ByStatus(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldStatus, opts...).ToFunc()
+}
+
+// ByAuthorID orders the results by the author_id field.
+func ByAuthorID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAuthorID, opts...).ToFunc()
+}
+
+// ByBatchSize orders the results by the batch_size field.
+func ByBatchSize(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldBatchSize, opts...).ToFunc()
+}
+
+// ByCursorColumn orders the results by the cursor_column field.
+func ByCursorColumn(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCursorColumn, opts...).ToFunc()
+}
+
+// ByBatchTable orders the results by the batch_table field.
+func ByBatchTable(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldBatchTable, opts...).ToFunc()
+}
+
+// ByMinID orders the results by the min_id field.
+func ByMinID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldMinID, opts...).ToFunc()
+}
+
+// ByMaxID orders the results by the max_id field.
+func ByMaxID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldMaxID, opts...).ToFunc()
+}
+
+// ByTemplate orders the results by the template field.
+func ByTemplate(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTemplate, opts...).ToFunc()
 }
 
 // ByConnectionField orders the results by connection field.
@@ -159,10 +248,38 @@ func ByConnectionField(field string, opts ...sql.OrderTermOption) OrderOption {
 	}
 }
 
-// ByExecutorField orders the results by executor field.
-func ByExecutorField(field string, opts ...sql.OrderTermOption) OrderOption {
+// ByAuthorField orders the results by author field.
+func ByAuthorField(field string, opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newExecutorStep(), sql.OrderByField(field, opts...))
+		sqlgraph.OrderByNeighborTerms(s, newAuthorStep(), sql.OrderByField(field, opts...))
+	}
+}
+
+// ByExecutionsCount orders the results by executions count.
+func ByExecutionsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newExecutionsStep(), opts...)
+	}
+}
+
+// ByExecutions orders the results by executions terms.
+func ByExecutions(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newExecutionsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
+// ByApprovalsCount orders the results by approvals count.
+func ByApprovalsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newApprovalsStep(), opts...)
+	}
+}
+
+// ByApprovals orders the results by approvals terms.
+func ByApprovals(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newApprovalsStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
 
@@ -186,11 +303,25 @@ func newConnectionStep() *sqlgraph.Step {
 		sqlgraph.Edge(sqlgraph.M2O, false, ConnectionTable, ConnectionColumn),
 	)
 }
-func newExecutorStep() *sqlgraph.Step {
+func newAuthorStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(ExecutorInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.M2O, false, ExecutorTable, ExecutorColumn),
+		sqlgraph.To(AuthorInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.M2O, false, AuthorTable, AuthorColumn),
+	)
+}
+func newExecutionsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(ExecutionsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, ExecutionsTable, ExecutionsColumn),
+	)
+}
+func newApprovalsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(ApprovalsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, ApprovalsTable, ApprovalsColumn),
 	)
 }
 func newSnapshotsStep() *sqlgraph.Step {

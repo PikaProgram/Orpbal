@@ -6,6 +6,7 @@ import (
 	"Orpbal/ent/databasegrant"
 	"Orpbal/ent/group"
 	"Orpbal/ent/groupmembership"
+	"Orpbal/ent/migrationapproval"
 	"context"
 	"errors"
 	"fmt"
@@ -98,6 +99,21 @@ func (gc *GroupCreate) AddGrants(d ...*DatabaseGrant) *GroupCreate {
 		ids[i] = d[i].ID
 	}
 	return gc.AddGrantIDs(ids...)
+}
+
+// AddApprovalIDs adds the "approvals" edge to the MigrationApproval entity by IDs.
+func (gc *GroupCreate) AddApprovalIDs(ids ...int) *GroupCreate {
+	gc.mutation.AddApprovalIDs(ids...)
+	return gc
+}
+
+// AddApprovals adds the "approvals" edges to the MigrationApproval entity.
+func (gc *GroupCreate) AddApprovals(m ...*MigrationApproval) *GroupCreate {
+	ids := make([]int, len(m))
+	for i := range m {
+		ids[i] = m[i].ID
+	}
+	return gc.AddApprovalIDs(ids...)
 }
 
 // Mutation returns the GroupMutation object of the builder.
@@ -235,6 +251,22 @@ func (gc *GroupCreate) createSpec() (*Group, *sqlgraph.CreateSpec) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(databasegrant.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := gc.mutation.ApprovalsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   group.ApprovalsTable,
+			Columns: []string{group.ApprovalsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(migrationapproval.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {

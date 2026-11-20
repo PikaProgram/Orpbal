@@ -5,12 +5,13 @@ package ent
 import (
 	"Orpbal/ent/databaseconnection"
 	"Orpbal/ent/migration"
+	"Orpbal/ent/migrationapproval"
+	"Orpbal/ent/migrationexecution"
 	"Orpbal/ent/platformuser"
 	"Orpbal/ent/schemasnapshot"
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
@@ -35,28 +36,50 @@ func (mc *MigrationCreate) SetVersion(i int) *MigrationCreate {
 	return mc
 }
 
-// SetSQL sets the "sql" field.
-func (mc *MigrationCreate) SetSQL(s string) *MigrationCreate {
-	mc.mutation.SetSQL(s)
+// SetSQLUp sets the "sql_up" field.
+func (mc *MigrationCreate) SetSQLUp(s string) *MigrationCreate {
+	mc.mutation.SetSQLUp(s)
 	return mc
 }
 
-// SetExecutorID sets the "executor_id" field.
-func (mc *MigrationCreate) SetExecutorID(i int) *MigrationCreate {
-	mc.mutation.SetExecutorID(i)
+// SetSQLDown sets the "sql_down" field.
+func (mc *MigrationCreate) SetSQLDown(s string) *MigrationCreate {
+	mc.mutation.SetSQLDown(s)
 	return mc
 }
 
-// SetExecutedAt sets the "executed_at" field.
-func (mc *MigrationCreate) SetExecutedAt(t time.Time) *MigrationCreate {
-	mc.mutation.SetExecutedAt(t)
+// SetNillableSQLDown sets the "sql_down" field if the given value is not nil.
+func (mc *MigrationCreate) SetNillableSQLDown(s *string) *MigrationCreate {
+	if s != nil {
+		mc.SetSQLDown(*s)
+	}
 	return mc
 }
 
-// SetNillableExecutedAt sets the "executed_at" field if the given value is not nil.
-func (mc *MigrationCreate) SetNillableExecutedAt(t *time.Time) *MigrationCreate {
-	if t != nil {
-		mc.SetExecutedAt(*t)
+// SetIrreversible sets the "irreversible" field.
+func (mc *MigrationCreate) SetIrreversible(b bool) *MigrationCreate {
+	mc.mutation.SetIrreversible(b)
+	return mc
+}
+
+// SetNillableIrreversible sets the "irreversible" field if the given value is not nil.
+func (mc *MigrationCreate) SetNillableIrreversible(b *bool) *MigrationCreate {
+	if b != nil {
+		mc.SetIrreversible(*b)
+	}
+	return mc
+}
+
+// SetIrreversibleReason sets the "irreversible_reason" field.
+func (mc *MigrationCreate) SetIrreversibleReason(s string) *MigrationCreate {
+	mc.mutation.SetIrreversibleReason(s)
+	return mc
+}
+
+// SetNillableIrreversibleReason sets the "irreversible_reason" field if the given value is not nil.
+func (mc *MigrationCreate) SetNillableIrreversibleReason(s *string) *MigrationCreate {
+	if s != nil {
+		mc.SetIrreversibleReason(*s)
 	}
 	return mc
 }
@@ -67,14 +90,134 @@ func (mc *MigrationCreate) SetStatus(m migration.Status) *MigrationCreate {
 	return mc
 }
 
+// SetAuthorID sets the "author_id" field.
+func (mc *MigrationCreate) SetAuthorID(i int) *MigrationCreate {
+	mc.mutation.SetAuthorID(i)
+	return mc
+}
+
+// SetBatchSize sets the "batch_size" field.
+func (mc *MigrationCreate) SetBatchSize(i int) *MigrationCreate {
+	mc.mutation.SetBatchSize(i)
+	return mc
+}
+
+// SetNillableBatchSize sets the "batch_size" field if the given value is not nil.
+func (mc *MigrationCreate) SetNillableBatchSize(i *int) *MigrationCreate {
+	if i != nil {
+		mc.SetBatchSize(*i)
+	}
+	return mc
+}
+
+// SetCursorColumn sets the "cursor_column" field.
+func (mc *MigrationCreate) SetCursorColumn(s string) *MigrationCreate {
+	mc.mutation.SetCursorColumn(s)
+	return mc
+}
+
+// SetNillableCursorColumn sets the "cursor_column" field if the given value is not nil.
+func (mc *MigrationCreate) SetNillableCursorColumn(s *string) *MigrationCreate {
+	if s != nil {
+		mc.SetCursorColumn(*s)
+	}
+	return mc
+}
+
+// SetBatchTable sets the "batch_table" field.
+func (mc *MigrationCreate) SetBatchTable(s string) *MigrationCreate {
+	mc.mutation.SetBatchTable(s)
+	return mc
+}
+
+// SetNillableBatchTable sets the "batch_table" field if the given value is not nil.
+func (mc *MigrationCreate) SetNillableBatchTable(s *string) *MigrationCreate {
+	if s != nil {
+		mc.SetBatchTable(*s)
+	}
+	return mc
+}
+
+// SetMinID sets the "min_id" field.
+func (mc *MigrationCreate) SetMinID(i int64) *MigrationCreate {
+	mc.mutation.SetMinID(i)
+	return mc
+}
+
+// SetNillableMinID sets the "min_id" field if the given value is not nil.
+func (mc *MigrationCreate) SetNillableMinID(i *int64) *MigrationCreate {
+	if i != nil {
+		mc.SetMinID(*i)
+	}
+	return mc
+}
+
+// SetMaxID sets the "max_id" field.
+func (mc *MigrationCreate) SetMaxID(i int64) *MigrationCreate {
+	mc.mutation.SetMaxID(i)
+	return mc
+}
+
+// SetNillableMaxID sets the "max_id" field if the given value is not nil.
+func (mc *MigrationCreate) SetNillableMaxID(i *int64) *MigrationCreate {
+	if i != nil {
+		mc.SetMaxID(*i)
+	}
+	return mc
+}
+
+// SetTemplate sets the "template" field.
+func (mc *MigrationCreate) SetTemplate(s string) *MigrationCreate {
+	mc.mutation.SetTemplate(s)
+	return mc
+}
+
+// SetNillableTemplate sets the "template" field if the given value is not nil.
+func (mc *MigrationCreate) SetNillableTemplate(s *string) *MigrationCreate {
+	if s != nil {
+		mc.SetTemplate(*s)
+	}
+	return mc
+}
+
 // SetConnection sets the "connection" edge to the DatabaseConnection entity.
 func (mc *MigrationCreate) SetConnection(d *DatabaseConnection) *MigrationCreate {
 	return mc.SetConnectionID(d.ID)
 }
 
-// SetExecutor sets the "executor" edge to the PlatformUser entity.
-func (mc *MigrationCreate) SetExecutor(p *PlatformUser) *MigrationCreate {
-	return mc.SetExecutorID(p.ID)
+// SetAuthor sets the "author" edge to the PlatformUser entity.
+func (mc *MigrationCreate) SetAuthor(p *PlatformUser) *MigrationCreate {
+	return mc.SetAuthorID(p.ID)
+}
+
+// AddExecutionIDs adds the "executions" edge to the MigrationExecution entity by IDs.
+func (mc *MigrationCreate) AddExecutionIDs(ids ...int) *MigrationCreate {
+	mc.mutation.AddExecutionIDs(ids...)
+	return mc
+}
+
+// AddExecutions adds the "executions" edges to the MigrationExecution entity.
+func (mc *MigrationCreate) AddExecutions(m ...*MigrationExecution) *MigrationCreate {
+	ids := make([]int, len(m))
+	for i := range m {
+		ids[i] = m[i].ID
+	}
+	return mc.AddExecutionIDs(ids...)
+}
+
+// AddApprovalIDs adds the "approvals" edge to the MigrationApproval entity by IDs.
+func (mc *MigrationCreate) AddApprovalIDs(ids ...int) *MigrationCreate {
+	mc.mutation.AddApprovalIDs(ids...)
+	return mc
+}
+
+// AddApprovals adds the "approvals" edges to the MigrationApproval entity.
+func (mc *MigrationCreate) AddApprovals(m ...*MigrationApproval) *MigrationCreate {
+	ids := make([]int, len(m))
+	for i := range m {
+		ids[i] = m[i].ID
+	}
+	return mc.AddApprovalIDs(ids...)
 }
 
 // AddSnapshotIDs adds the "snapshots" edge to the SchemaSnapshot entity by IDs.
@@ -127,9 +270,9 @@ func (mc *MigrationCreate) ExecX(ctx context.Context) {
 
 // defaults sets the default values of the builder before save.
 func (mc *MigrationCreate) defaults() {
-	if _, ok := mc.mutation.ExecutedAt(); !ok {
-		v := migration.DefaultExecutedAt()
-		mc.mutation.SetExecutedAt(v)
+	if _, ok := mc.mutation.Irreversible(); !ok {
+		v := migration.DefaultIrreversible
+		mc.mutation.SetIrreversible(v)
 	}
 }
 
@@ -151,19 +294,11 @@ func (mc *MigrationCreate) check() error {
 			return &ValidationError{Name: "version", err: fmt.Errorf(`ent: validator failed for field "Migration.version": %w`, err)}
 		}
 	}
-	if _, ok := mc.mutation.SQL(); !ok {
-		return &ValidationError{Name: "sql", err: errors.New(`ent: missing required field "Migration.sql"`)}
+	if _, ok := mc.mutation.SQLUp(); !ok {
+		return &ValidationError{Name: "sql_up", err: errors.New(`ent: missing required field "Migration.sql_up"`)}
 	}
-	if _, ok := mc.mutation.ExecutorID(); !ok {
-		return &ValidationError{Name: "executor_id", err: errors.New(`ent: missing required field "Migration.executor_id"`)}
-	}
-	if v, ok := mc.mutation.ExecutorID(); ok {
-		if err := migration.ExecutorIDValidator(v); err != nil {
-			return &ValidationError{Name: "executor_id", err: fmt.Errorf(`ent: validator failed for field "Migration.executor_id": %w`, err)}
-		}
-	}
-	if _, ok := mc.mutation.ExecutedAt(); !ok {
-		return &ValidationError{Name: "executed_at", err: errors.New(`ent: missing required field "Migration.executed_at"`)}
+	if _, ok := mc.mutation.Irreversible(); !ok {
+		return &ValidationError{Name: "irreversible", err: errors.New(`ent: missing required field "Migration.irreversible"`)}
 	}
 	if _, ok := mc.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "Migration.status"`)}
@@ -173,11 +308,24 @@ func (mc *MigrationCreate) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Migration.status": %w`, err)}
 		}
 	}
+	if _, ok := mc.mutation.AuthorID(); !ok {
+		return &ValidationError{Name: "author_id", err: errors.New(`ent: missing required field "Migration.author_id"`)}
+	}
+	if v, ok := mc.mutation.AuthorID(); ok {
+		if err := migration.AuthorIDValidator(v); err != nil {
+			return &ValidationError{Name: "author_id", err: fmt.Errorf(`ent: validator failed for field "Migration.author_id": %w`, err)}
+		}
+	}
+	if v, ok := mc.mutation.BatchSize(); ok {
+		if err := migration.BatchSizeValidator(v); err != nil {
+			return &ValidationError{Name: "batch_size", err: fmt.Errorf(`ent: validator failed for field "Migration.batch_size": %w`, err)}
+		}
+	}
 	if len(mc.mutation.ConnectionIDs()) == 0 {
 		return &ValidationError{Name: "connection", err: errors.New(`ent: missing required edge "Migration.connection"`)}
 	}
-	if len(mc.mutation.ExecutorIDs()) == 0 {
-		return &ValidationError{Name: "executor", err: errors.New(`ent: missing required edge "Migration.executor"`)}
+	if len(mc.mutation.AuthorIDs()) == 0 {
+		return &ValidationError{Name: "author", err: errors.New(`ent: missing required edge "Migration.author"`)}
 	}
 	return nil
 }
@@ -209,17 +357,49 @@ func (mc *MigrationCreate) createSpec() (*Migration, *sqlgraph.CreateSpec) {
 		_spec.SetField(migration.FieldVersion, field.TypeInt, value)
 		_node.Version = value
 	}
-	if value, ok := mc.mutation.SQL(); ok {
-		_spec.SetField(migration.FieldSQL, field.TypeString, value)
-		_node.SQL = value
+	if value, ok := mc.mutation.SQLUp(); ok {
+		_spec.SetField(migration.FieldSQLUp, field.TypeString, value)
+		_node.SQLUp = value
 	}
-	if value, ok := mc.mutation.ExecutedAt(); ok {
-		_spec.SetField(migration.FieldExecutedAt, field.TypeTime, value)
-		_node.ExecutedAt = value
+	if value, ok := mc.mutation.SQLDown(); ok {
+		_spec.SetField(migration.FieldSQLDown, field.TypeString, value)
+		_node.SQLDown = value
+	}
+	if value, ok := mc.mutation.Irreversible(); ok {
+		_spec.SetField(migration.FieldIrreversible, field.TypeBool, value)
+		_node.Irreversible = value
+	}
+	if value, ok := mc.mutation.IrreversibleReason(); ok {
+		_spec.SetField(migration.FieldIrreversibleReason, field.TypeString, value)
+		_node.IrreversibleReason = value
 	}
 	if value, ok := mc.mutation.Status(); ok {
 		_spec.SetField(migration.FieldStatus, field.TypeEnum, value)
 		_node.Status = value
+	}
+	if value, ok := mc.mutation.BatchSize(); ok {
+		_spec.SetField(migration.FieldBatchSize, field.TypeInt, value)
+		_node.BatchSize = value
+	}
+	if value, ok := mc.mutation.CursorColumn(); ok {
+		_spec.SetField(migration.FieldCursorColumn, field.TypeString, value)
+		_node.CursorColumn = value
+	}
+	if value, ok := mc.mutation.BatchTable(); ok {
+		_spec.SetField(migration.FieldBatchTable, field.TypeString, value)
+		_node.BatchTable = value
+	}
+	if value, ok := mc.mutation.MinID(); ok {
+		_spec.SetField(migration.FieldMinID, field.TypeInt64, value)
+		_node.MinID = &value
+	}
+	if value, ok := mc.mutation.MaxID(); ok {
+		_spec.SetField(migration.FieldMaxID, field.TypeInt64, value)
+		_node.MaxID = &value
+	}
+	if value, ok := mc.mutation.Template(); ok {
+		_spec.SetField(migration.FieldTemplate, field.TypeString, value)
+		_node.Template = value
 	}
 	if nodes := mc.mutation.ConnectionIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
@@ -238,12 +418,12 @@ func (mc *MigrationCreate) createSpec() (*Migration, *sqlgraph.CreateSpec) {
 		_node.ConnectionID = nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
-	if nodes := mc.mutation.ExecutorIDs(); len(nodes) > 0 {
+	if nodes := mc.mutation.AuthorIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: false,
-			Table:   migration.ExecutorTable,
-			Columns: []string{migration.ExecutorColumn},
+			Table:   migration.AuthorTable,
+			Columns: []string{migration.AuthorColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(platformuser.FieldID, field.TypeInt),
@@ -252,7 +432,39 @@ func (mc *MigrationCreate) createSpec() (*Migration, *sqlgraph.CreateSpec) {
 		for _, k := range nodes {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
-		_node.ExecutorID = nodes[0]
+		_node.AuthorID = nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := mc.mutation.ExecutionsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   migration.ExecutionsTable,
+			Columns: []string{migration.ExecutionsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(migrationexecution.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := mc.mutation.ApprovalsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   migration.ApprovalsTable,
+			Columns: []string{migration.ApprovalsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(migrationapproval.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	if nodes := mc.mutation.SnapshotsIDs(); len(nodes) > 0 {

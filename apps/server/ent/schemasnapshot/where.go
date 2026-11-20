@@ -59,6 +59,11 @@ func MigrationID(v int) predicate.SchemaSnapshot {
 	return predicate.SchemaSnapshot(sql.FieldEQ(FieldMigrationID, v))
 }
 
+// ExecutionID applies equality check predicate on the "execution_id" field. It's identical to ExecutionIDEQ.
+func ExecutionID(v int) predicate.SchemaSnapshot {
+	return predicate.SchemaSnapshot(sql.FieldEQ(FieldExecutionID, v))
+}
+
 // JSON applies equality check predicate on the "json" field. It's identical to JSONEQ.
 func JSON(v string) predicate.SchemaSnapshot {
 	return predicate.SchemaSnapshot(sql.FieldEQ(FieldJSON, v))
@@ -82,6 +87,36 @@ func MigrationIDIn(vs ...int) predicate.SchemaSnapshot {
 // MigrationIDNotIn applies the NotIn predicate on the "migration_id" field.
 func MigrationIDNotIn(vs ...int) predicate.SchemaSnapshot {
 	return predicate.SchemaSnapshot(sql.FieldNotIn(FieldMigrationID, vs...))
+}
+
+// ExecutionIDEQ applies the EQ predicate on the "execution_id" field.
+func ExecutionIDEQ(v int) predicate.SchemaSnapshot {
+	return predicate.SchemaSnapshot(sql.FieldEQ(FieldExecutionID, v))
+}
+
+// ExecutionIDNEQ applies the NEQ predicate on the "execution_id" field.
+func ExecutionIDNEQ(v int) predicate.SchemaSnapshot {
+	return predicate.SchemaSnapshot(sql.FieldNEQ(FieldExecutionID, v))
+}
+
+// ExecutionIDIn applies the In predicate on the "execution_id" field.
+func ExecutionIDIn(vs ...int) predicate.SchemaSnapshot {
+	return predicate.SchemaSnapshot(sql.FieldIn(FieldExecutionID, vs...))
+}
+
+// ExecutionIDNotIn applies the NotIn predicate on the "execution_id" field.
+func ExecutionIDNotIn(vs ...int) predicate.SchemaSnapshot {
+	return predicate.SchemaSnapshot(sql.FieldNotIn(FieldExecutionID, vs...))
+}
+
+// ExecutionIDIsNil applies the IsNil predicate on the "execution_id" field.
+func ExecutionIDIsNil() predicate.SchemaSnapshot {
+	return predicate.SchemaSnapshot(sql.FieldIsNull(FieldExecutionID))
+}
+
+// ExecutionIDNotNil applies the NotNil predicate on the "execution_id" field.
+func ExecutionIDNotNil() predicate.SchemaSnapshot {
+	return predicate.SchemaSnapshot(sql.FieldNotNull(FieldExecutionID))
 }
 
 // PhaseEQ applies the EQ predicate on the "phase" field.
@@ -184,6 +219,29 @@ func HasMigration() predicate.SchemaSnapshot {
 func HasMigrationWith(preds ...predicate.Migration) predicate.SchemaSnapshot {
 	return predicate.SchemaSnapshot(func(s *sql.Selector) {
 		step := newMigrationStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasExecution applies the HasEdge predicate on the "execution" edge.
+func HasExecution() predicate.SchemaSnapshot {
+	return predicate.SchemaSnapshot(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, ExecutionTable, ExecutionColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasExecutionWith applies the HasEdge predicate on the "execution" edge with a given conditions (other predicates).
+func HasExecutionWith(preds ...predicate.MigrationExecution) predicate.SchemaSnapshot {
+	return predicate.SchemaSnapshot(func(s *sql.Selector) {
+		step := newExecutionStep()
 		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
 			for _, p := range preds {
 				p(s)

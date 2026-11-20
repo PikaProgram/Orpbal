@@ -34,6 +34,27 @@ func (e AccessLevel) Valid() bool {
 	}
 }
 
+// Defines values for ApprovalStatus.
+const (
+	ApprovalStatusApproved ApprovalStatus = "approved"
+	ApprovalStatusPending  ApprovalStatus = "pending"
+	ApprovalStatusRejected ApprovalStatus = "rejected"
+)
+
+// Valid indicates whether the value is a known member of the ApprovalStatus enum.
+func (e ApprovalStatus) Valid() bool {
+	switch e {
+	case ApprovalStatusApproved:
+		return true
+	case ApprovalStatusPending:
+		return true
+	case ApprovalStatusRejected:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for Engine.
 const (
 	Mysql    Engine = "mysql"
@@ -52,21 +73,60 @@ func (e Engine) Valid() bool {
 	}
 }
 
-// Defines values for MigrationStatus.
+// Defines values for ExecutionKind.
 const (
-	MigrationStatusFailed  MigrationStatus = "failed"
-	MigrationStatusPending MigrationStatus = "pending"
-	MigrationStatusSuccess MigrationStatus = "success"
+	BatchRevert ExecutionKind = "batch_revert"
+	Forward     ExecutionKind = "forward"
+	Retry       ExecutionKind = "retry"
+	Rollback    ExecutionKind = "rollback"
+	Up          ExecutionKind = "up"
 )
 
-// Valid indicates whether the value is a known member of the MigrationStatus enum.
-func (e MigrationStatus) Valid() bool {
+// Valid indicates whether the value is a known member of the ExecutionKind enum.
+func (e ExecutionKind) Valid() bool {
 	switch e {
-	case MigrationStatusFailed:
+	case BatchRevert:
 		return true
-	case MigrationStatusPending:
+	case Forward:
 		return true
-	case MigrationStatusSuccess:
+	case Retry:
+		return true
+	case Rollback:
+		return true
+	case Up:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for JobStatus.
+const (
+	JobStatusCancelled  JobStatus = "cancelled"
+	JobStatusCancelling JobStatus = "cancelling"
+	JobStatusFailed     JobStatus = "failed"
+	JobStatusPartial    JobStatus = "partial"
+	JobStatusQueued     JobStatus = "queued"
+	JobStatusRunning    JobStatus = "running"
+	JobStatusSuccess    JobStatus = "success"
+)
+
+// Valid indicates whether the value is a known member of the JobStatus enum.
+func (e JobStatus) Valid() bool {
+	switch e {
+	case JobStatusCancelled:
+		return true
+	case JobStatusCancelling:
+		return true
+	case JobStatusFailed:
+		return true
+	case JobStatusPartial:
+		return true
+	case JobStatusQueued:
+		return true
+	case JobStatusRunning:
+		return true
+	case JobStatusSuccess:
 		return true
 	default:
 		return false
@@ -88,6 +148,45 @@ func (e MigrationDiffStatus) Valid() bool {
 	case MigrationDiffStatusPending:
 		return true
 	case MigrationDiffStatusSuccess:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MigrationStatus.
+const (
+	MigrationStatusApproved      MigrationStatus = "approved"
+	MigrationStatusCancelled     MigrationStatus = "cancelled"
+	MigrationStatusDraft         MigrationStatus = "draft"
+	MigrationStatusFailed        MigrationStatus = "failed"
+	MigrationStatusPartial       MigrationStatus = "partial"
+	MigrationStatusPendingReview MigrationStatus = "pending_review"
+	MigrationStatusQueued        MigrationStatus = "queued"
+	MigrationStatusRunning       MigrationStatus = "running"
+	MigrationStatusSuccess       MigrationStatus = "success"
+)
+
+// Valid indicates whether the value is a known member of the MigrationStatus enum.
+func (e MigrationStatus) Valid() bool {
+	switch e {
+	case MigrationStatusApproved:
+		return true
+	case MigrationStatusCancelled:
+		return true
+	case MigrationStatusDraft:
+		return true
+	case MigrationStatusFailed:
+		return true
+	case MigrationStatusPartial:
+		return true
+	case MigrationStatusPendingReview:
+		return true
+	case MigrationStatusQueued:
+		return true
+	case MigrationStatusRunning:
+		return true
+	case MigrationStatusSuccess:
 		return true
 	default:
 		return false
@@ -184,8 +283,94 @@ func (e SchemaChangeObjectType) Valid() bool {
 	}
 }
 
+// Defines values for SchemaSnapshotInfoPhase.
+const (
+	After  SchemaSnapshotInfoPhase = "after"
+	Before SchemaSnapshotInfoPhase = "before"
+)
+
+// Valid indicates whether the value is a known member of the SchemaSnapshotInfoPhase enum.
+func (e SchemaSnapshotInfoPhase) Valid() bool {
+	switch e {
+	case After:
+		return true
+	case Before:
+		return true
+	default:
+		return false
+	}
+}
+
 // AccessLevel defines model for AccessLevel.
 type AccessLevel string
+
+// Approval defines model for Approval.
+type Approval struct {
+	Comment   *string    `json:"comment,omitempty"`
+	CreatedAt time.Time  `json:"created_at"`
+	DecidedAt *time.Time `json:"decided_at,omitempty"`
+
+	// DecidedById Actual leader who approved; may differ from leader_id when leadership rotated
+	DecidedById    *int                      `json:"decided_by_id,omitempty"`
+	GroupId        int                       `json:"group_id"`
+	GroupName      string                    `json:"group_name"`
+	Id             int                       `json:"id"`
+	LeaderId       int                       `json:"leader_id"`
+	LeaderUsername string                    `json:"leader_username"`
+	Migration      *ApprovalMigrationSummary `json:"migration,omitempty"`
+	MigrationId    int                       `json:"migration_id"`
+	Status         ApprovalStatus            `json:"status"`
+}
+
+// ApprovalMigrationSummary defines model for ApprovalMigrationSummary.
+type ApprovalMigrationSummary struct {
+	AuthorUsername string          `json:"author_username"`
+	Id             int             `json:"id"`
+	SqlUp          string          `json:"sql_up"`
+	Status         MigrationStatus `json:"status"`
+	Version        int             `json:"version"`
+}
+
+// ApprovalStatus defines model for ApprovalStatus.
+type ApprovalStatus string
+
+// BatchConfig defines model for BatchConfig.
+type BatchConfig struct {
+	BatchSize int `json:"batch_size"`
+
+	// BatchTable Table the batch cursor walks (identifier-validated), e.g. orpbal_demo_events
+	BatchTable *string `json:"batch_table,omitempty"`
+
+	// CursorColumn Unique, unchanging column the worker advances each batch, e.g. id
+	CursorColumn string `json:"cursor_column"`
+
+	// MaxId Inclusive upper scope of the data migration
+	MaxId *int64 `json:"max_id,omitempty"`
+
+	// MinId Inclusive lower scope of the data migration
+	MinId *int64 `json:"min_id,omitempty"`
+
+	// Template Batch SQL with {{last_id}} (exclusive lower cursor bound), {{upper_id}} (inclusive upper bound the worker
+	// probes per batch), {{batch_size}}, {{min_id}}, {{max_id}} placeholders. Must be idempotent; scope rows with
+	// a subselect, e.g. UPDATE t SET ... WHERE id IN (SELECT id FROM t WHERE id > {{last_id}} AND id <= {{upper_id}}
+	// AND id >= {{min_id}} AND id <= {{max_id}} ORDER BY id LIMIT {{batch_size}}).
+	Template string `json:"template"`
+}
+
+// BatchRevertRequest defines model for BatchRevertRequest.
+type BatchRevertRequest struct {
+	BatchSize    int    `json:"batch_size"`
+	CursorColumn string `json:"cursor_column"`
+
+	// ExecutionId The partial batch execution to compensate
+	ExecutionId int `json:"execution_id"`
+
+	// SqlDown Immutable compensation SQL with {{last_id}}, {{batch_size}}, {{min_id}}, {{max_id}} placeholders
+	SqlDown string `json:"sql_down"`
+
+	// Template Fallback when compensation SQL needs extra data recovery columns
+	Template *string `json:"template,omitempty"`
+}
 
 // ChangePasswordRequest defines model for ChangePasswordRequest.
 type ChangePasswordRequest struct {
@@ -217,7 +402,15 @@ type CreateGroupRequest struct {
 
 // CreateMigrationRequest defines model for CreateMigrationRequest.
 type CreateMigrationRequest struct {
-	Sql string `json:"sql"`
+	Batch        *BatchConfig `json:"batch,omitempty"`
+	Irreversible *bool        `json:"irreversible,omitempty"`
+
+	// IrreversibleReason Required when irreversible is true
+	IrreversibleReason *string `json:"irreversible_reason,omitempty"`
+
+	// SqlDown Reverse SQL enabling rollback; omit or leave empty when irreversible
+	SqlDown *string `json:"sql_down,omitempty"`
+	SqlUp   string  `json:"sql_up"`
 }
 
 // CreateUserRequest defines model for CreateUserRequest.
@@ -271,6 +464,35 @@ type ExecuteQueryRequest struct {
 	Offset *int   `json:"offset,omitempty"`
 	Sql    string `json:"sql"`
 }
+
+// Execution defines model for Execution.
+type Execution struct {
+	ActorId       int    `json:"actor_id"`
+	ActorUsername string `json:"actor_username"`
+
+	// BatchCursor Last committed batch upper bound (exclusive) for batch migrations
+	BatchCursor  *int64        `json:"batch_cursor,omitempty"`
+	BatchesDone  *int          `json:"batches_done,omitempty"`
+	ConnectionId int           `json:"connection_id"`
+	CreatedAt    time.Time     `json:"created_at"`
+	Error        *string       `json:"error,omitempty"`
+	FinishedAt   *time.Time    `json:"finished_at,omitempty"`
+	Id           int           `json:"id"`
+	Kind         ExecutionKind `json:"kind"`
+	MigrationId  int           `json:"migration_id"`
+
+	// RevertedExecutionId For rollback, the execution ID being cancelled
+	RevertedExecutionId *int                  `json:"reverted_execution_id,omitempty"`
+	RowsDone            *int64                `json:"rows_done,omitempty"`
+	Snapshots           *[]SchemaSnapshotInfo `json:"snapshots,omitempty"`
+
+	// SqlExecuted Copy of the SQL that actually ran, filled after execution
+	SqlExecuted *string         `json:"sql_executed,omitempty"`
+	Status      MigrationStatus `json:"status"`
+}
+
+// ExecutionKind defines model for ExecutionKind.
+type ExecutionKind string
 
 // ExplainNode defines model for ExplainNode.
 type ExplainNode struct {
@@ -351,6 +573,26 @@ type Health struct {
 	Status string `json:"status"`
 }
 
+// Job defines model for Job.
+type Job struct {
+	Attempts     *int       `json:"attempts,omitempty"`
+	BatchCursor  *int64     `json:"batch_cursor,omitempty"`
+	BatchesDone  *int       `json:"batches_done,omitempty"`
+	ConnectionId int        `json:"connection_id"`
+	CreatedAt    time.Time  `json:"created_at"`
+	Error        *string    `json:"error,omitempty"`
+	ExecutionId  int        `json:"execution_id"`
+	FinishedAt   *time.Time `json:"finished_at,omitempty"`
+	Id           int        `json:"id"`
+	MigrationId  int        `json:"migration_id"`
+	RowsDone     *int64     `json:"rows_done,omitempty"`
+	StartedAt    *time.Time `json:"started_at,omitempty"`
+	Status       JobStatus  `json:"status"`
+}
+
+// JobStatus defines model for JobStatus.
+type JobStatus string
+
 // LoginRequest defines model for LoginRequest.
 type LoginRequest struct {
 	Password string `json:"password"`
@@ -359,18 +601,22 @@ type LoginRequest struct {
 
 // Migration defines model for Migration.
 type Migration struct {
-	ConnectionId     int             `json:"connection_id"`
-	ExecutedAt       time.Time       `json:"executed_at"`
-	ExecutorId       int             `json:"executor_id"`
-	ExecutorUsername string          `json:"executor_username"`
-	Id               int             `json:"id"`
-	Sql              string          `json:"sql"`
-	Status           MigrationStatus `json:"status"`
-	Version          int             `json:"version"`
+	Approvals          []Approval      `json:"approvals"`
+	AuthorId           int             `json:"author_id"`
+	AuthorUsername     string          `json:"author_username"`
+	Batch              *BatchConfig    `json:"batch,omitempty"`
+	ConnectionId       int             `json:"connection_id"`
+	CreatedAt          time.Time       `json:"created_at"`
+	Executions         []Execution     `json:"executions"`
+	Id                 int             `json:"id"`
+	Irreversible       bool            `json:"irreversible"`
+	IrreversibleReason *string         `json:"irreversible_reason"`
+	SqlDown            *string         `json:"sql_down"`
+	SqlUp              string          `json:"sql_up"`
+	Status             MigrationStatus `json:"status"`
+	UpdatedAt          time.Time       `json:"updated_at"`
+	Version            int             `json:"version"`
 }
-
-// MigrationStatus defines model for Migration.Status.
-type MigrationStatus string
 
 // MigrationDiff defines model for MigrationDiff.
 type MigrationDiff struct {
@@ -381,6 +627,9 @@ type MigrationDiff struct {
 
 // MigrationDiffStatus defines model for MigrationDiff.Status.
 type MigrationDiffStatus string
+
+// MigrationStatus defines model for MigrationStatus.
+type MigrationStatus string
 
 // MutateRowsRequest defines model for MutateRowsRequest.
 type MutateRowsRequest struct {
@@ -416,6 +665,12 @@ type MyDatabase struct {
 type QueryResult struct {
 	Columns []string         `json:"columns"`
 	Rows    []*[]interface{} `json:"rows"`
+}
+
+// RejectRequest defines model for RejectRequest.
+type RejectRequest struct {
+	// Comment Reason returned to the migration author
+	Comment *string `json:"comment,omitempty"`
 }
 
 // ResetPasswordRequest defines model for ResetPasswordRequest.
@@ -474,6 +729,15 @@ type SchemaIndex struct {
 	IsUnique bool     `json:"is_unique"`
 	Name     string   `json:"name"`
 }
+
+// SchemaSnapshotInfo defines model for SchemaSnapshotInfo.
+type SchemaSnapshotInfo struct {
+	CapturedAt *time.Time              `json:"captured_at,omitempty"`
+	Phase      SchemaSnapshotInfoPhase `json:"phase"`
+}
+
+// SchemaSnapshotInfoPhase defines model for SchemaSnapshotInfo.Phase.
+type SchemaSnapshotInfoPhase string
 
 // SchemaTable defines model for SchemaTable.
 type SchemaTable struct {
@@ -660,6 +924,23 @@ type ResetUserPasswordParams struct {
 	XCSRFToken CsrfToken `json:"X-CSRF-Token"`
 }
 
+// ListMyApprovalsParams defines parameters for ListMyApprovals.
+type ListMyApprovalsParams struct {
+	Status *ApprovalStatus `form:"status,omitempty" json:"status,omitempty"`
+}
+
+// ApproveMigrationParams defines parameters for ApproveMigration.
+type ApproveMigrationParams struct {
+	// XCSRFToken Per-session CSRF token from GET /auth/session
+	XCSRFToken CsrfToken `json:"X-CSRF-Token"`
+}
+
+// RejectMigrationParams defines parameters for RejectMigration.
+type RejectMigrationParams struct {
+	// XCSRFToken Per-session CSRF token from GET /auth/session
+	XCSRFToken CsrfToken `json:"X-CSRF-Token"`
+}
+
 // LogoutParams defines parameters for Logout.
 type LogoutParams struct {
 	// XCSRFToken Per-session CSRF token from GET /auth/session
@@ -678,8 +959,20 @@ type ExplainDatabaseQueryParams struct {
 	XCSRFToken CsrfToken `json:"X-CSRF-Token"`
 }
 
+// ListMigrationsParams defines parameters for ListMigrations.
+type ListMigrationsParams struct {
+	// HideRollback When true, hide execution pairs cancelled by a successful rollback (failed attempts remain visible)
+	HideRollback *bool `form:"hide_rollback,omitempty" json:"hide_rollback,omitempty"`
+}
+
 // CreateMigrationParams defines parameters for CreateMigration.
 type CreateMigrationParams struct {
+	// XCSRFToken Per-session CSRF token from GET /auth/session
+	XCSRFToken CsrfToken `json:"X-CSRF-Token"`
+}
+
+// DeleteMigrationParams defines parameters for DeleteMigration.
+type DeleteMigrationParams struct {
 	// XCSRFToken Per-session CSRF token from GET /auth/session
 	XCSRFToken CsrfToken `json:"X-CSRF-Token"`
 }
@@ -690,8 +983,26 @@ type UpdateMigrationParams struct {
 	XCSRFToken CsrfToken `json:"X-CSRF-Token"`
 }
 
-// ExecuteMigrationParams defines parameters for ExecuteMigration.
-type ExecuteMigrationParams struct {
+// RequestForwardParams defines parameters for RequestForward.
+type RequestForwardParams struct {
+	// XCSRFToken Per-session CSRF token from GET /auth/session
+	XCSRFToken CsrfToken `json:"X-CSRF-Token"`
+}
+
+// RequestBatchRevertParams defines parameters for RequestBatchRevert.
+type RequestBatchRevertParams struct {
+	// XCSRFToken Per-session CSRF token from GET /auth/session
+	XCSRFToken CsrfToken `json:"X-CSRF-Token"`
+}
+
+// RequestRollbackParams defines parameters for RequestRollback.
+type RequestRollbackParams struct {
+	// XCSRFToken Per-session CSRF token from GET /auth/session
+	XCSRFToken CsrfToken `json:"X-CSRF-Token"`
+}
+
+// SubmitMigrationParams defines parameters for SubmitMigration.
+type SubmitMigrationParams struct {
 	// XCSRFToken Per-session CSRF token from GET /auth/session
 	XCSRFToken CsrfToken `json:"X-CSRF-Token"`
 }
@@ -704,6 +1015,12 @@ type ExecuteDatabaseQueryParams struct {
 
 // MutateRowsParams defines parameters for MutateRows.
 type MutateRowsParams struct {
+	// XCSRFToken Per-session CSRF token from GET /auth/session
+	XCSRFToken CsrfToken `json:"X-CSRF-Token"`
+}
+
+// CancelJobParams defines parameters for CancelJob.
+type CancelJobParams struct {
 	// XCSRFToken Per-session CSRF token from GET /auth/session
 	XCSRFToken CsrfToken `json:"X-CSRF-Token"`
 }
@@ -732,6 +1049,9 @@ type UpdateUserJSONRequestBody = UpdateUserRequest
 // ResetUserPasswordJSONRequestBody defines body for ResetUserPassword for application/json ContentType.
 type ResetUserPasswordJSONRequestBody = ResetPasswordRequest
 
+// RejectMigrationJSONRequestBody defines body for RejectMigration for application/json ContentType.
+type RejectMigrationJSONRequestBody = RejectRequest
+
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody = LoginRequest
 
@@ -746,6 +1066,9 @@ type CreateMigrationJSONRequestBody = CreateMigrationRequest
 
 // UpdateMigrationJSONRequestBody defines body for UpdateMigration for application/json ContentType.
 type UpdateMigrationJSONRequestBody = CreateMigrationRequest
+
+// RequestBatchRevertJSONRequestBody defines body for RequestBatchRevert for application/json ContentType.
+type RequestBatchRevertJSONRequestBody = BatchRevertRequest
 
 // ExecuteDatabaseQueryJSONRequestBody defines body for ExecuteDatabaseQuery for application/json ContentType.
 type ExecuteDatabaseQueryJSONRequestBody = ExecuteQueryRequest
@@ -813,6 +1136,15 @@ type ServerInterface interface {
 	// (POST /admin/users/{id}/password)
 	ResetUserPassword(c *gin.Context, id Id, params ResetUserPasswordParams)
 
+	// (GET /approvals)
+	ListMyApprovals(c *gin.Context, params ListMyApprovalsParams)
+
+	// (POST /approvals/{approvalId}/approve)
+	ApproveMigration(c *gin.Context, approvalId int, params ApproveMigrationParams)
+
+	// (POST /approvals/{approvalId}/reject)
+	RejectMigration(c *gin.Context, approvalId int, params RejectMigrationParams)
+
 	// (POST /auth/login)
 	Login(c *gin.Context)
 
@@ -829,10 +1161,13 @@ type ServerInterface interface {
 	ExplainDatabaseQuery(c *gin.Context, id Id, params ExplainDatabaseQueryParams)
 
 	// (GET /databases/{id}/migrations)
-	ListMigrations(c *gin.Context, id Id)
+	ListMigrations(c *gin.Context, id Id, params ListMigrationsParams)
 
 	// (POST /databases/{id}/migrations)
 	CreateMigration(c *gin.Context, id Id, params CreateMigrationParams)
+
+	// (DELETE /databases/{id}/migrations/{migrationId})
+	DeleteMigration(c *gin.Context, id Id, migrationId int, params DeleteMigrationParams)
 
 	// (PATCH /databases/{id}/migrations/{migrationId})
 	UpdateMigration(c *gin.Context, id Id, migrationId int, params UpdateMigrationParams)
@@ -840,8 +1175,17 @@ type ServerInterface interface {
 	// (GET /databases/{id}/migrations/{migrationId}/diff)
 	GetMigrationDiff(c *gin.Context, id Id, migrationId int)
 
-	// (POST /databases/{id}/migrations/{migrationId}/execute)
-	ExecuteMigration(c *gin.Context, id Id, migrationId int, params ExecuteMigrationParams)
+	// (POST /databases/{id}/migrations/{migrationId}/forward)
+	RequestForward(c *gin.Context, id Id, migrationId int, params RequestForwardParams)
+
+	// (POST /databases/{id}/migrations/{migrationId}/revert-batches)
+	RequestBatchRevert(c *gin.Context, id Id, migrationId int, params RequestBatchRevertParams)
+
+	// (POST /databases/{id}/migrations/{migrationId}/rollback)
+	RequestRollback(c *gin.Context, id Id, migrationId int, params RequestRollbackParams)
+
+	// (POST /databases/{id}/migrations/{migrationId}/submit)
+	SubmitMigration(c *gin.Context, id Id, migrationId int, params SubmitMigrationParams)
 
 	// (POST /databases/{id}/query)
 	ExecuteDatabaseQuery(c *gin.Context, id Id, params ExecuteDatabaseQueryParams)
@@ -857,6 +1201,12 @@ type ServerInterface interface {
 
 	// (GET /health)
 	GetHealth(c *gin.Context)
+
+	// (GET /jobs/{jobId})
+	GetJob(c *gin.Context, jobId int)
+
+	// (POST /jobs/{jobId}/cancel)
+	CancelJob(c *gin.Context, jobId int, params CancelJobParams)
 
 	// (GET /me/databases)
 	ListMyDatabases(c *gin.Context)
@@ -1691,6 +2041,143 @@ func (siw *ServerInterfaceWrapper) ResetUserPassword(c *gin.Context) {
 	siw.Handler.ResetUserPassword(c, id, params)
 }
 
+// ListMyApprovals operation middleware
+func (siw *ServerInterfaceWrapper) ListMyApprovals(c *gin.Context) {
+
+	var err error
+	_ = err
+
+	c.Set(string(CookieAuthScopes), []string{})
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListMyApprovalsParams
+
+	// ------------- Optional query parameter "status" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "status", c.Request.URL.Query(), &params.Status, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter status: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.ListMyApprovals(c, params)
+}
+
+// ApproveMigration operation middleware
+func (siw *ServerInterfaceWrapper) ApproveMigration(c *gin.Context) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "approvalId" -------------
+	var approvalId int
+
+	err = runtime.BindStyledParameterWithOptions("simple", "approvalId", c.Param("approvalId"), &approvalId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter approvalId: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	c.Set(string(CookieAuthScopes), []string{})
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ApproveMigrationParams
+
+	headers := c.Request.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandler(c, fmt.Errorf("Expected one value for X-CSRF-Token, got %d", n), http.StatusBadRequest)
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter X-CSRF-Token: %w", err), http.StatusBadRequest)
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		siw.ErrorHandler(c, fmt.Errorf("Header parameter X-CSRF-Token is required, but not found"), http.StatusBadRequest)
+		return
+	}
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.ApproveMigration(c, approvalId, params)
+}
+
+// RejectMigration operation middleware
+func (siw *ServerInterfaceWrapper) RejectMigration(c *gin.Context) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "approvalId" -------------
+	var approvalId int
+
+	err = runtime.BindStyledParameterWithOptions("simple", "approvalId", c.Param("approvalId"), &approvalId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter approvalId: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	c.Set(string(CookieAuthScopes), []string{})
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RejectMigrationParams
+
+	headers := c.Request.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandler(c, fmt.Errorf("Expected one value for X-CSRF-Token, got %d", n), http.StatusBadRequest)
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter X-CSRF-Token: %w", err), http.StatusBadRequest)
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		siw.ErrorHandler(c, fmt.Errorf("Header parameter X-CSRF-Token is required, but not found"), http.StatusBadRequest)
+		return
+	}
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.RejectMigration(c, approvalId, params)
+}
+
 // Login operation middleware
 func (siw *ServerInterfaceWrapper) Login(c *gin.Context) {
 
@@ -1880,6 +2367,17 @@ func (siw *ServerInterfaceWrapper) ListMigrations(c *gin.Context) {
 
 	c.Set(string(CookieAuthScopes), []string{})
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListMigrationsParams
+
+	// ------------- Optional query parameter "hide_rollback" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "hide_rollback", c.Request.URL.Query(), &params.HideRollback, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter hide_rollback: %w", err), http.StatusBadRequest)
+		return
+	}
+
 	for _, middleware := range siw.HandlerMiddlewares {
 		middleware(c)
 		if c.IsAborted() {
@@ -1887,7 +2385,7 @@ func (siw *ServerInterfaceWrapper) ListMigrations(c *gin.Context) {
 		}
 	}
 
-	siw.Handler.ListMigrations(c, id)
+	siw.Handler.ListMigrations(c, id, params)
 }
 
 // CreateMigration operation middleware
@@ -1942,6 +2440,69 @@ func (siw *ServerInterfaceWrapper) CreateMigration(c *gin.Context) {
 	}
 
 	siw.Handler.CreateMigration(c, id, params)
+}
+
+// DeleteMigration operation middleware
+func (siw *ServerInterfaceWrapper) DeleteMigration(c *gin.Context) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", c.Param("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter id: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	// ------------- Path parameter "migrationId" -------------
+	var migrationId int
+
+	err = runtime.BindStyledParameterWithOptions("simple", "migrationId", c.Param("migrationId"), &migrationId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter migrationId: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	c.Set(string(CookieAuthScopes), []string{})
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteMigrationParams
+
+	headers := c.Request.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandler(c, fmt.Errorf("Expected one value for X-CSRF-Token, got %d", n), http.StatusBadRequest)
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter X-CSRF-Token: %w", err), http.StatusBadRequest)
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		siw.ErrorHandler(c, fmt.Errorf("Header parameter X-CSRF-Token is required, but not found"), http.StatusBadRequest)
+		return
+	}
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.DeleteMigration(c, id, migrationId, params)
 }
 
 // UpdateMigration operation middleware
@@ -2043,8 +2604,8 @@ func (siw *ServerInterfaceWrapper) GetMigrationDiff(c *gin.Context) {
 	siw.Handler.GetMigrationDiff(c, id, migrationId)
 }
 
-// ExecuteMigration operation middleware
-func (siw *ServerInterfaceWrapper) ExecuteMigration(c *gin.Context) {
+// RequestForward operation middleware
+func (siw *ServerInterfaceWrapper) RequestForward(c *gin.Context) {
 
 	var err error
 	_ = err
@@ -2070,7 +2631,7 @@ func (siw *ServerInterfaceWrapper) ExecuteMigration(c *gin.Context) {
 	c.Set(string(CookieAuthScopes), []string{})
 
 	// Parameter object where we will unmarshal all parameters from the context
-	var params ExecuteMigrationParams
+	var params RequestForwardParams
 
 	headers := c.Request.Header
 
@@ -2103,7 +2664,196 @@ func (siw *ServerInterfaceWrapper) ExecuteMigration(c *gin.Context) {
 		}
 	}
 
-	siw.Handler.ExecuteMigration(c, id, migrationId, params)
+	siw.Handler.RequestForward(c, id, migrationId, params)
+}
+
+// RequestBatchRevert operation middleware
+func (siw *ServerInterfaceWrapper) RequestBatchRevert(c *gin.Context) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", c.Param("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter id: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	// ------------- Path parameter "migrationId" -------------
+	var migrationId int
+
+	err = runtime.BindStyledParameterWithOptions("simple", "migrationId", c.Param("migrationId"), &migrationId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter migrationId: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	c.Set(string(CookieAuthScopes), []string{})
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RequestBatchRevertParams
+
+	headers := c.Request.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandler(c, fmt.Errorf("Expected one value for X-CSRF-Token, got %d", n), http.StatusBadRequest)
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter X-CSRF-Token: %w", err), http.StatusBadRequest)
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		siw.ErrorHandler(c, fmt.Errorf("Header parameter X-CSRF-Token is required, but not found"), http.StatusBadRequest)
+		return
+	}
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.RequestBatchRevert(c, id, migrationId, params)
+}
+
+// RequestRollback operation middleware
+func (siw *ServerInterfaceWrapper) RequestRollback(c *gin.Context) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", c.Param("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter id: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	// ------------- Path parameter "migrationId" -------------
+	var migrationId int
+
+	err = runtime.BindStyledParameterWithOptions("simple", "migrationId", c.Param("migrationId"), &migrationId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter migrationId: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	c.Set(string(CookieAuthScopes), []string{})
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RequestRollbackParams
+
+	headers := c.Request.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandler(c, fmt.Errorf("Expected one value for X-CSRF-Token, got %d", n), http.StatusBadRequest)
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter X-CSRF-Token: %w", err), http.StatusBadRequest)
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		siw.ErrorHandler(c, fmt.Errorf("Header parameter X-CSRF-Token is required, but not found"), http.StatusBadRequest)
+		return
+	}
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.RequestRollback(c, id, migrationId, params)
+}
+
+// SubmitMigration operation middleware
+func (siw *ServerInterfaceWrapper) SubmitMigration(c *gin.Context) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", c.Param("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter id: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	// ------------- Path parameter "migrationId" -------------
+	var migrationId int
+
+	err = runtime.BindStyledParameterWithOptions("simple", "migrationId", c.Param("migrationId"), &migrationId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter migrationId: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	c.Set(string(CookieAuthScopes), []string{})
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SubmitMigrationParams
+
+	headers := c.Request.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandler(c, fmt.Errorf("Expected one value for X-CSRF-Token, got %d", n), http.StatusBadRequest)
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter X-CSRF-Token: %w", err), http.StatusBadRequest)
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		siw.ErrorHandler(c, fmt.Errorf("Header parameter X-CSRF-Token is required, but not found"), http.StatusBadRequest)
+		return
+	}
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.SubmitMigration(c, id, migrationId, params)
 }
 
 // ExecuteDatabaseQuery operation middleware
@@ -2281,6 +3031,87 @@ func (siw *ServerInterfaceWrapper) GetHealth(c *gin.Context) {
 	siw.Handler.GetHealth(c)
 }
 
+// GetJob operation middleware
+func (siw *ServerInterfaceWrapper) GetJob(c *gin.Context) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "jobId" -------------
+	var jobId int
+
+	err = runtime.BindStyledParameterWithOptions("simple", "jobId", c.Param("jobId"), &jobId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter jobId: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	c.Set(string(CookieAuthScopes), []string{})
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.GetJob(c, jobId)
+}
+
+// CancelJob operation middleware
+func (siw *ServerInterfaceWrapper) CancelJob(c *gin.Context) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "jobId" -------------
+	var jobId int
+
+	err = runtime.BindStyledParameterWithOptions("simple", "jobId", c.Param("jobId"), &jobId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter jobId: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	c.Set(string(CookieAuthScopes), []string{})
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CancelJobParams
+
+	headers := c.Request.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandler(c, fmt.Errorf("Expected one value for X-CSRF-Token, got %d", n), http.StatusBadRequest)
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter X-CSRF-Token: %w", err), http.StatusBadRequest)
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		siw.ErrorHandler(c, fmt.Errorf("Header parameter X-CSRF-Token is required, but not found"), http.StatusBadRequest)
+		return
+	}
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.CancelJob(c, jobId, params)
+}
+
 // ListMyDatabases operation middleware
 func (siw *ServerInterfaceWrapper) ListMyDatabases(c *gin.Context) {
 
@@ -2342,6 +3173,9 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 	router.GET(options.BaseURL+"/admin/users/:id", wrapper.GetUser)
 	router.PATCH(options.BaseURL+"/admin/users/:id", wrapper.UpdateUser)
 	router.POST(options.BaseURL+"/admin/users/:id/password", wrapper.ResetUserPassword)
+	router.GET(options.BaseURL+"/approvals", wrapper.ListMyApprovals)
+	router.POST(options.BaseURL+"/approvals/:approvalId/approve", wrapper.ApproveMigration)
+	router.POST(options.BaseURL+"/approvals/:approvalId/reject", wrapper.RejectMigration)
 	router.POST(options.BaseURL+"/auth/login", wrapper.Login)
 	router.POST(options.BaseURL+"/auth/logout", wrapper.Logout)
 	router.POST(options.BaseURL+"/auth/password", wrapper.ChangePassword)
@@ -2349,13 +3183,19 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 	router.POST(options.BaseURL+"/databases/:id/explain", wrapper.ExplainDatabaseQuery)
 	router.GET(options.BaseURL+"/databases/:id/migrations", wrapper.ListMigrations)
 	router.POST(options.BaseURL+"/databases/:id/migrations", wrapper.CreateMigration)
+	router.DELETE(options.BaseURL+"/databases/:id/migrations/:migrationId", wrapper.DeleteMigration)
 	router.PATCH(options.BaseURL+"/databases/:id/migrations/:migrationId", wrapper.UpdateMigration)
 	router.GET(options.BaseURL+"/databases/:id/migrations/:migrationId/diff", wrapper.GetMigrationDiff)
-	router.POST(options.BaseURL+"/databases/:id/migrations/:migrationId/execute", wrapper.ExecuteMigration)
+	router.POST(options.BaseURL+"/databases/:id/migrations/:migrationId/forward", wrapper.RequestForward)
+	router.POST(options.BaseURL+"/databases/:id/migrations/:migrationId/revert-batches", wrapper.RequestBatchRevert)
+	router.POST(options.BaseURL+"/databases/:id/migrations/:migrationId/rollback", wrapper.RequestRollback)
+	router.POST(options.BaseURL+"/databases/:id/migrations/:migrationId/submit", wrapper.SubmitMigration)
 	router.POST(options.BaseURL+"/databases/:id/query", wrapper.ExecuteDatabaseQuery)
 	router.POST(options.BaseURL+"/databases/:id/rows", wrapper.MutateRows)
 	router.GET(options.BaseURL+"/databases/:id/schema", wrapper.GetDatabaseSchema)
 	router.GET(options.BaseURL+"/databases/:id/table-counts", wrapper.ListTableCounts)
 	router.GET(options.BaseURL+"/health", wrapper.GetHealth)
+	router.GET(options.BaseURL+"/jobs/:jobId", wrapper.GetJob)
+	router.POST(options.BaseURL+"/jobs/:jobId/cancel", wrapper.CancelJob)
 	router.GET(options.BaseURL+"/me/databases", wrapper.ListMyDatabases)
 }

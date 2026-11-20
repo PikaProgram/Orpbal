@@ -19,6 +19,10 @@ func (GroupMembership) Fields() []ent.Field {
 	return []ent.Field{
 		field.Int("user_id"),
 		field.Int("group_id"),
+		field.Enum("role").
+			Values("member", "leader").
+			Default("member").
+			Comment("Leader decides migration approvals for the group"),
 		field.Time("created_at").
 			Default(time.Now).
 			Immutable(),

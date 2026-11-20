@@ -41,9 +41,11 @@ type PlatformUserEdges struct {
 	Memberships []*GroupMembership `json:"memberships,omitempty"`
 	// Sessions holds the value of the sessions edge.
 	Sessions []*Session `json:"sessions,omitempty"`
+	// Approvals holds the value of the approvals edge.
+	Approvals []*MigrationApproval `json:"approvals,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [2]bool
+	loadedTypes [3]bool
 }
 
 // MembershipsOrErr returns the Memberships value or an error if the edge
@@ -62,6 +64,15 @@ func (e PlatformUserEdges) SessionsOrErr() ([]*Session, error) {
 		return e.Sessions, nil
 	}
 	return nil, &NotLoadedError{edge: "sessions"}
+}
+
+// ApprovalsOrErr returns the Approvals value or an error if the edge
+// was not loaded in eager-loading.
+func (e PlatformUserEdges) ApprovalsOrErr() ([]*MigrationApproval, error) {
+	if e.loadedTypes[2] {
+		return e.Approvals, nil
+	}
+	return nil, &NotLoadedError{edge: "approvals"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -155,6 +166,11 @@ func (pu *PlatformUser) QueryMemberships() *GroupMembershipQuery {
 // QuerySessions queries the "sessions" edge of the PlatformUser entity.
 func (pu *PlatformUser) QuerySessions() *SessionQuery {
 	return NewPlatformUserClient(pu.config).QuerySessions(pu)
+}
+
+// QueryApprovals queries the "approvals" edge of the PlatformUser entity.
+func (pu *PlatformUser) QueryApprovals() *MigrationApprovalQuery {
+	return NewPlatformUserClient(pu.config).QueryApprovals(pu)
 }
 
 // Update returns a builder for updating this PlatformUser.

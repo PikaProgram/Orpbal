@@ -8,6 +8,9 @@ import (
 	"Orpbal/ent/group"
 	"Orpbal/ent/groupmembership"
 	"Orpbal/ent/migration"
+	"Orpbal/ent/migrationapproval"
+	"Orpbal/ent/migrationexecution"
+	"Orpbal/ent/migrationjob"
 	"Orpbal/ent/platformuser"
 	"Orpbal/ent/predicate"
 	"Orpbal/ent/schemasnapshot"
@@ -36,6 +39,9 @@ const (
 	TypeGroup              = "Group"
 	TypeGroupMembership    = "GroupMembership"
 	TypeMigration          = "Migration"
+	TypeMigrationApproval  = "MigrationApproval"
+	TypeMigrationExecution = "MigrationExecution"
+	TypeMigrationJob       = "MigrationJob"
 	TypePlatformUser       = "PlatformUser"
 	TypeSchemaSnapshot     = "SchemaSnapshot"
 	TypeSession            = "Session"
@@ -1720,6 +1726,9 @@ type GroupMutation struct {
 	grants             map[int]struct{}
 	removedgrants      map[int]struct{}
 	clearedgrants      bool
+	approvals          map[int]struct{}
+	removedapprovals   map[int]struct{}
+	clearedapprovals   bool
 	done               bool
 	oldValue           func(context.Context) (*Group, error)
 	predicates         []predicate.Group
@@ -2075,6 +2084,60 @@ func (m *GroupMutation) ResetGrants() {
 	m.removedgrants = nil
 }
 
+// AddApprovalIDs adds the "approvals" edge to the MigrationApproval entity by ids.
+func (m *GroupMutation) AddApprovalIDs(ids ...int) {
+	if m.approvals == nil {
+		m.approvals = make(map[int]struct{})
+	}
+	for i := range ids {
+		m.approvals[ids[i]] = struct{}{}
+	}
+}
+
+// ClearApprovals clears the "approvals" edge to the MigrationApproval entity.
+func (m *GroupMutation) ClearApprovals() {
+	m.clearedapprovals = true
+}
+
+// ApprovalsCleared reports if the "approvals" edge to the MigrationApproval entity was cleared.
+func (m *GroupMutation) ApprovalsCleared() bool {
+	return m.clearedapprovals
+}
+
+// RemoveApprovalIDs removes the "approvals" edge to the MigrationApproval entity by IDs.
+func (m *GroupMutation) RemoveApprovalIDs(ids ...int) {
+	if m.removedapprovals == nil {
+		m.removedapprovals = make(map[int]struct{})
+	}
+	for i := range ids {
+		delete(m.approvals, ids[i])
+		m.removedapprovals[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedApprovals returns the removed IDs of the "approvals" edge to the MigrationApproval entity.
+func (m *GroupMutation) RemovedApprovalsIDs() (ids []int) {
+	for id := range m.removedapprovals {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ApprovalsIDs returns the "approvals" edge IDs in the mutation.
+func (m *GroupMutation) ApprovalsIDs() (ids []int) {
+	for id := range m.approvals {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetApprovals resets all changes to the "approvals" edge.
+func (m *GroupMutation) ResetApprovals() {
+	m.approvals = nil
+	m.clearedapprovals = false
+	m.removedapprovals = nil
+}
+
 // Where appends a list predicates to the GroupMutation builder.
 func (m *GroupMutation) Where(ps ...predicate.Group) {
 	m.predicates = append(m.predicates, ps...)
@@ -2259,12 +2322,15 @@ func (m *GroupMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *GroupMutation) AddedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 3)
 	if m.memberships != nil {
 		edges = append(edges, group.EdgeMemberships)
 	}
 	if m.grants != nil {
 		edges = append(edges, group.EdgeGrants)
+	}
+	if m.approvals != nil {
+		edges = append(edges, group.EdgeApprovals)
 	}
 	return edges
 }
@@ -2285,18 +2351,27 @@ func (m *GroupMutation) AddedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case group.EdgeApprovals:
+		ids := make([]ent.Value, 0, len(m.approvals))
+		for id := range m.approvals {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *GroupMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 3)
 	if m.removedmemberships != nil {
 		edges = append(edges, group.EdgeMemberships)
 	}
 	if m.removedgrants != nil {
 		edges = append(edges, group.EdgeGrants)
+	}
+	if m.removedapprovals != nil {
+		edges = append(edges, group.EdgeApprovals)
 	}
 	return edges
 }
@@ -2317,18 +2392,27 @@ func (m *GroupMutation) RemovedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case group.EdgeApprovals:
+		ids := make([]ent.Value, 0, len(m.removedapprovals))
+		for id := range m.removedapprovals {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *GroupMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 3)
 	if m.clearedmemberships {
 		edges = append(edges, group.EdgeMemberships)
 	}
 	if m.clearedgrants {
 		edges = append(edges, group.EdgeGrants)
+	}
+	if m.clearedapprovals {
+		edges = append(edges, group.EdgeApprovals)
 	}
 	return edges
 }
@@ -2341,6 +2425,8 @@ func (m *GroupMutation) EdgeCleared(name string) bool {
 		return m.clearedmemberships
 	case group.EdgeGrants:
 		return m.clearedgrants
+	case group.EdgeApprovals:
+		return m.clearedapprovals
 	}
 	return false
 }
@@ -2363,6 +2449,9 @@ func (m *GroupMutation) ResetEdge(name string) error {
 	case group.EdgeGrants:
 		m.ResetGrants()
 		return nil
+	case group.EdgeApprovals:
+		m.ResetApprovals()
+		return nil
 	}
 	return fmt.Errorf("unknown Group edge %s", name)
 }
@@ -2373,6 +2462,7 @@ type GroupMembershipMutation struct {
 	op            Op
 	typ           string
 	id            *int
+	role          *groupmembership.Role
 	created_at    *time.Time
 	clearedFields map[string]struct{}
 	user          *int
@@ -2554,6 +2644,42 @@ func (m *GroupMembershipMutation) ResetGroupID() {
 	m.group = nil
 }
 
+// SetRole sets the "role" field.
+func (m *GroupMembershipMutation) SetRole(gr groupmembership.Role) {
+	m.role = &gr
+}
+
+// Role returns the value of the "role" field in the mutation.
+func (m *GroupMembershipMutation) Role() (r groupmembership.Role, exists bool) {
+	v := m.role
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRole returns the old "role" field's value of the GroupMembership entity.
+// If the GroupMembership object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupMembershipMutation) OldRole(ctx context.Context) (v groupmembership.Role, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRole is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRole requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRole: %w", err)
+	}
+	return oldValue.Role, nil
+}
+
+// ResetRole resets all changes to the "role" field.
+func (m *GroupMembershipMutation) ResetRole() {
+	m.role = nil
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (m *GroupMembershipMutation) SetCreatedAt(t time.Time) {
 	m.created_at = &t
@@ -2678,12 +2804,15 @@ func (m *GroupMembershipMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *GroupMembershipMutation) Fields() []string {
-	fields := make([]string, 0, 3)
+	fields := make([]string, 0, 4)
 	if m.user != nil {
 		fields = append(fields, groupmembership.FieldUserID)
 	}
 	if m.group != nil {
 		fields = append(fields, groupmembership.FieldGroupID)
+	}
+	if m.role != nil {
+		fields = append(fields, groupmembership.FieldRole)
 	}
 	if m.created_at != nil {
 		fields = append(fields, groupmembership.FieldCreatedAt)
@@ -2700,6 +2829,8 @@ func (m *GroupMembershipMutation) Field(name string) (ent.Value, bool) {
 		return m.UserID()
 	case groupmembership.FieldGroupID:
 		return m.GroupID()
+	case groupmembership.FieldRole:
+		return m.Role()
 	case groupmembership.FieldCreatedAt:
 		return m.CreatedAt()
 	}
@@ -2715,6 +2846,8 @@ func (m *GroupMembershipMutation) OldField(ctx context.Context, name string) (en
 		return m.OldUserID(ctx)
 	case groupmembership.FieldGroupID:
 		return m.OldGroupID(ctx)
+	case groupmembership.FieldRole:
+		return m.OldRole(ctx)
 	case groupmembership.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
 	}
@@ -2739,6 +2872,13 @@ func (m *GroupMembershipMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetGroupID(v)
+		return nil
+	case groupmembership.FieldRole:
+		v, ok := value.(groupmembership.Role)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRole(v)
 		return nil
 	case groupmembership.FieldCreatedAt:
 		v, ok := value.(time.Time)
@@ -2804,6 +2944,9 @@ func (m *GroupMembershipMutation) ResetField(name string) error {
 		return nil
 	case groupmembership.FieldGroupID:
 		m.ResetGroupID()
+		return nil
+	case groupmembership.FieldRole:
+		m.ResetRole()
 		return nil
 	case groupmembership.FieldCreatedAt:
 		m.ResetCreatedAt()
@@ -2907,25 +3050,42 @@ func (m *GroupMembershipMutation) ResetEdge(name string) error {
 // MigrationMutation represents an operation that mutates the Migration nodes in the graph.
 type MigrationMutation struct {
 	config
-	op                Op
-	typ               string
-	id                *int
-	version           *int
-	addversion        *int
-	sql               *string
-	executed_at       *time.Time
-	status            *migration.Status
-	clearedFields     map[string]struct{}
-	connection        *int
-	clearedconnection bool
-	executor          *int
-	clearedexecutor   bool
-	snapshots         map[int]struct{}
-	removedsnapshots  map[int]struct{}
-	clearedsnapshots  bool
-	done              bool
-	oldValue          func(context.Context) (*Migration, error)
-	predicates        []predicate.Migration
+	op                  Op
+	typ                 string
+	id                  *int
+	version             *int
+	addversion          *int
+	sql_up              *string
+	sql_down            *string
+	irreversible        *bool
+	irreversible_reason *string
+	status              *migration.Status
+	batch_size          *int
+	addbatch_size       *int
+	cursor_column       *string
+	batch_table         *string
+	min_id              *int64
+	addmin_id           *int64
+	max_id              *int64
+	addmax_id           *int64
+	template            *string
+	clearedFields       map[string]struct{}
+	connection          *int
+	clearedconnection   bool
+	author              *int
+	clearedauthor       bool
+	executions          map[int]struct{}
+	removedexecutions   map[int]struct{}
+	clearedexecutions   bool
+	approvals           map[int]struct{}
+	removedapprovals    map[int]struct{}
+	clearedapprovals    bool
+	snapshots           map[int]struct{}
+	removedsnapshots    map[int]struct{}
+	clearedsnapshots    bool
+	done                bool
+	oldValue            func(context.Context) (*Migration, error)
+	predicates          []predicate.Migration
 }
 
 var _ ent.Mutation = (*MigrationMutation)(nil)
@@ -3118,112 +3278,174 @@ func (m *MigrationMutation) ResetVersion() {
 	m.addversion = nil
 }
 
-// SetSQL sets the "sql" field.
-func (m *MigrationMutation) SetSQL(s string) {
-	m.sql = &s
+// SetSQLUp sets the "sql_up" field.
+func (m *MigrationMutation) SetSQLUp(s string) {
+	m.sql_up = &s
 }
 
-// SQL returns the value of the "sql" field in the mutation.
-func (m *MigrationMutation) SQL() (r string, exists bool) {
-	v := m.sql
+// SQLUp returns the value of the "sql_up" field in the mutation.
+func (m *MigrationMutation) SQLUp() (r string, exists bool) {
+	v := m.sql_up
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldSQL returns the old "sql" field's value of the Migration entity.
+// OldSQLUp returns the old "sql_up" field's value of the Migration entity.
 // If the Migration object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *MigrationMutation) OldSQL(ctx context.Context) (v string, err error) {
+func (m *MigrationMutation) OldSQLUp(ctx context.Context) (v string, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldSQL is only allowed on UpdateOne operations")
+		return v, errors.New("OldSQLUp is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldSQL requires an ID field in the mutation")
+		return v, errors.New("OldSQLUp requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldSQL: %w", err)
+		return v, fmt.Errorf("querying old value for OldSQLUp: %w", err)
 	}
-	return oldValue.SQL, nil
+	return oldValue.SQLUp, nil
 }
 
-// ResetSQL resets all changes to the "sql" field.
-func (m *MigrationMutation) ResetSQL() {
-	m.sql = nil
+// ResetSQLUp resets all changes to the "sql_up" field.
+func (m *MigrationMutation) ResetSQLUp() {
+	m.sql_up = nil
 }
 
-// SetExecutorID sets the "executor_id" field.
-func (m *MigrationMutation) SetExecutorID(i int) {
-	m.executor = &i
+// SetSQLDown sets the "sql_down" field.
+func (m *MigrationMutation) SetSQLDown(s string) {
+	m.sql_down = &s
 }
 
-// ExecutorID returns the value of the "executor_id" field in the mutation.
-func (m *MigrationMutation) ExecutorID() (r int, exists bool) {
-	v := m.executor
+// SQLDown returns the value of the "sql_down" field in the mutation.
+func (m *MigrationMutation) SQLDown() (r string, exists bool) {
+	v := m.sql_down
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldExecutorID returns the old "executor_id" field's value of the Migration entity.
+// OldSQLDown returns the old "sql_down" field's value of the Migration entity.
 // If the Migration object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *MigrationMutation) OldExecutorID(ctx context.Context) (v int, err error) {
+func (m *MigrationMutation) OldSQLDown(ctx context.Context) (v string, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldExecutorID is only allowed on UpdateOne operations")
+		return v, errors.New("OldSQLDown is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldExecutorID requires an ID field in the mutation")
+		return v, errors.New("OldSQLDown requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldExecutorID: %w", err)
+		return v, fmt.Errorf("querying old value for OldSQLDown: %w", err)
 	}
-	return oldValue.ExecutorID, nil
+	return oldValue.SQLDown, nil
 }
 
-// ResetExecutorID resets all changes to the "executor_id" field.
-func (m *MigrationMutation) ResetExecutorID() {
-	m.executor = nil
+// ClearSQLDown clears the value of the "sql_down" field.
+func (m *MigrationMutation) ClearSQLDown() {
+	m.sql_down = nil
+	m.clearedFields[migration.FieldSQLDown] = struct{}{}
 }
 
-// SetExecutedAt sets the "executed_at" field.
-func (m *MigrationMutation) SetExecutedAt(t time.Time) {
-	m.executed_at = &t
+// SQLDownCleared returns if the "sql_down" field was cleared in this mutation.
+func (m *MigrationMutation) SQLDownCleared() bool {
+	_, ok := m.clearedFields[migration.FieldSQLDown]
+	return ok
 }
 
-// ExecutedAt returns the value of the "executed_at" field in the mutation.
-func (m *MigrationMutation) ExecutedAt() (r time.Time, exists bool) {
-	v := m.executed_at
+// ResetSQLDown resets all changes to the "sql_down" field.
+func (m *MigrationMutation) ResetSQLDown() {
+	m.sql_down = nil
+	delete(m.clearedFields, migration.FieldSQLDown)
+}
+
+// SetIrreversible sets the "irreversible" field.
+func (m *MigrationMutation) SetIrreversible(b bool) {
+	m.irreversible = &b
+}
+
+// Irreversible returns the value of the "irreversible" field in the mutation.
+func (m *MigrationMutation) Irreversible() (r bool, exists bool) {
+	v := m.irreversible
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldExecutedAt returns the old "executed_at" field's value of the Migration entity.
+// OldIrreversible returns the old "irreversible" field's value of the Migration entity.
 // If the Migration object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *MigrationMutation) OldExecutedAt(ctx context.Context) (v time.Time, err error) {
+func (m *MigrationMutation) OldIrreversible(ctx context.Context) (v bool, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldExecutedAt is only allowed on UpdateOne operations")
+		return v, errors.New("OldIrreversible is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldExecutedAt requires an ID field in the mutation")
+		return v, errors.New("OldIrreversible requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldExecutedAt: %w", err)
+		return v, fmt.Errorf("querying old value for OldIrreversible: %w", err)
 	}
-	return oldValue.ExecutedAt, nil
+	return oldValue.Irreversible, nil
 }
 
-// ResetExecutedAt resets all changes to the "executed_at" field.
-func (m *MigrationMutation) ResetExecutedAt() {
-	m.executed_at = nil
+// ResetIrreversible resets all changes to the "irreversible" field.
+func (m *MigrationMutation) ResetIrreversible() {
+	m.irreversible = nil
+}
+
+// SetIrreversibleReason sets the "irreversible_reason" field.
+func (m *MigrationMutation) SetIrreversibleReason(s string) {
+	m.irreversible_reason = &s
+}
+
+// IrreversibleReason returns the value of the "irreversible_reason" field in the mutation.
+func (m *MigrationMutation) IrreversibleReason() (r string, exists bool) {
+	v := m.irreversible_reason
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIrreversibleReason returns the old "irreversible_reason" field's value of the Migration entity.
+// If the Migration object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MigrationMutation) OldIrreversibleReason(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIrreversibleReason is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIrreversibleReason requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIrreversibleReason: %w", err)
+	}
+	return oldValue.IrreversibleReason, nil
+}
+
+// ClearIrreversibleReason clears the value of the "irreversible_reason" field.
+func (m *MigrationMutation) ClearIrreversibleReason() {
+	m.irreversible_reason = nil
+	m.clearedFields[migration.FieldIrreversibleReason] = struct{}{}
+}
+
+// IrreversibleReasonCleared returns if the "irreversible_reason" field was cleared in this mutation.
+func (m *MigrationMutation) IrreversibleReasonCleared() bool {
+	_, ok := m.clearedFields[migration.FieldIrreversibleReason]
+	return ok
+}
+
+// ResetIrreversibleReason resets all changes to the "irreversible_reason" field.
+func (m *MigrationMutation) ResetIrreversibleReason() {
+	m.irreversible_reason = nil
+	delete(m.clearedFields, migration.FieldIrreversibleReason)
 }
 
 // SetStatus sets the "status" field.
@@ -3262,6 +3484,399 @@ func (m *MigrationMutation) ResetStatus() {
 	m.status = nil
 }
 
+// SetAuthorID sets the "author_id" field.
+func (m *MigrationMutation) SetAuthorID(i int) {
+	m.author = &i
+}
+
+// AuthorID returns the value of the "author_id" field in the mutation.
+func (m *MigrationMutation) AuthorID() (r int, exists bool) {
+	v := m.author
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAuthorID returns the old "author_id" field's value of the Migration entity.
+// If the Migration object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MigrationMutation) OldAuthorID(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAuthorID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAuthorID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAuthorID: %w", err)
+	}
+	return oldValue.AuthorID, nil
+}
+
+// ResetAuthorID resets all changes to the "author_id" field.
+func (m *MigrationMutation) ResetAuthorID() {
+	m.author = nil
+}
+
+// SetBatchSize sets the "batch_size" field.
+func (m *MigrationMutation) SetBatchSize(i int) {
+	m.batch_size = &i
+	m.addbatch_size = nil
+}
+
+// BatchSize returns the value of the "batch_size" field in the mutation.
+func (m *MigrationMutation) BatchSize() (r int, exists bool) {
+	v := m.batch_size
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBatchSize returns the old "batch_size" field's value of the Migration entity.
+// If the Migration object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MigrationMutation) OldBatchSize(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBatchSize is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBatchSize requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBatchSize: %w", err)
+	}
+	return oldValue.BatchSize, nil
+}
+
+// AddBatchSize adds i to the "batch_size" field.
+func (m *MigrationMutation) AddBatchSize(i int) {
+	if m.addbatch_size != nil {
+		*m.addbatch_size += i
+	} else {
+		m.addbatch_size = &i
+	}
+}
+
+// AddedBatchSize returns the value that was added to the "batch_size" field in this mutation.
+func (m *MigrationMutation) AddedBatchSize() (r int, exists bool) {
+	v := m.addbatch_size
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearBatchSize clears the value of the "batch_size" field.
+func (m *MigrationMutation) ClearBatchSize() {
+	m.batch_size = nil
+	m.addbatch_size = nil
+	m.clearedFields[migration.FieldBatchSize] = struct{}{}
+}
+
+// BatchSizeCleared returns if the "batch_size" field was cleared in this mutation.
+func (m *MigrationMutation) BatchSizeCleared() bool {
+	_, ok := m.clearedFields[migration.FieldBatchSize]
+	return ok
+}
+
+// ResetBatchSize resets all changes to the "batch_size" field.
+func (m *MigrationMutation) ResetBatchSize() {
+	m.batch_size = nil
+	m.addbatch_size = nil
+	delete(m.clearedFields, migration.FieldBatchSize)
+}
+
+// SetCursorColumn sets the "cursor_column" field.
+func (m *MigrationMutation) SetCursorColumn(s string) {
+	m.cursor_column = &s
+}
+
+// CursorColumn returns the value of the "cursor_column" field in the mutation.
+func (m *MigrationMutation) CursorColumn() (r string, exists bool) {
+	v := m.cursor_column
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCursorColumn returns the old "cursor_column" field's value of the Migration entity.
+// If the Migration object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MigrationMutation) OldCursorColumn(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCursorColumn is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCursorColumn requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCursorColumn: %w", err)
+	}
+	return oldValue.CursorColumn, nil
+}
+
+// ClearCursorColumn clears the value of the "cursor_column" field.
+func (m *MigrationMutation) ClearCursorColumn() {
+	m.cursor_column = nil
+	m.clearedFields[migration.FieldCursorColumn] = struct{}{}
+}
+
+// CursorColumnCleared returns if the "cursor_column" field was cleared in this mutation.
+func (m *MigrationMutation) CursorColumnCleared() bool {
+	_, ok := m.clearedFields[migration.FieldCursorColumn]
+	return ok
+}
+
+// ResetCursorColumn resets all changes to the "cursor_column" field.
+func (m *MigrationMutation) ResetCursorColumn() {
+	m.cursor_column = nil
+	delete(m.clearedFields, migration.FieldCursorColumn)
+}
+
+// SetBatchTable sets the "batch_table" field.
+func (m *MigrationMutation) SetBatchTable(s string) {
+	m.batch_table = &s
+}
+
+// BatchTable returns the value of the "batch_table" field in the mutation.
+func (m *MigrationMutation) BatchTable() (r string, exists bool) {
+	v := m.batch_table
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBatchTable returns the old "batch_table" field's value of the Migration entity.
+// If the Migration object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MigrationMutation) OldBatchTable(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBatchTable is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBatchTable requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBatchTable: %w", err)
+	}
+	return oldValue.BatchTable, nil
+}
+
+// ClearBatchTable clears the value of the "batch_table" field.
+func (m *MigrationMutation) ClearBatchTable() {
+	m.batch_table = nil
+	m.clearedFields[migration.FieldBatchTable] = struct{}{}
+}
+
+// BatchTableCleared returns if the "batch_table" field was cleared in this mutation.
+func (m *MigrationMutation) BatchTableCleared() bool {
+	_, ok := m.clearedFields[migration.FieldBatchTable]
+	return ok
+}
+
+// ResetBatchTable resets all changes to the "batch_table" field.
+func (m *MigrationMutation) ResetBatchTable() {
+	m.batch_table = nil
+	delete(m.clearedFields, migration.FieldBatchTable)
+}
+
+// SetMinID sets the "min_id" field.
+func (m *MigrationMutation) SetMinID(i int64) {
+	m.min_id = &i
+	m.addmin_id = nil
+}
+
+// MinID returns the value of the "min_id" field in the mutation.
+func (m *MigrationMutation) MinID() (r int64, exists bool) {
+	v := m.min_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMinID returns the old "min_id" field's value of the Migration entity.
+// If the Migration object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MigrationMutation) OldMinID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMinID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMinID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMinID: %w", err)
+	}
+	return oldValue.MinID, nil
+}
+
+// AddMinID adds i to the "min_id" field.
+func (m *MigrationMutation) AddMinID(i int64) {
+	if m.addmin_id != nil {
+		*m.addmin_id += i
+	} else {
+		m.addmin_id = &i
+	}
+}
+
+// AddedMinID returns the value that was added to the "min_id" field in this mutation.
+func (m *MigrationMutation) AddedMinID() (r int64, exists bool) {
+	v := m.addmin_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearMinID clears the value of the "min_id" field.
+func (m *MigrationMutation) ClearMinID() {
+	m.min_id = nil
+	m.addmin_id = nil
+	m.clearedFields[migration.FieldMinID] = struct{}{}
+}
+
+// MinIDCleared returns if the "min_id" field was cleared in this mutation.
+func (m *MigrationMutation) MinIDCleared() bool {
+	_, ok := m.clearedFields[migration.FieldMinID]
+	return ok
+}
+
+// ResetMinID resets all changes to the "min_id" field.
+func (m *MigrationMutation) ResetMinID() {
+	m.min_id = nil
+	m.addmin_id = nil
+	delete(m.clearedFields, migration.FieldMinID)
+}
+
+// SetMaxID sets the "max_id" field.
+func (m *MigrationMutation) SetMaxID(i int64) {
+	m.max_id = &i
+	m.addmax_id = nil
+}
+
+// MaxID returns the value of the "max_id" field in the mutation.
+func (m *MigrationMutation) MaxID() (r int64, exists bool) {
+	v := m.max_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMaxID returns the old "max_id" field's value of the Migration entity.
+// If the Migration object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MigrationMutation) OldMaxID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMaxID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMaxID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMaxID: %w", err)
+	}
+	return oldValue.MaxID, nil
+}
+
+// AddMaxID adds i to the "max_id" field.
+func (m *MigrationMutation) AddMaxID(i int64) {
+	if m.addmax_id != nil {
+		*m.addmax_id += i
+	} else {
+		m.addmax_id = &i
+	}
+}
+
+// AddedMaxID returns the value that was added to the "max_id" field in this mutation.
+func (m *MigrationMutation) AddedMaxID() (r int64, exists bool) {
+	v := m.addmax_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearMaxID clears the value of the "max_id" field.
+func (m *MigrationMutation) ClearMaxID() {
+	m.max_id = nil
+	m.addmax_id = nil
+	m.clearedFields[migration.FieldMaxID] = struct{}{}
+}
+
+// MaxIDCleared returns if the "max_id" field was cleared in this mutation.
+func (m *MigrationMutation) MaxIDCleared() bool {
+	_, ok := m.clearedFields[migration.FieldMaxID]
+	return ok
+}
+
+// ResetMaxID resets all changes to the "max_id" field.
+func (m *MigrationMutation) ResetMaxID() {
+	m.max_id = nil
+	m.addmax_id = nil
+	delete(m.clearedFields, migration.FieldMaxID)
+}
+
+// SetTemplate sets the "template" field.
+func (m *MigrationMutation) SetTemplate(s string) {
+	m.template = &s
+}
+
+// Template returns the value of the "template" field in the mutation.
+func (m *MigrationMutation) Template() (r string, exists bool) {
+	v := m.template
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTemplate returns the old "template" field's value of the Migration entity.
+// If the Migration object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MigrationMutation) OldTemplate(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTemplate is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTemplate requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTemplate: %w", err)
+	}
+	return oldValue.Template, nil
+}
+
+// ClearTemplate clears the value of the "template" field.
+func (m *MigrationMutation) ClearTemplate() {
+	m.template = nil
+	m.clearedFields[migration.FieldTemplate] = struct{}{}
+}
+
+// TemplateCleared returns if the "template" field was cleared in this mutation.
+func (m *MigrationMutation) TemplateCleared() bool {
+	_, ok := m.clearedFields[migration.FieldTemplate]
+	return ok
+}
+
+// ResetTemplate resets all changes to the "template" field.
+func (m *MigrationMutation) ResetTemplate() {
+	m.template = nil
+	delete(m.clearedFields, migration.FieldTemplate)
+}
+
 // ClearConnection clears the "connection" edge to the DatabaseConnection entity.
 func (m *MigrationMutation) ClearConnection() {
 	m.clearedconnection = true
@@ -3289,31 +3904,139 @@ func (m *MigrationMutation) ResetConnection() {
 	m.clearedconnection = false
 }
 
-// ClearExecutor clears the "executor" edge to the PlatformUser entity.
-func (m *MigrationMutation) ClearExecutor() {
-	m.clearedexecutor = true
-	m.clearedFields[migration.FieldExecutorID] = struct{}{}
+// ClearAuthor clears the "author" edge to the PlatformUser entity.
+func (m *MigrationMutation) ClearAuthor() {
+	m.clearedauthor = true
+	m.clearedFields[migration.FieldAuthorID] = struct{}{}
 }
 
-// ExecutorCleared reports if the "executor" edge to the PlatformUser entity was cleared.
-func (m *MigrationMutation) ExecutorCleared() bool {
-	return m.clearedexecutor
+// AuthorCleared reports if the "author" edge to the PlatformUser entity was cleared.
+func (m *MigrationMutation) AuthorCleared() bool {
+	return m.clearedauthor
 }
 
-// ExecutorIDs returns the "executor" edge IDs in the mutation.
+// AuthorIDs returns the "author" edge IDs in the mutation.
 // Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
-// ExecutorID instead. It exists only for internal usage by the builders.
-func (m *MigrationMutation) ExecutorIDs() (ids []int) {
-	if id := m.executor; id != nil {
+// AuthorID instead. It exists only for internal usage by the builders.
+func (m *MigrationMutation) AuthorIDs() (ids []int) {
+	if id := m.author; id != nil {
 		ids = append(ids, *id)
 	}
 	return
 }
 
-// ResetExecutor resets all changes to the "executor" edge.
-func (m *MigrationMutation) ResetExecutor() {
-	m.executor = nil
-	m.clearedexecutor = false
+// ResetAuthor resets all changes to the "author" edge.
+func (m *MigrationMutation) ResetAuthor() {
+	m.author = nil
+	m.clearedauthor = false
+}
+
+// AddExecutionIDs adds the "executions" edge to the MigrationExecution entity by ids.
+func (m *MigrationMutation) AddExecutionIDs(ids ...int) {
+	if m.executions == nil {
+		m.executions = make(map[int]struct{})
+	}
+	for i := range ids {
+		m.executions[ids[i]] = struct{}{}
+	}
+}
+
+// ClearExecutions clears the "executions" edge to the MigrationExecution entity.
+func (m *MigrationMutation) ClearExecutions() {
+	m.clearedexecutions = true
+}
+
+// ExecutionsCleared reports if the "executions" edge to the MigrationExecution entity was cleared.
+func (m *MigrationMutation) ExecutionsCleared() bool {
+	return m.clearedexecutions
+}
+
+// RemoveExecutionIDs removes the "executions" edge to the MigrationExecution entity by IDs.
+func (m *MigrationMutation) RemoveExecutionIDs(ids ...int) {
+	if m.removedexecutions == nil {
+		m.removedexecutions = make(map[int]struct{})
+	}
+	for i := range ids {
+		delete(m.executions, ids[i])
+		m.removedexecutions[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedExecutions returns the removed IDs of the "executions" edge to the MigrationExecution entity.
+func (m *MigrationMutation) RemovedExecutionsIDs() (ids []int) {
+	for id := range m.removedexecutions {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ExecutionsIDs returns the "executions" edge IDs in the mutation.
+func (m *MigrationMutation) ExecutionsIDs() (ids []int) {
+	for id := range m.executions {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetExecutions resets all changes to the "executions" edge.
+func (m *MigrationMutation) ResetExecutions() {
+	m.executions = nil
+	m.clearedexecutions = false
+	m.removedexecutions = nil
+}
+
+// AddApprovalIDs adds the "approvals" edge to the MigrationApproval entity by ids.
+func (m *MigrationMutation) AddApprovalIDs(ids ...int) {
+	if m.approvals == nil {
+		m.approvals = make(map[int]struct{})
+	}
+	for i := range ids {
+		m.approvals[ids[i]] = struct{}{}
+	}
+}
+
+// ClearApprovals clears the "approvals" edge to the MigrationApproval entity.
+func (m *MigrationMutation) ClearApprovals() {
+	m.clearedapprovals = true
+}
+
+// ApprovalsCleared reports if the "approvals" edge to the MigrationApproval entity was cleared.
+func (m *MigrationMutation) ApprovalsCleared() bool {
+	return m.clearedapprovals
+}
+
+// RemoveApprovalIDs removes the "approvals" edge to the MigrationApproval entity by IDs.
+func (m *MigrationMutation) RemoveApprovalIDs(ids ...int) {
+	if m.removedapprovals == nil {
+		m.removedapprovals = make(map[int]struct{})
+	}
+	for i := range ids {
+		delete(m.approvals, ids[i])
+		m.removedapprovals[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedApprovals returns the removed IDs of the "approvals" edge to the MigrationApproval entity.
+func (m *MigrationMutation) RemovedApprovalsIDs() (ids []int) {
+	for id := range m.removedapprovals {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ApprovalsIDs returns the "approvals" edge IDs in the mutation.
+func (m *MigrationMutation) ApprovalsIDs() (ids []int) {
+	for id := range m.approvals {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetApprovals resets all changes to the "approvals" edge.
+func (m *MigrationMutation) ResetApprovals() {
+	m.approvals = nil
+	m.clearedapprovals = false
+	m.removedapprovals = nil
 }
 
 // AddSnapshotIDs adds the "snapshots" edge to the SchemaSnapshot entity by ids.
@@ -3404,24 +4127,48 @@ func (m *MigrationMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *MigrationMutation) Fields() []string {
-	fields := make([]string, 0, 6)
+	fields := make([]string, 0, 14)
 	if m.connection != nil {
 		fields = append(fields, migration.FieldConnectionID)
 	}
 	if m.version != nil {
 		fields = append(fields, migration.FieldVersion)
 	}
-	if m.sql != nil {
-		fields = append(fields, migration.FieldSQL)
+	if m.sql_up != nil {
+		fields = append(fields, migration.FieldSQLUp)
 	}
-	if m.executor != nil {
-		fields = append(fields, migration.FieldExecutorID)
+	if m.sql_down != nil {
+		fields = append(fields, migration.FieldSQLDown)
 	}
-	if m.executed_at != nil {
-		fields = append(fields, migration.FieldExecutedAt)
+	if m.irreversible != nil {
+		fields = append(fields, migration.FieldIrreversible)
+	}
+	if m.irreversible_reason != nil {
+		fields = append(fields, migration.FieldIrreversibleReason)
 	}
 	if m.status != nil {
 		fields = append(fields, migration.FieldStatus)
+	}
+	if m.author != nil {
+		fields = append(fields, migration.FieldAuthorID)
+	}
+	if m.batch_size != nil {
+		fields = append(fields, migration.FieldBatchSize)
+	}
+	if m.cursor_column != nil {
+		fields = append(fields, migration.FieldCursorColumn)
+	}
+	if m.batch_table != nil {
+		fields = append(fields, migration.FieldBatchTable)
+	}
+	if m.min_id != nil {
+		fields = append(fields, migration.FieldMinID)
+	}
+	if m.max_id != nil {
+		fields = append(fields, migration.FieldMaxID)
+	}
+	if m.template != nil {
+		fields = append(fields, migration.FieldTemplate)
 	}
 	return fields
 }
@@ -3435,14 +4182,30 @@ func (m *MigrationMutation) Field(name string) (ent.Value, bool) {
 		return m.ConnectionID()
 	case migration.FieldVersion:
 		return m.Version()
-	case migration.FieldSQL:
-		return m.SQL()
-	case migration.FieldExecutorID:
-		return m.ExecutorID()
-	case migration.FieldExecutedAt:
-		return m.ExecutedAt()
+	case migration.FieldSQLUp:
+		return m.SQLUp()
+	case migration.FieldSQLDown:
+		return m.SQLDown()
+	case migration.FieldIrreversible:
+		return m.Irreversible()
+	case migration.FieldIrreversibleReason:
+		return m.IrreversibleReason()
 	case migration.FieldStatus:
 		return m.Status()
+	case migration.FieldAuthorID:
+		return m.AuthorID()
+	case migration.FieldBatchSize:
+		return m.BatchSize()
+	case migration.FieldCursorColumn:
+		return m.CursorColumn()
+	case migration.FieldBatchTable:
+		return m.BatchTable()
+	case migration.FieldMinID:
+		return m.MinID()
+	case migration.FieldMaxID:
+		return m.MaxID()
+	case migration.FieldTemplate:
+		return m.Template()
 	}
 	return nil, false
 }
@@ -3456,14 +4219,30 @@ func (m *MigrationMutation) OldField(ctx context.Context, name string) (ent.Valu
 		return m.OldConnectionID(ctx)
 	case migration.FieldVersion:
 		return m.OldVersion(ctx)
-	case migration.FieldSQL:
-		return m.OldSQL(ctx)
-	case migration.FieldExecutorID:
-		return m.OldExecutorID(ctx)
-	case migration.FieldExecutedAt:
-		return m.OldExecutedAt(ctx)
+	case migration.FieldSQLUp:
+		return m.OldSQLUp(ctx)
+	case migration.FieldSQLDown:
+		return m.OldSQLDown(ctx)
+	case migration.FieldIrreversible:
+		return m.OldIrreversible(ctx)
+	case migration.FieldIrreversibleReason:
+		return m.OldIrreversibleReason(ctx)
 	case migration.FieldStatus:
 		return m.OldStatus(ctx)
+	case migration.FieldAuthorID:
+		return m.OldAuthorID(ctx)
+	case migration.FieldBatchSize:
+		return m.OldBatchSize(ctx)
+	case migration.FieldCursorColumn:
+		return m.OldCursorColumn(ctx)
+	case migration.FieldBatchTable:
+		return m.OldBatchTable(ctx)
+	case migration.FieldMinID:
+		return m.OldMinID(ctx)
+	case migration.FieldMaxID:
+		return m.OldMaxID(ctx)
+	case migration.FieldTemplate:
+		return m.OldTemplate(ctx)
 	}
 	return nil, fmt.Errorf("unknown Migration field %s", name)
 }
@@ -3487,26 +4266,33 @@ func (m *MigrationMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetVersion(v)
 		return nil
-	case migration.FieldSQL:
+	case migration.FieldSQLUp:
 		v, ok := value.(string)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetSQL(v)
+		m.SetSQLUp(v)
 		return nil
-	case migration.FieldExecutorID:
-		v, ok := value.(int)
+	case migration.FieldSQLDown:
+		v, ok := value.(string)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetExecutorID(v)
+		m.SetSQLDown(v)
 		return nil
-	case migration.FieldExecutedAt:
-		v, ok := value.(time.Time)
+	case migration.FieldIrreversible:
+		v, ok := value.(bool)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetExecutedAt(v)
+		m.SetIrreversible(v)
+		return nil
+	case migration.FieldIrreversibleReason:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIrreversibleReason(v)
 		return nil
 	case migration.FieldStatus:
 		v, ok := value.(migration.Status)
@@ -3514,6 +4300,55 @@ func (m *MigrationMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetStatus(v)
+		return nil
+	case migration.FieldAuthorID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAuthorID(v)
+		return nil
+	case migration.FieldBatchSize:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBatchSize(v)
+		return nil
+	case migration.FieldCursorColumn:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCursorColumn(v)
+		return nil
+	case migration.FieldBatchTable:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBatchTable(v)
+		return nil
+	case migration.FieldMinID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMinID(v)
+		return nil
+	case migration.FieldMaxID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMaxID(v)
+		return nil
+	case migration.FieldTemplate:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTemplate(v)
 		return nil
 	}
 	return fmt.Errorf("unknown Migration field %s", name)
@@ -3526,6 +4361,15 @@ func (m *MigrationMutation) AddedFields() []string {
 	if m.addversion != nil {
 		fields = append(fields, migration.FieldVersion)
 	}
+	if m.addbatch_size != nil {
+		fields = append(fields, migration.FieldBatchSize)
+	}
+	if m.addmin_id != nil {
+		fields = append(fields, migration.FieldMinID)
+	}
+	if m.addmax_id != nil {
+		fields = append(fields, migration.FieldMaxID)
+	}
 	return fields
 }
 
@@ -3536,6 +4380,12 @@ func (m *MigrationMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
 	case migration.FieldVersion:
 		return m.AddedVersion()
+	case migration.FieldBatchSize:
+		return m.AddedBatchSize()
+	case migration.FieldMinID:
+		return m.AddedMinID()
+	case migration.FieldMaxID:
+		return m.AddedMaxID()
 	}
 	return nil, false
 }
@@ -3552,6 +4402,27 @@ func (m *MigrationMutation) AddField(name string, value ent.Value) error {
 		}
 		m.AddVersion(v)
 		return nil
+	case migration.FieldBatchSize:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddBatchSize(v)
+		return nil
+	case migration.FieldMinID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddMinID(v)
+		return nil
+	case migration.FieldMaxID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddMaxID(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Migration numeric field %s", name)
 }
@@ -3559,7 +4430,32 @@ func (m *MigrationMutation) AddField(name string, value ent.Value) error {
 // ClearedFields returns all nullable fields that were cleared during this
 // mutation.
 func (m *MigrationMutation) ClearedFields() []string {
-	return nil
+	var fields []string
+	if m.FieldCleared(migration.FieldSQLDown) {
+		fields = append(fields, migration.FieldSQLDown)
+	}
+	if m.FieldCleared(migration.FieldIrreversibleReason) {
+		fields = append(fields, migration.FieldIrreversibleReason)
+	}
+	if m.FieldCleared(migration.FieldBatchSize) {
+		fields = append(fields, migration.FieldBatchSize)
+	}
+	if m.FieldCleared(migration.FieldCursorColumn) {
+		fields = append(fields, migration.FieldCursorColumn)
+	}
+	if m.FieldCleared(migration.FieldBatchTable) {
+		fields = append(fields, migration.FieldBatchTable)
+	}
+	if m.FieldCleared(migration.FieldMinID) {
+		fields = append(fields, migration.FieldMinID)
+	}
+	if m.FieldCleared(migration.FieldMaxID) {
+		fields = append(fields, migration.FieldMaxID)
+	}
+	if m.FieldCleared(migration.FieldTemplate) {
+		fields = append(fields, migration.FieldTemplate)
+	}
+	return fields
 }
 
 // FieldCleared returns a boolean indicating if a field with the given name was
@@ -3572,6 +4468,32 @@ func (m *MigrationMutation) FieldCleared(name string) bool {
 // ClearField clears the value of the field with the given name. It returns an
 // error if the field is not defined in the schema.
 func (m *MigrationMutation) ClearField(name string) error {
+	switch name {
+	case migration.FieldSQLDown:
+		m.ClearSQLDown()
+		return nil
+	case migration.FieldIrreversibleReason:
+		m.ClearIrreversibleReason()
+		return nil
+	case migration.FieldBatchSize:
+		m.ClearBatchSize()
+		return nil
+	case migration.FieldCursorColumn:
+		m.ClearCursorColumn()
+		return nil
+	case migration.FieldBatchTable:
+		m.ClearBatchTable()
+		return nil
+	case migration.FieldMinID:
+		m.ClearMinID()
+		return nil
+	case migration.FieldMaxID:
+		m.ClearMaxID()
+		return nil
+	case migration.FieldTemplate:
+		m.ClearTemplate()
+		return nil
+	}
 	return fmt.Errorf("unknown Migration nullable field %s", name)
 }
 
@@ -3585,17 +4507,41 @@ func (m *MigrationMutation) ResetField(name string) error {
 	case migration.FieldVersion:
 		m.ResetVersion()
 		return nil
-	case migration.FieldSQL:
-		m.ResetSQL()
+	case migration.FieldSQLUp:
+		m.ResetSQLUp()
 		return nil
-	case migration.FieldExecutorID:
-		m.ResetExecutorID()
+	case migration.FieldSQLDown:
+		m.ResetSQLDown()
 		return nil
-	case migration.FieldExecutedAt:
-		m.ResetExecutedAt()
+	case migration.FieldIrreversible:
+		m.ResetIrreversible()
+		return nil
+	case migration.FieldIrreversibleReason:
+		m.ResetIrreversibleReason()
 		return nil
 	case migration.FieldStatus:
 		m.ResetStatus()
+		return nil
+	case migration.FieldAuthorID:
+		m.ResetAuthorID()
+		return nil
+	case migration.FieldBatchSize:
+		m.ResetBatchSize()
+		return nil
+	case migration.FieldCursorColumn:
+		m.ResetCursorColumn()
+		return nil
+	case migration.FieldBatchTable:
+		m.ResetBatchTable()
+		return nil
+	case migration.FieldMinID:
+		m.ResetMinID()
+		return nil
+	case migration.FieldMaxID:
+		m.ResetMaxID()
+		return nil
+	case migration.FieldTemplate:
+		m.ResetTemplate()
 		return nil
 	}
 	return fmt.Errorf("unknown Migration field %s", name)
@@ -3603,12 +4549,18 @@ func (m *MigrationMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *MigrationMutation) AddedEdges() []string {
-	edges := make([]string, 0, 3)
+	edges := make([]string, 0, 5)
 	if m.connection != nil {
 		edges = append(edges, migration.EdgeConnection)
 	}
-	if m.executor != nil {
-		edges = append(edges, migration.EdgeExecutor)
+	if m.author != nil {
+		edges = append(edges, migration.EdgeAuthor)
+	}
+	if m.executions != nil {
+		edges = append(edges, migration.EdgeExecutions)
+	}
+	if m.approvals != nil {
+		edges = append(edges, migration.EdgeApprovals)
 	}
 	if m.snapshots != nil {
 		edges = append(edges, migration.EdgeSnapshots)
@@ -3624,10 +4576,22 @@ func (m *MigrationMutation) AddedIDs(name string) []ent.Value {
 		if id := m.connection; id != nil {
 			return []ent.Value{*id}
 		}
-	case migration.EdgeExecutor:
-		if id := m.executor; id != nil {
+	case migration.EdgeAuthor:
+		if id := m.author; id != nil {
 			return []ent.Value{*id}
 		}
+	case migration.EdgeExecutions:
+		ids := make([]ent.Value, 0, len(m.executions))
+		for id := range m.executions {
+			ids = append(ids, id)
+		}
+		return ids
+	case migration.EdgeApprovals:
+		ids := make([]ent.Value, 0, len(m.approvals))
+		for id := range m.approvals {
+			ids = append(ids, id)
+		}
+		return ids
 	case migration.EdgeSnapshots:
 		ids := make([]ent.Value, 0, len(m.snapshots))
 		for id := range m.snapshots {
@@ -3640,7 +4604,13 @@ func (m *MigrationMutation) AddedIDs(name string) []ent.Value {
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *MigrationMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 3)
+	edges := make([]string, 0, 5)
+	if m.removedexecutions != nil {
+		edges = append(edges, migration.EdgeExecutions)
+	}
+	if m.removedapprovals != nil {
+		edges = append(edges, migration.EdgeApprovals)
+	}
 	if m.removedsnapshots != nil {
 		edges = append(edges, migration.EdgeSnapshots)
 	}
@@ -3651,6 +4621,18 @@ func (m *MigrationMutation) RemovedEdges() []string {
 // the given name in this mutation.
 func (m *MigrationMutation) RemovedIDs(name string) []ent.Value {
 	switch name {
+	case migration.EdgeExecutions:
+		ids := make([]ent.Value, 0, len(m.removedexecutions))
+		for id := range m.removedexecutions {
+			ids = append(ids, id)
+		}
+		return ids
+	case migration.EdgeApprovals:
+		ids := make([]ent.Value, 0, len(m.removedapprovals))
+		for id := range m.removedapprovals {
+			ids = append(ids, id)
+		}
+		return ids
 	case migration.EdgeSnapshots:
 		ids := make([]ent.Value, 0, len(m.removedsnapshots))
 		for id := range m.removedsnapshots {
@@ -3663,12 +4645,18 @@ func (m *MigrationMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *MigrationMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 3)
+	edges := make([]string, 0, 5)
 	if m.clearedconnection {
 		edges = append(edges, migration.EdgeConnection)
 	}
-	if m.clearedexecutor {
-		edges = append(edges, migration.EdgeExecutor)
+	if m.clearedauthor {
+		edges = append(edges, migration.EdgeAuthor)
+	}
+	if m.clearedexecutions {
+		edges = append(edges, migration.EdgeExecutions)
+	}
+	if m.clearedapprovals {
+		edges = append(edges, migration.EdgeApprovals)
 	}
 	if m.clearedsnapshots {
 		edges = append(edges, migration.EdgeSnapshots)
@@ -3682,8 +4670,12 @@ func (m *MigrationMutation) EdgeCleared(name string) bool {
 	switch name {
 	case migration.EdgeConnection:
 		return m.clearedconnection
-	case migration.EdgeExecutor:
-		return m.clearedexecutor
+	case migration.EdgeAuthor:
+		return m.clearedauthor
+	case migration.EdgeExecutions:
+		return m.clearedexecutions
+	case migration.EdgeApprovals:
+		return m.clearedapprovals
 	case migration.EdgeSnapshots:
 		return m.clearedsnapshots
 	}
@@ -3697,8 +4689,8 @@ func (m *MigrationMutation) ClearEdge(name string) error {
 	case migration.EdgeConnection:
 		m.ClearConnection()
 		return nil
-	case migration.EdgeExecutor:
-		m.ClearExecutor()
+	case migration.EdgeAuthor:
+		m.ClearAuthor()
 		return nil
 	}
 	return fmt.Errorf("unknown Migration unique edge %s", name)
@@ -3711,14 +4703,4108 @@ func (m *MigrationMutation) ResetEdge(name string) error {
 	case migration.EdgeConnection:
 		m.ResetConnection()
 		return nil
-	case migration.EdgeExecutor:
-		m.ResetExecutor()
+	case migration.EdgeAuthor:
+		m.ResetAuthor()
+		return nil
+	case migration.EdgeExecutions:
+		m.ResetExecutions()
+		return nil
+	case migration.EdgeApprovals:
+		m.ResetApprovals()
 		return nil
 	case migration.EdgeSnapshots:
 		m.ResetSnapshots()
 		return nil
 	}
 	return fmt.Errorf("unknown Migration edge %s", name)
+}
+
+// MigrationApprovalMutation represents an operation that mutates the MigrationApproval nodes in the graph.
+type MigrationApprovalMutation struct {
+	config
+	op               Op
+	typ              string
+	id               *int
+	status           *migrationapproval.Status
+	decided_by_id    *int
+	adddecided_by_id *int
+	comment          *string
+	created_at       *time.Time
+	decided_at       *time.Time
+	clearedFields    map[string]struct{}
+	migration        *int
+	clearedmigration bool
+	group            *int
+	clearedgroup     bool
+	leader           *int
+	clearedleader    bool
+	done             bool
+	oldValue         func(context.Context) (*MigrationApproval, error)
+	predicates       []predicate.MigrationApproval
+}
+
+var _ ent.Mutation = (*MigrationApprovalMutation)(nil)
+
+// migrationapprovalOption allows management of the mutation configuration using functional options.
+type migrationapprovalOption func(*MigrationApprovalMutation)
+
+// newMigrationApprovalMutation creates new mutation for the MigrationApproval entity.
+func newMigrationApprovalMutation(c config, op Op, opts ...migrationapprovalOption) *MigrationApprovalMutation {
+	m := &MigrationApprovalMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeMigrationApproval,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withMigrationApprovalID sets the ID field of the mutation.
+func withMigrationApprovalID(id int) migrationapprovalOption {
+	return func(m *MigrationApprovalMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *MigrationApproval
+		)
+		m.oldValue = func(ctx context.Context) (*MigrationApproval, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().MigrationApproval.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withMigrationApproval sets the old MigrationApproval of the mutation.
+func withMigrationApproval(node *MigrationApproval) migrationapprovalOption {
+	return func(m *MigrationApprovalMutation) {
+		m.oldValue = func(context.Context) (*MigrationApproval, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m MigrationApprovalMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m MigrationApprovalMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *MigrationApprovalMutation) ID() (id int, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *MigrationApprovalMutation) IDs(ctx context.Context) ([]int, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().MigrationApproval.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetMigrationID sets the "migration_id" field.
+func (m *MigrationApprovalMutation) SetMigrationID(i int) {
+	m.migration = &i
+}
+
+// MigrationID returns the value of the "migration_id" field in the mutation.
+func (m *MigrationApprovalMutation) MigrationID() (r int, exists bool) {
+	v := m.migration
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMigrationID returns the old "migration_id" field's value of the MigrationApproval entity.
+// If the MigrationApproval object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MigrationApprovalMutation) OldMigrationID(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMigrationID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMigrationID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMigrationID: %w", err)
+	}
+	return oldValue.MigrationID, nil
+}
+
+// ResetMigrationID resets all changes to the "migration_id" field.
+func (m *MigrationApprovalMutation) ResetMigrationID() {
+	m.migration = nil
+}
+
+// SetGroupID sets the "group_id" field.
+func (m *MigrationApprovalMutation) SetGroupID(i int) {
+	m.group = &i
+}
+
+// GroupID returns the value of the "group_id" field in the mutation.
+func (m *MigrationApprovalMutation) GroupID() (r int, exists bool) {
+	v := m.group
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGroupID returns the old "group_id" field's value of the MigrationApproval entity.
+// If the MigrationApproval object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MigrationApprovalMutation) OldGroupID(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGroupID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGroupID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGroupID: %w", err)
+	}
+	return oldValue.GroupID, nil
+}
+
+// ResetGroupID resets all changes to the "group_id" field.
+func (m *MigrationApprovalMutation) ResetGroupID() {
+	m.group = nil
+}
+
+// SetLeaderID sets the "leader_id" field.
+func (m *MigrationApprovalMutation) SetLeaderID(i int) {
+	m.leader = &i
+}
+
+// LeaderID returns the value of the "leader_id" field in the mutation.
+func (m *MigrationApprovalMutation) LeaderID() (r int, exists bool) {
+	v := m.leader
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLeaderID returns the old "leader_id" field's value of the MigrationApproval entity.
+// If the MigrationApproval object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MigrationApprovalMutation) OldLeaderID(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLeaderID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLeaderID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLeaderID: %w", err)
+	}
+	return oldValue.LeaderID, nil
+}
+
+// ResetLeaderID resets all changes to the "leader_id" field.
+func (m *MigrationApprovalMutation) ResetLeaderID() {
+	m.leader = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *MigrationApprovalMutation) SetStatus(value migrationapproval.Status) {
+	m.status = &value
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *MigrationApprovalMutation) Status() (r migrationapproval.Status, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the MigrationApproval entity.
+// If the MigrationApproval object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MigrationApprovalMutation) OldStatus(ctx context.Context) (v migrationapproval.Status, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *MigrationApprovalMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetDecidedByID sets the "decided_by_id" field.
+func (m *MigrationApprovalMutation) SetDecidedByID(i int) {
+	m.decided_by_id = &i
+	m.adddecided_by_id = nil
+}
+
+// DecidedByID returns the value of the "decided_by_id" field in the mutation.
+func (m *MigrationApprovalMutation) DecidedByID() (r int, exists bool) {
+	v := m.decided_by_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDecidedByID returns the old "decided_by_id" field's value of the MigrationApproval entity.
+// If the MigrationApproval object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MigrationApprovalMutation) OldDecidedByID(ctx context.Context) (v *int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDecidedByID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDecidedByID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDecidedByID: %w", err)
+	}
+	return oldValue.DecidedByID, nil
+}
+
+// AddDecidedByID adds i to the "decided_by_id" field.
+func (m *MigrationApprovalMutation) AddDecidedByID(i int) {
+	if m.adddecided_by_id != nil {
+		*m.adddecided_by_id += i
+	} else {
+		m.adddecided_by_id = &i
+	}
+}
+
+// AddedDecidedByID returns the value that was added to the "decided_by_id" field in this mutation.
+func (m *MigrationApprovalMutation) AddedDecidedByID() (r int, exists bool) {
+	v := m.adddecided_by_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearDecidedByID clears the value of the "decided_by_id" field.
+func (m *MigrationApprovalMutation) ClearDecidedByID() {
+	m.decided_by_id = nil
+	m.adddecided_by_id = nil
+	m.clearedFields[migrationapproval.FieldDecidedByID] = struct{}{}
+}
+
+// DecidedByIDCleared returns if the "decided_by_id" field was cleared in this mutation.
+func (m *MigrationApprovalMutation) DecidedByIDCleared() bool {
+	_, ok := m.clearedFields[migrationapproval.FieldDecidedByID]
+	return ok
+}
+
+// ResetDecidedByID resets all changes to the "decided_by_id" field.
+func (m *MigrationApprovalMutation) ResetDecidedByID() {
+	m.decided_by_id = nil
+	m.adddecided_by_id = nil
+	delete(m.clearedFields, migrationapproval.FieldDecidedByID)
+}
+
+// SetComment sets the "comment" field.
+func (m *MigrationApprovalMutation) SetComment(s string) {
+	m.comment = &s
+}
+
+// Comment returns the value of the "comment" field in the mutation.
+func (m *MigrationApprovalMutation) Comment() (r string, exists bool) {
+	v := m.comment
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldComment returns the old "comment" field's value of the MigrationApproval entity.
+// If the MigrationApproval object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MigrationApprovalMutation) OldComment(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldComment is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldComment requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldComment: %w", err)
+	}
+	return oldValue.Comment, nil
+}
+
+// ClearComment clears the value of the "comment" field.
+func (m *MigrationApprovalMutation) ClearComment() {
+	m.comment = nil
+	m.clearedFields[migrationapproval.FieldComment] = struct{}{}
+}
+
+// CommentCleared returns if the "comment" field was cleared in this mutation.
+func (m *MigrationApprovalMutation) CommentCleared() bool {
+	_, ok := m.clearedFields[migrationapproval.FieldComment]
+	return ok
+}
+
+// ResetComment resets all changes to the "comment" field.
+func (m *MigrationApprovalMutation) ResetComment() {
+	m.comment = nil
+	delete(m.clearedFields, migrationapproval.FieldComment)
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *MigrationApprovalMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *MigrationApprovalMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the MigrationApproval entity.
+// If the MigrationApproval object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MigrationApprovalMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *MigrationApprovalMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetDecidedAt sets the "decided_at" field.
+func (m *MigrationApprovalMutation) SetDecidedAt(t time.Time) {
+	m.decided_at = &t
+}
+
+// DecidedAt returns the value of the "decided_at" field in the mutation.
+func (m *MigrationApprovalMutation) DecidedAt() (r time.Time, exists bool) {
+	v := m.decided_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDecidedAt returns the old "decided_at" field's value of the MigrationApproval entity.
+// If the MigrationApproval object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MigrationApprovalMutation) OldDecidedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDecidedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDecidedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDecidedAt: %w", err)
+	}
+	return oldValue.DecidedAt, nil
+}
+
+// ClearDecidedAt clears the value of the "decided_at" field.
+func (m *MigrationApprovalMutation) ClearDecidedAt() {
+	m.decided_at = nil
+	m.clearedFields[migrationapproval.FieldDecidedAt] = struct{}{}
+}
+
+// DecidedAtCleared returns if the "decided_at" field was cleared in this mutation.
+func (m *MigrationApprovalMutation) DecidedAtCleared() bool {
+	_, ok := m.clearedFields[migrationapproval.FieldDecidedAt]
+	return ok
+}
+
+// ResetDecidedAt resets all changes to the "decided_at" field.
+func (m *MigrationApprovalMutation) ResetDecidedAt() {
+	m.decided_at = nil
+	delete(m.clearedFields, migrationapproval.FieldDecidedAt)
+}
+
+// ClearMigration clears the "migration" edge to the Migration entity.
+func (m *MigrationApprovalMutation) ClearMigration() {
+	m.clearedmigration = true
+	m.clearedFields[migrationapproval.FieldMigrationID] = struct{}{}
+}
+
+// MigrationCleared reports if the "migration" edge to the Migration entity was cleared.
+func (m *MigrationApprovalMutation) MigrationCleared() bool {
+	return m.clearedmigration
+}
+
+// MigrationIDs returns the "migration" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// MigrationID instead. It exists only for internal usage by the builders.
+func (m *MigrationApprovalMutation) MigrationIDs() (ids []int) {
+	if id := m.migration; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetMigration resets all changes to the "migration" edge.
+func (m *MigrationApprovalMutation) ResetMigration() {
+	m.migration = nil
+	m.clearedmigration = false
+}
+
+// ClearGroup clears the "group" edge to the Group entity.
+func (m *MigrationApprovalMutation) ClearGroup() {
+	m.clearedgroup = true
+	m.clearedFields[migrationapproval.FieldGroupID] = struct{}{}
+}
+
+// GroupCleared reports if the "group" edge to the Group entity was cleared.
+func (m *MigrationApprovalMutation) GroupCleared() bool {
+	return m.clearedgroup
+}
+
+// GroupIDs returns the "group" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// GroupID instead. It exists only for internal usage by the builders.
+func (m *MigrationApprovalMutation) GroupIDs() (ids []int) {
+	if id := m.group; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetGroup resets all changes to the "group" edge.
+func (m *MigrationApprovalMutation) ResetGroup() {
+	m.group = nil
+	m.clearedgroup = false
+}
+
+// ClearLeader clears the "leader" edge to the PlatformUser entity.
+func (m *MigrationApprovalMutation) ClearLeader() {
+	m.clearedleader = true
+	m.clearedFields[migrationapproval.FieldLeaderID] = struct{}{}
+}
+
+// LeaderCleared reports if the "leader" edge to the PlatformUser entity was cleared.
+func (m *MigrationApprovalMutation) LeaderCleared() bool {
+	return m.clearedleader
+}
+
+// LeaderIDs returns the "leader" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// LeaderID instead. It exists only for internal usage by the builders.
+func (m *MigrationApprovalMutation) LeaderIDs() (ids []int) {
+	if id := m.leader; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetLeader resets all changes to the "leader" edge.
+func (m *MigrationApprovalMutation) ResetLeader() {
+	m.leader = nil
+	m.clearedleader = false
+}
+
+// Where appends a list predicates to the MigrationApprovalMutation builder.
+func (m *MigrationApprovalMutation) Where(ps ...predicate.MigrationApproval) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the MigrationApprovalMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *MigrationApprovalMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.MigrationApproval, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *MigrationApprovalMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *MigrationApprovalMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (MigrationApproval).
+func (m *MigrationApprovalMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *MigrationApprovalMutation) Fields() []string {
+	fields := make([]string, 0, 8)
+	if m.migration != nil {
+		fields = append(fields, migrationapproval.FieldMigrationID)
+	}
+	if m.group != nil {
+		fields = append(fields, migrationapproval.FieldGroupID)
+	}
+	if m.leader != nil {
+		fields = append(fields, migrationapproval.FieldLeaderID)
+	}
+	if m.status != nil {
+		fields = append(fields, migrationapproval.FieldStatus)
+	}
+	if m.decided_by_id != nil {
+		fields = append(fields, migrationapproval.FieldDecidedByID)
+	}
+	if m.comment != nil {
+		fields = append(fields, migrationapproval.FieldComment)
+	}
+	if m.created_at != nil {
+		fields = append(fields, migrationapproval.FieldCreatedAt)
+	}
+	if m.decided_at != nil {
+		fields = append(fields, migrationapproval.FieldDecidedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *MigrationApprovalMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case migrationapproval.FieldMigrationID:
+		return m.MigrationID()
+	case migrationapproval.FieldGroupID:
+		return m.GroupID()
+	case migrationapproval.FieldLeaderID:
+		return m.LeaderID()
+	case migrationapproval.FieldStatus:
+		return m.Status()
+	case migrationapproval.FieldDecidedByID:
+		return m.DecidedByID()
+	case migrationapproval.FieldComment:
+		return m.Comment()
+	case migrationapproval.FieldCreatedAt:
+		return m.CreatedAt()
+	case migrationapproval.FieldDecidedAt:
+		return m.DecidedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *MigrationApprovalMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case migrationapproval.FieldMigrationID:
+		return m.OldMigrationID(ctx)
+	case migrationapproval.FieldGroupID:
+		return m.OldGroupID(ctx)
+	case migrationapproval.FieldLeaderID:
+		return m.OldLeaderID(ctx)
+	case migrationapproval.FieldStatus:
+		return m.OldStatus(ctx)
+	case migrationapproval.FieldDecidedByID:
+		return m.OldDecidedByID(ctx)
+	case migrationapproval.FieldComment:
+		return m.OldComment(ctx)
+	case migrationapproval.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case migrationapproval.FieldDecidedAt:
+		return m.OldDecidedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown MigrationApproval field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *MigrationApprovalMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case migrationapproval.FieldMigrationID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMigrationID(v)
+		return nil
+	case migrationapproval.FieldGroupID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGroupID(v)
+		return nil
+	case migrationapproval.FieldLeaderID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLeaderID(v)
+		return nil
+	case migrationapproval.FieldStatus:
+		v, ok := value.(migrationapproval.Status)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case migrationapproval.FieldDecidedByID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDecidedByID(v)
+		return nil
+	case migrationapproval.FieldComment:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetComment(v)
+		return nil
+	case migrationapproval.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case migrationapproval.FieldDecidedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDecidedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown MigrationApproval field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *MigrationApprovalMutation) AddedFields() []string {
+	var fields []string
+	if m.adddecided_by_id != nil {
+		fields = append(fields, migrationapproval.FieldDecidedByID)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *MigrationApprovalMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case migrationapproval.FieldDecidedByID:
+		return m.AddedDecidedByID()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *MigrationApprovalMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case migrationapproval.FieldDecidedByID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddDecidedByID(v)
+		return nil
+	}
+	return fmt.Errorf("unknown MigrationApproval numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *MigrationApprovalMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(migrationapproval.FieldDecidedByID) {
+		fields = append(fields, migrationapproval.FieldDecidedByID)
+	}
+	if m.FieldCleared(migrationapproval.FieldComment) {
+		fields = append(fields, migrationapproval.FieldComment)
+	}
+	if m.FieldCleared(migrationapproval.FieldDecidedAt) {
+		fields = append(fields, migrationapproval.FieldDecidedAt)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *MigrationApprovalMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *MigrationApprovalMutation) ClearField(name string) error {
+	switch name {
+	case migrationapproval.FieldDecidedByID:
+		m.ClearDecidedByID()
+		return nil
+	case migrationapproval.FieldComment:
+		m.ClearComment()
+		return nil
+	case migrationapproval.FieldDecidedAt:
+		m.ClearDecidedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown MigrationApproval nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *MigrationApprovalMutation) ResetField(name string) error {
+	switch name {
+	case migrationapproval.FieldMigrationID:
+		m.ResetMigrationID()
+		return nil
+	case migrationapproval.FieldGroupID:
+		m.ResetGroupID()
+		return nil
+	case migrationapproval.FieldLeaderID:
+		m.ResetLeaderID()
+		return nil
+	case migrationapproval.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case migrationapproval.FieldDecidedByID:
+		m.ResetDecidedByID()
+		return nil
+	case migrationapproval.FieldComment:
+		m.ResetComment()
+		return nil
+	case migrationapproval.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case migrationapproval.FieldDecidedAt:
+		m.ResetDecidedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown MigrationApproval field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *MigrationApprovalMutation) AddedEdges() []string {
+	edges := make([]string, 0, 3)
+	if m.migration != nil {
+		edges = append(edges, migrationapproval.EdgeMigration)
+	}
+	if m.group != nil {
+		edges = append(edges, migrationapproval.EdgeGroup)
+	}
+	if m.leader != nil {
+		edges = append(edges, migrationapproval.EdgeLeader)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *MigrationApprovalMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case migrationapproval.EdgeMigration:
+		if id := m.migration; id != nil {
+			return []ent.Value{*id}
+		}
+	case migrationapproval.EdgeGroup:
+		if id := m.group; id != nil {
+			return []ent.Value{*id}
+		}
+	case migrationapproval.EdgeLeader:
+		if id := m.leader; id != nil {
+			return []ent.Value{*id}
+		}
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *MigrationApprovalMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 3)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *MigrationApprovalMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *MigrationApprovalMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 3)
+	if m.clearedmigration {
+		edges = append(edges, migrationapproval.EdgeMigration)
+	}
+	if m.clearedgroup {
+		edges = append(edges, migrationapproval.EdgeGroup)
+	}
+	if m.clearedleader {
+		edges = append(edges, migrationapproval.EdgeLeader)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *MigrationApprovalMutation) EdgeCleared(name string) bool {
+	switch name {
+	case migrationapproval.EdgeMigration:
+		return m.clearedmigration
+	case migrationapproval.EdgeGroup:
+		return m.clearedgroup
+	case migrationapproval.EdgeLeader:
+		return m.clearedleader
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *MigrationApprovalMutation) ClearEdge(name string) error {
+	switch name {
+	case migrationapproval.EdgeMigration:
+		m.ClearMigration()
+		return nil
+	case migrationapproval.EdgeGroup:
+		m.ClearGroup()
+		return nil
+	case migrationapproval.EdgeLeader:
+		m.ClearLeader()
+		return nil
+	}
+	return fmt.Errorf("unknown MigrationApproval unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *MigrationApprovalMutation) ResetEdge(name string) error {
+	switch name {
+	case migrationapproval.EdgeMigration:
+		m.ResetMigration()
+		return nil
+	case migrationapproval.EdgeGroup:
+		m.ResetGroup()
+		return nil
+	case migrationapproval.EdgeLeader:
+		m.ResetLeader()
+		return nil
+	}
+	return fmt.Errorf("unknown MigrationApproval edge %s", name)
+}
+
+// MigrationExecutionMutation represents an operation that mutates the MigrationExecution nodes in the graph.
+type MigrationExecutionMutation struct {
+	config
+	op                Op
+	typ               string
+	id                *int
+	connection_id     *int
+	addconnection_id  *int
+	kind              *migrationexecution.Kind
+	status            *migrationexecution.Status
+	sql_executed      *string
+	sql_down_executed *string
+	error             *string
+	batch_cursor      *int64
+	addbatch_cursor   *int64
+	batches_done      *int
+	addbatches_done   *int
+	rows_done         *int64
+	addrows_done      *int64
+	created_at        *time.Time
+	finished_at       *time.Time
+	clearedFields     map[string]struct{}
+	migration         *int
+	clearedmigration  bool
+	actor             *int
+	clearedactor      bool
+	reverted          *int
+	clearedreverted   bool
+	jobs              map[int]struct{}
+	removedjobs       map[int]struct{}
+	clearedjobs       bool
+	snapshots         map[int]struct{}
+	removedsnapshots  map[int]struct{}
+	clearedsnapshots  bool
+	done              bool
+	oldValue          func(context.Context) (*MigrationExecution, error)
+	predicates        []predicate.MigrationExecution
+}
+
+var _ ent.Mutation = (*MigrationExecutionMutation)(nil)
+
+// migrationexecutionOption allows management of the mutation configuration using functional options.
+type migrationexecutionOption func(*MigrationExecutionMutation)
+
+// newMigrationExecutionMutation creates new mutation for the MigrationExecution entity.
+func newMigrationExecutionMutation(c config, op Op, opts ...migrationexecutionOption) *MigrationExecutionMutation {
+	m := &MigrationExecutionMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeMigrationExecution,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withMigrationExecutionID sets the ID field of the mutation.
+func withMigrationExecutionID(id int) migrationexecutionOption {
+	return func(m *MigrationExecutionMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *MigrationExecution
+		)
+		m.oldValue = func(ctx context.Context) (*MigrationExecution, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().MigrationExecution.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withMigrationExecution sets the old MigrationExecution of the mutation.
+func withMigrationExecution(node *MigrationExecution) migrationexecutionOption {
+	return func(m *MigrationExecutionMutation) {
+		m.oldValue = func(context.Context) (*MigrationExecution, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m MigrationExecutionMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m MigrationExecutionMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *MigrationExecutionMutation) ID() (id int, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *MigrationExecutionMutation) IDs(ctx context.Context) ([]int, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().MigrationExecution.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetMigrationID sets the "migration_id" field.
+func (m *MigrationExecutionMutation) SetMigrationID(i int) {
+	m.migration = &i
+}
+
+// MigrationID returns the value of the "migration_id" field in the mutation.
+func (m *MigrationExecutionMutation) MigrationID() (r int, exists bool) {
+	v := m.migration
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMigrationID returns the old "migration_id" field's value of the MigrationExecution entity.
+// If the MigrationExecution object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MigrationExecutionMutation) OldMigrationID(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMigrationID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMigrationID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMigrationID: %w", err)
+	}
+	return oldValue.MigrationID, nil
+}
+
+// ResetMigrationID resets all changes to the "migration_id" field.
+func (m *MigrationExecutionMutation) ResetMigrationID() {
+	m.migration = nil
+}
+
+// SetConnectionID sets the "connection_id" field.
+func (m *MigrationExecutionMutation) SetConnectionID(i int) {
+	m.connection_id = &i
+	m.addconnection_id = nil
+}
+
+// ConnectionID returns the value of the "connection_id" field in the mutation.
+func (m *MigrationExecutionMutation) ConnectionID() (r int, exists bool) {
+	v := m.connection_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldConnectionID returns the old "connection_id" field's value of the MigrationExecution entity.
+// If the MigrationExecution object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MigrationExecutionMutation) OldConnectionID(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldConnectionID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldConnectionID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldConnectionID: %w", err)
+	}
+	return oldValue.ConnectionID, nil
+}
+
+// AddConnectionID adds i to the "connection_id" field.
+func (m *MigrationExecutionMutation) AddConnectionID(i int) {
+	if m.addconnection_id != nil {
+		*m.addconnection_id += i
+	} else {
+		m.addconnection_id = &i
+	}
+}
+
+// AddedConnectionID returns the value that was added to the "connection_id" field in this mutation.
+func (m *MigrationExecutionMutation) AddedConnectionID() (r int, exists bool) {
+	v := m.addconnection_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetConnectionID resets all changes to the "connection_id" field.
+func (m *MigrationExecutionMutation) ResetConnectionID() {
+	m.connection_id = nil
+	m.addconnection_id = nil
+}
+
+// SetKind sets the "kind" field.
+func (m *MigrationExecutionMutation) SetKind(value migrationexecution.Kind) {
+	m.kind = &value
+}
+
+// Kind returns the value of the "kind" field in the mutation.
+func (m *MigrationExecutionMutation) Kind() (r migrationexecution.Kind, exists bool) {
+	v := m.kind
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldKind returns the old "kind" field's value of the MigrationExecution entity.
+// If the MigrationExecution object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MigrationExecutionMutation) OldKind(ctx context.Context) (v migrationexecution.Kind, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldKind is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldKind requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldKind: %w", err)
+	}
+	return oldValue.Kind, nil
+}
+
+// ResetKind resets all changes to the "kind" field.
+func (m *MigrationExecutionMutation) ResetKind() {
+	m.kind = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *MigrationExecutionMutation) SetStatus(value migrationexecution.Status) {
+	m.status = &value
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *MigrationExecutionMutation) Status() (r migrationexecution.Status, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the MigrationExecution entity.
+// If the MigrationExecution object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MigrationExecutionMutation) OldStatus(ctx context.Context) (v migrationexecution.Status, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *MigrationExecutionMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetSQLExecuted sets the "sql_executed" field.
+func (m *MigrationExecutionMutation) SetSQLExecuted(s string) {
+	m.sql_executed = &s
+}
+
+// SQLExecuted returns the value of the "sql_executed" field in the mutation.
+func (m *MigrationExecutionMutation) SQLExecuted() (r string, exists bool) {
+	v := m.sql_executed
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSQLExecuted returns the old "sql_executed" field's value of the MigrationExecution entity.
+// If the MigrationExecution object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MigrationExecutionMutation) OldSQLExecuted(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSQLExecuted is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSQLExecuted requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSQLExecuted: %w", err)
+	}
+	return oldValue.SQLExecuted, nil
+}
+
+// ClearSQLExecuted clears the value of the "sql_executed" field.
+func (m *MigrationExecutionMutation) ClearSQLExecuted() {
+	m.sql_executed = nil
+	m.clearedFields[migrationexecution.FieldSQLExecuted] = struct{}{}
+}
+
+// SQLExecutedCleared returns if the "sql_executed" field was cleared in this mutation.
+func (m *MigrationExecutionMutation) SQLExecutedCleared() bool {
+	_, ok := m.clearedFields[migrationexecution.FieldSQLExecuted]
+	return ok
+}
+
+// ResetSQLExecuted resets all changes to the "sql_executed" field.
+func (m *MigrationExecutionMutation) ResetSQLExecuted() {
+	m.sql_executed = nil
+	delete(m.clearedFields, migrationexecution.FieldSQLExecuted)
+}
+
+// SetSQLDownExecuted sets the "sql_down_executed" field.
+func (m *MigrationExecutionMutation) SetSQLDownExecuted(s string) {
+	m.sql_down_executed = &s
+}
+
+// SQLDownExecuted returns the value of the "sql_down_executed" field in the mutation.
+func (m *MigrationExecutionMutation) SQLDownExecuted() (r string, exists bool) {
+	v := m.sql_down_executed
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSQLDownExecuted returns the old "sql_down_executed" field's value of the MigrationExecution entity.
+// If the MigrationExecution object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MigrationExecutionMutation) OldSQLDownExecuted(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSQLDownExecuted is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSQLDownExecuted requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSQLDownExecuted: %w", err)
+	}
+	return oldValue.SQLDownExecuted, nil
+}
+
+// ClearSQLDownExecuted clears the value of the "sql_down_executed" field.
+func (m *MigrationExecutionMutation) ClearSQLDownExecuted() {
+	m.sql_down_executed = nil
+	m.clearedFields[migrationexecution.FieldSQLDownExecuted] = struct{}{}
+}
+
+// SQLDownExecutedCleared returns if the "sql_down_executed" field was cleared in this mutation.
+func (m *MigrationExecutionMutation) SQLDownExecutedCleared() bool {
+	_, ok := m.clearedFields[migrationexecution.FieldSQLDownExecuted]
+	return ok
+}
+
+// ResetSQLDownExecuted resets all changes to the "sql_down_executed" field.
+func (m *MigrationExecutionMutation) ResetSQLDownExecuted() {
+	m.sql_down_executed = nil
+	delete(m.clearedFields, migrationexecution.FieldSQLDownExecuted)
+}
+
+// SetError sets the "error" field.
+func (m *MigrationExecutionMutation) SetError(s string) {
+	m.error = &s
+}
+
+// Error returns the value of the "error" field in the mutation.
+func (m *MigrationExecutionMutation) Error() (r string, exists bool) {
+	v := m.error
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldError returns the old "error" field's value of the MigrationExecution entity.
+// If the MigrationExecution object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MigrationExecutionMutation) OldError(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldError is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldError requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldError: %w", err)
+	}
+	return oldValue.Error, nil
+}
+
+// ClearError clears the value of the "error" field.
+func (m *MigrationExecutionMutation) ClearError() {
+	m.error = nil
+	m.clearedFields[migrationexecution.FieldError] = struct{}{}
+}
+
+// ErrorCleared returns if the "error" field was cleared in this mutation.
+func (m *MigrationExecutionMutation) ErrorCleared() bool {
+	_, ok := m.clearedFields[migrationexecution.FieldError]
+	return ok
+}
+
+// ResetError resets all changes to the "error" field.
+func (m *MigrationExecutionMutation) ResetError() {
+	m.error = nil
+	delete(m.clearedFields, migrationexecution.FieldError)
+}
+
+// SetRevertedExecutionID sets the "reverted_execution_id" field.
+func (m *MigrationExecutionMutation) SetRevertedExecutionID(i int) {
+	m.reverted = &i
+}
+
+// RevertedExecutionID returns the value of the "reverted_execution_id" field in the mutation.
+func (m *MigrationExecutionMutation) RevertedExecutionID() (r int, exists bool) {
+	v := m.reverted
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRevertedExecutionID returns the old "reverted_execution_id" field's value of the MigrationExecution entity.
+// If the MigrationExecution object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MigrationExecutionMutation) OldRevertedExecutionID(ctx context.Context) (v *int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRevertedExecutionID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRevertedExecutionID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRevertedExecutionID: %w", err)
+	}
+	return oldValue.RevertedExecutionID, nil
+}
+
+// ClearRevertedExecutionID clears the value of the "reverted_execution_id" field.
+func (m *MigrationExecutionMutation) ClearRevertedExecutionID() {
+	m.reverted = nil
+	m.clearedFields[migrationexecution.FieldRevertedExecutionID] = struct{}{}
+}
+
+// RevertedExecutionIDCleared returns if the "reverted_execution_id" field was cleared in this mutation.
+func (m *MigrationExecutionMutation) RevertedExecutionIDCleared() bool {
+	_, ok := m.clearedFields[migrationexecution.FieldRevertedExecutionID]
+	return ok
+}
+
+// ResetRevertedExecutionID resets all changes to the "reverted_execution_id" field.
+func (m *MigrationExecutionMutation) ResetRevertedExecutionID() {
+	m.reverted = nil
+	delete(m.clearedFields, migrationexecution.FieldRevertedExecutionID)
+}
+
+// SetActorID sets the "actor_id" field.
+func (m *MigrationExecutionMutation) SetActorID(i int) {
+	m.actor = &i
+}
+
+// ActorID returns the value of the "actor_id" field in the mutation.
+func (m *MigrationExecutionMutation) ActorID() (r int, exists bool) {
+	v := m.actor
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldActorID returns the old "actor_id" field's value of the MigrationExecution entity.
+// If the MigrationExecution object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MigrationExecutionMutation) OldActorID(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldActorID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldActorID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldActorID: %w", err)
+	}
+	return oldValue.ActorID, nil
+}
+
+// ResetActorID resets all changes to the "actor_id" field.
+func (m *MigrationExecutionMutation) ResetActorID() {
+	m.actor = nil
+}
+
+// SetBatchCursor sets the "batch_cursor" field.
+func (m *MigrationExecutionMutation) SetBatchCursor(i int64) {
+	m.batch_cursor = &i
+	m.addbatch_cursor = nil
+}
+
+// BatchCursor returns the value of the "batch_cursor" field in the mutation.
+func (m *MigrationExecutionMutation) BatchCursor() (r int64, exists bool) {
+	v := m.batch_cursor
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBatchCursor returns the old "batch_cursor" field's value of the MigrationExecution entity.
+// If the MigrationExecution object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MigrationExecutionMutation) OldBatchCursor(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBatchCursor is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBatchCursor requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBatchCursor: %w", err)
+	}
+	return oldValue.BatchCursor, nil
+}
+
+// AddBatchCursor adds i to the "batch_cursor" field.
+func (m *MigrationExecutionMutation) AddBatchCursor(i int64) {
+	if m.addbatch_cursor != nil {
+		*m.addbatch_cursor += i
+	} else {
+		m.addbatch_cursor = &i
+	}
+}
+
+// AddedBatchCursor returns the value that was added to the "batch_cursor" field in this mutation.
+func (m *MigrationExecutionMutation) AddedBatchCursor() (r int64, exists bool) {
+	v := m.addbatch_cursor
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearBatchCursor clears the value of the "batch_cursor" field.
+func (m *MigrationExecutionMutation) ClearBatchCursor() {
+	m.batch_cursor = nil
+	m.addbatch_cursor = nil
+	m.clearedFields[migrationexecution.FieldBatchCursor] = struct{}{}
+}
+
+// BatchCursorCleared returns if the "batch_cursor" field was cleared in this mutation.
+func (m *MigrationExecutionMutation) BatchCursorCleared() bool {
+	_, ok := m.clearedFields[migrationexecution.FieldBatchCursor]
+	return ok
+}
+
+// ResetBatchCursor resets all changes to the "batch_cursor" field.
+func (m *MigrationExecutionMutation) ResetBatchCursor() {
+	m.batch_cursor = nil
+	m.addbatch_cursor = nil
+	delete(m.clearedFields, migrationexecution.FieldBatchCursor)
+}
+
+// SetBatchesDone sets the "batches_done" field.
+func (m *MigrationExecutionMutation) SetBatchesDone(i int) {
+	m.batches_done = &i
+	m.addbatches_done = nil
+}
+
+// BatchesDone returns the value of the "batches_done" field in the mutation.
+func (m *MigrationExecutionMutation) BatchesDone() (r int, exists bool) {
+	v := m.batches_done
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBatchesDone returns the old "batches_done" field's value of the MigrationExecution entity.
+// If the MigrationExecution object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MigrationExecutionMutation) OldBatchesDone(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBatchesDone is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBatchesDone requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBatchesDone: %w", err)
+	}
+	return oldValue.BatchesDone, nil
+}
+
+// AddBatchesDone adds i to the "batches_done" field.
+func (m *MigrationExecutionMutation) AddBatchesDone(i int) {
+	if m.addbatches_done != nil {
+		*m.addbatches_done += i
+	} else {
+		m.addbatches_done = &i
+	}
+}
+
+// AddedBatchesDone returns the value that was added to the "batches_done" field in this mutation.
+func (m *MigrationExecutionMutation) AddedBatchesDone() (r int, exists bool) {
+	v := m.addbatches_done
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetBatchesDone resets all changes to the "batches_done" field.
+func (m *MigrationExecutionMutation) ResetBatchesDone() {
+	m.batches_done = nil
+	m.addbatches_done = nil
+}
+
+// SetRowsDone sets the "rows_done" field.
+func (m *MigrationExecutionMutation) SetRowsDone(i int64) {
+	m.rows_done = &i
+	m.addrows_done = nil
+}
+
+// RowsDone returns the value of the "rows_done" field in the mutation.
+func (m *MigrationExecutionMutation) RowsDone() (r int64, exists bool) {
+	v := m.rows_done
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRowsDone returns the old "rows_done" field's value of the MigrationExecution entity.
+// If the MigrationExecution object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MigrationExecutionMutation) OldRowsDone(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRowsDone is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRowsDone requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRowsDone: %w", err)
+	}
+	return oldValue.RowsDone, nil
+}
+
+// AddRowsDone adds i to the "rows_done" field.
+func (m *MigrationExecutionMutation) AddRowsDone(i int64) {
+	if m.addrows_done != nil {
+		*m.addrows_done += i
+	} else {
+		m.addrows_done = &i
+	}
+}
+
+// AddedRowsDone returns the value that was added to the "rows_done" field in this mutation.
+func (m *MigrationExecutionMutation) AddedRowsDone() (r int64, exists bool) {
+	v := m.addrows_done
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetRowsDone resets all changes to the "rows_done" field.
+func (m *MigrationExecutionMutation) ResetRowsDone() {
+	m.rows_done = nil
+	m.addrows_done = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *MigrationExecutionMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *MigrationExecutionMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the MigrationExecution entity.
+// If the MigrationExecution object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MigrationExecutionMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *MigrationExecutionMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetFinishedAt sets the "finished_at" field.
+func (m *MigrationExecutionMutation) SetFinishedAt(t time.Time) {
+	m.finished_at = &t
+}
+
+// FinishedAt returns the value of the "finished_at" field in the mutation.
+func (m *MigrationExecutionMutation) FinishedAt() (r time.Time, exists bool) {
+	v := m.finished_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldFinishedAt returns the old "finished_at" field's value of the MigrationExecution entity.
+// If the MigrationExecution object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MigrationExecutionMutation) OldFinishedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldFinishedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldFinishedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldFinishedAt: %w", err)
+	}
+	return oldValue.FinishedAt, nil
+}
+
+// ClearFinishedAt clears the value of the "finished_at" field.
+func (m *MigrationExecutionMutation) ClearFinishedAt() {
+	m.finished_at = nil
+	m.clearedFields[migrationexecution.FieldFinishedAt] = struct{}{}
+}
+
+// FinishedAtCleared returns if the "finished_at" field was cleared in this mutation.
+func (m *MigrationExecutionMutation) FinishedAtCleared() bool {
+	_, ok := m.clearedFields[migrationexecution.FieldFinishedAt]
+	return ok
+}
+
+// ResetFinishedAt resets all changes to the "finished_at" field.
+func (m *MigrationExecutionMutation) ResetFinishedAt() {
+	m.finished_at = nil
+	delete(m.clearedFields, migrationexecution.FieldFinishedAt)
+}
+
+// ClearMigration clears the "migration" edge to the Migration entity.
+func (m *MigrationExecutionMutation) ClearMigration() {
+	m.clearedmigration = true
+	m.clearedFields[migrationexecution.FieldMigrationID] = struct{}{}
+}
+
+// MigrationCleared reports if the "migration" edge to the Migration entity was cleared.
+func (m *MigrationExecutionMutation) MigrationCleared() bool {
+	return m.clearedmigration
+}
+
+// MigrationIDs returns the "migration" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// MigrationID instead. It exists only for internal usage by the builders.
+func (m *MigrationExecutionMutation) MigrationIDs() (ids []int) {
+	if id := m.migration; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetMigration resets all changes to the "migration" edge.
+func (m *MigrationExecutionMutation) ResetMigration() {
+	m.migration = nil
+	m.clearedmigration = false
+}
+
+// ClearActor clears the "actor" edge to the PlatformUser entity.
+func (m *MigrationExecutionMutation) ClearActor() {
+	m.clearedactor = true
+	m.clearedFields[migrationexecution.FieldActorID] = struct{}{}
+}
+
+// ActorCleared reports if the "actor" edge to the PlatformUser entity was cleared.
+func (m *MigrationExecutionMutation) ActorCleared() bool {
+	return m.clearedactor
+}
+
+// ActorIDs returns the "actor" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// ActorID instead. It exists only for internal usage by the builders.
+func (m *MigrationExecutionMutation) ActorIDs() (ids []int) {
+	if id := m.actor; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetActor resets all changes to the "actor" edge.
+func (m *MigrationExecutionMutation) ResetActor() {
+	m.actor = nil
+	m.clearedactor = false
+}
+
+// SetRevertedID sets the "reverted" edge to the MigrationExecution entity by id.
+func (m *MigrationExecutionMutation) SetRevertedID(id int) {
+	m.reverted = &id
+}
+
+// ClearReverted clears the "reverted" edge to the MigrationExecution entity.
+func (m *MigrationExecutionMutation) ClearReverted() {
+	m.clearedreverted = true
+	m.clearedFields[migrationexecution.FieldRevertedExecutionID] = struct{}{}
+}
+
+// RevertedCleared reports if the "reverted" edge to the MigrationExecution entity was cleared.
+func (m *MigrationExecutionMutation) RevertedCleared() bool {
+	return m.RevertedExecutionIDCleared() || m.clearedreverted
+}
+
+// RevertedID returns the "reverted" edge ID in the mutation.
+func (m *MigrationExecutionMutation) RevertedID() (id int, exists bool) {
+	if m.reverted != nil {
+		return *m.reverted, true
+	}
+	return
+}
+
+// RevertedIDs returns the "reverted" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// RevertedID instead. It exists only for internal usage by the builders.
+func (m *MigrationExecutionMutation) RevertedIDs() (ids []int) {
+	if id := m.reverted; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetReverted resets all changes to the "reverted" edge.
+func (m *MigrationExecutionMutation) ResetReverted() {
+	m.reverted = nil
+	m.clearedreverted = false
+}
+
+// AddJobIDs adds the "jobs" edge to the MigrationJob entity by ids.
+func (m *MigrationExecutionMutation) AddJobIDs(ids ...int) {
+	if m.jobs == nil {
+		m.jobs = make(map[int]struct{})
+	}
+	for i := range ids {
+		m.jobs[ids[i]] = struct{}{}
+	}
+}
+
+// ClearJobs clears the "jobs" edge to the MigrationJob entity.
+func (m *MigrationExecutionMutation) ClearJobs() {
+	m.clearedjobs = true
+}
+
+// JobsCleared reports if the "jobs" edge to the MigrationJob entity was cleared.
+func (m *MigrationExecutionMutation) JobsCleared() bool {
+	return m.clearedjobs
+}
+
+// RemoveJobIDs removes the "jobs" edge to the MigrationJob entity by IDs.
+func (m *MigrationExecutionMutation) RemoveJobIDs(ids ...int) {
+	if m.removedjobs == nil {
+		m.removedjobs = make(map[int]struct{})
+	}
+	for i := range ids {
+		delete(m.jobs, ids[i])
+		m.removedjobs[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedJobs returns the removed IDs of the "jobs" edge to the MigrationJob entity.
+func (m *MigrationExecutionMutation) RemovedJobsIDs() (ids []int) {
+	for id := range m.removedjobs {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// JobsIDs returns the "jobs" edge IDs in the mutation.
+func (m *MigrationExecutionMutation) JobsIDs() (ids []int) {
+	for id := range m.jobs {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetJobs resets all changes to the "jobs" edge.
+func (m *MigrationExecutionMutation) ResetJobs() {
+	m.jobs = nil
+	m.clearedjobs = false
+	m.removedjobs = nil
+}
+
+// AddSnapshotIDs adds the "snapshots" edge to the SchemaSnapshot entity by ids.
+func (m *MigrationExecutionMutation) AddSnapshotIDs(ids ...int) {
+	if m.snapshots == nil {
+		m.snapshots = make(map[int]struct{})
+	}
+	for i := range ids {
+		m.snapshots[ids[i]] = struct{}{}
+	}
+}
+
+// ClearSnapshots clears the "snapshots" edge to the SchemaSnapshot entity.
+func (m *MigrationExecutionMutation) ClearSnapshots() {
+	m.clearedsnapshots = true
+}
+
+// SnapshotsCleared reports if the "snapshots" edge to the SchemaSnapshot entity was cleared.
+func (m *MigrationExecutionMutation) SnapshotsCleared() bool {
+	return m.clearedsnapshots
+}
+
+// RemoveSnapshotIDs removes the "snapshots" edge to the SchemaSnapshot entity by IDs.
+func (m *MigrationExecutionMutation) RemoveSnapshotIDs(ids ...int) {
+	if m.removedsnapshots == nil {
+		m.removedsnapshots = make(map[int]struct{})
+	}
+	for i := range ids {
+		delete(m.snapshots, ids[i])
+		m.removedsnapshots[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedSnapshots returns the removed IDs of the "snapshots" edge to the SchemaSnapshot entity.
+func (m *MigrationExecutionMutation) RemovedSnapshotsIDs() (ids []int) {
+	for id := range m.removedsnapshots {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// SnapshotsIDs returns the "snapshots" edge IDs in the mutation.
+func (m *MigrationExecutionMutation) SnapshotsIDs() (ids []int) {
+	for id := range m.snapshots {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetSnapshots resets all changes to the "snapshots" edge.
+func (m *MigrationExecutionMutation) ResetSnapshots() {
+	m.snapshots = nil
+	m.clearedsnapshots = false
+	m.removedsnapshots = nil
+}
+
+// Where appends a list predicates to the MigrationExecutionMutation builder.
+func (m *MigrationExecutionMutation) Where(ps ...predicate.MigrationExecution) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the MigrationExecutionMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *MigrationExecutionMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.MigrationExecution, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *MigrationExecutionMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *MigrationExecutionMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (MigrationExecution).
+func (m *MigrationExecutionMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *MigrationExecutionMutation) Fields() []string {
+	fields := make([]string, 0, 14)
+	if m.migration != nil {
+		fields = append(fields, migrationexecution.FieldMigrationID)
+	}
+	if m.connection_id != nil {
+		fields = append(fields, migrationexecution.FieldConnectionID)
+	}
+	if m.kind != nil {
+		fields = append(fields, migrationexecution.FieldKind)
+	}
+	if m.status != nil {
+		fields = append(fields, migrationexecution.FieldStatus)
+	}
+	if m.sql_executed != nil {
+		fields = append(fields, migrationexecution.FieldSQLExecuted)
+	}
+	if m.sql_down_executed != nil {
+		fields = append(fields, migrationexecution.FieldSQLDownExecuted)
+	}
+	if m.error != nil {
+		fields = append(fields, migrationexecution.FieldError)
+	}
+	if m.reverted != nil {
+		fields = append(fields, migrationexecution.FieldRevertedExecutionID)
+	}
+	if m.actor != nil {
+		fields = append(fields, migrationexecution.FieldActorID)
+	}
+	if m.batch_cursor != nil {
+		fields = append(fields, migrationexecution.FieldBatchCursor)
+	}
+	if m.batches_done != nil {
+		fields = append(fields, migrationexecution.FieldBatchesDone)
+	}
+	if m.rows_done != nil {
+		fields = append(fields, migrationexecution.FieldRowsDone)
+	}
+	if m.created_at != nil {
+		fields = append(fields, migrationexecution.FieldCreatedAt)
+	}
+	if m.finished_at != nil {
+		fields = append(fields, migrationexecution.FieldFinishedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *MigrationExecutionMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case migrationexecution.FieldMigrationID:
+		return m.MigrationID()
+	case migrationexecution.FieldConnectionID:
+		return m.ConnectionID()
+	case migrationexecution.FieldKind:
+		return m.Kind()
+	case migrationexecution.FieldStatus:
+		return m.Status()
+	case migrationexecution.FieldSQLExecuted:
+		return m.SQLExecuted()
+	case migrationexecution.FieldSQLDownExecuted:
+		return m.SQLDownExecuted()
+	case migrationexecution.FieldError:
+		return m.Error()
+	case migrationexecution.FieldRevertedExecutionID:
+		return m.RevertedExecutionID()
+	case migrationexecution.FieldActorID:
+		return m.ActorID()
+	case migrationexecution.FieldBatchCursor:
+		return m.BatchCursor()
+	case migrationexecution.FieldBatchesDone:
+		return m.BatchesDone()
+	case migrationexecution.FieldRowsDone:
+		return m.RowsDone()
+	case migrationexecution.FieldCreatedAt:
+		return m.CreatedAt()
+	case migrationexecution.FieldFinishedAt:
+		return m.FinishedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *MigrationExecutionMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case migrationexecution.FieldMigrationID:
+		return m.OldMigrationID(ctx)
+	case migrationexecution.FieldConnectionID:
+		return m.OldConnectionID(ctx)
+	case migrationexecution.FieldKind:
+		return m.OldKind(ctx)
+	case migrationexecution.FieldStatus:
+		return m.OldStatus(ctx)
+	case migrationexecution.FieldSQLExecuted:
+		return m.OldSQLExecuted(ctx)
+	case migrationexecution.FieldSQLDownExecuted:
+		return m.OldSQLDownExecuted(ctx)
+	case migrationexecution.FieldError:
+		return m.OldError(ctx)
+	case migrationexecution.FieldRevertedExecutionID:
+		return m.OldRevertedExecutionID(ctx)
+	case migrationexecution.FieldActorID:
+		return m.OldActorID(ctx)
+	case migrationexecution.FieldBatchCursor:
+		return m.OldBatchCursor(ctx)
+	case migrationexecution.FieldBatchesDone:
+		return m.OldBatchesDone(ctx)
+	case migrationexecution.FieldRowsDone:
+		return m.OldRowsDone(ctx)
+	case migrationexecution.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case migrationexecution.FieldFinishedAt:
+		return m.OldFinishedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown MigrationExecution field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *MigrationExecutionMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case migrationexecution.FieldMigrationID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMigrationID(v)
+		return nil
+	case migrationexecution.FieldConnectionID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetConnectionID(v)
+		return nil
+	case migrationexecution.FieldKind:
+		v, ok := value.(migrationexecution.Kind)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetKind(v)
+		return nil
+	case migrationexecution.FieldStatus:
+		v, ok := value.(migrationexecution.Status)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case migrationexecution.FieldSQLExecuted:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSQLExecuted(v)
+		return nil
+	case migrationexecution.FieldSQLDownExecuted:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSQLDownExecuted(v)
+		return nil
+	case migrationexecution.FieldError:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetError(v)
+		return nil
+	case migrationexecution.FieldRevertedExecutionID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRevertedExecutionID(v)
+		return nil
+	case migrationexecution.FieldActorID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetActorID(v)
+		return nil
+	case migrationexecution.FieldBatchCursor:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBatchCursor(v)
+		return nil
+	case migrationexecution.FieldBatchesDone:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBatchesDone(v)
+		return nil
+	case migrationexecution.FieldRowsDone:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRowsDone(v)
+		return nil
+	case migrationexecution.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case migrationexecution.FieldFinishedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetFinishedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown MigrationExecution field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *MigrationExecutionMutation) AddedFields() []string {
+	var fields []string
+	if m.addconnection_id != nil {
+		fields = append(fields, migrationexecution.FieldConnectionID)
+	}
+	if m.addbatch_cursor != nil {
+		fields = append(fields, migrationexecution.FieldBatchCursor)
+	}
+	if m.addbatches_done != nil {
+		fields = append(fields, migrationexecution.FieldBatchesDone)
+	}
+	if m.addrows_done != nil {
+		fields = append(fields, migrationexecution.FieldRowsDone)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *MigrationExecutionMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case migrationexecution.FieldConnectionID:
+		return m.AddedConnectionID()
+	case migrationexecution.FieldBatchCursor:
+		return m.AddedBatchCursor()
+	case migrationexecution.FieldBatchesDone:
+		return m.AddedBatchesDone()
+	case migrationexecution.FieldRowsDone:
+		return m.AddedRowsDone()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *MigrationExecutionMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case migrationexecution.FieldConnectionID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddConnectionID(v)
+		return nil
+	case migrationexecution.FieldBatchCursor:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddBatchCursor(v)
+		return nil
+	case migrationexecution.FieldBatchesDone:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddBatchesDone(v)
+		return nil
+	case migrationexecution.FieldRowsDone:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddRowsDone(v)
+		return nil
+	}
+	return fmt.Errorf("unknown MigrationExecution numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *MigrationExecutionMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(migrationexecution.FieldSQLExecuted) {
+		fields = append(fields, migrationexecution.FieldSQLExecuted)
+	}
+	if m.FieldCleared(migrationexecution.FieldSQLDownExecuted) {
+		fields = append(fields, migrationexecution.FieldSQLDownExecuted)
+	}
+	if m.FieldCleared(migrationexecution.FieldError) {
+		fields = append(fields, migrationexecution.FieldError)
+	}
+	if m.FieldCleared(migrationexecution.FieldRevertedExecutionID) {
+		fields = append(fields, migrationexecution.FieldRevertedExecutionID)
+	}
+	if m.FieldCleared(migrationexecution.FieldBatchCursor) {
+		fields = append(fields, migrationexecution.FieldBatchCursor)
+	}
+	if m.FieldCleared(migrationexecution.FieldFinishedAt) {
+		fields = append(fields, migrationexecution.FieldFinishedAt)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *MigrationExecutionMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *MigrationExecutionMutation) ClearField(name string) error {
+	switch name {
+	case migrationexecution.FieldSQLExecuted:
+		m.ClearSQLExecuted()
+		return nil
+	case migrationexecution.FieldSQLDownExecuted:
+		m.ClearSQLDownExecuted()
+		return nil
+	case migrationexecution.FieldError:
+		m.ClearError()
+		return nil
+	case migrationexecution.FieldRevertedExecutionID:
+		m.ClearRevertedExecutionID()
+		return nil
+	case migrationexecution.FieldBatchCursor:
+		m.ClearBatchCursor()
+		return nil
+	case migrationexecution.FieldFinishedAt:
+		m.ClearFinishedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown MigrationExecution nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *MigrationExecutionMutation) ResetField(name string) error {
+	switch name {
+	case migrationexecution.FieldMigrationID:
+		m.ResetMigrationID()
+		return nil
+	case migrationexecution.FieldConnectionID:
+		m.ResetConnectionID()
+		return nil
+	case migrationexecution.FieldKind:
+		m.ResetKind()
+		return nil
+	case migrationexecution.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case migrationexecution.FieldSQLExecuted:
+		m.ResetSQLExecuted()
+		return nil
+	case migrationexecution.FieldSQLDownExecuted:
+		m.ResetSQLDownExecuted()
+		return nil
+	case migrationexecution.FieldError:
+		m.ResetError()
+		return nil
+	case migrationexecution.FieldRevertedExecutionID:
+		m.ResetRevertedExecutionID()
+		return nil
+	case migrationexecution.FieldActorID:
+		m.ResetActorID()
+		return nil
+	case migrationexecution.FieldBatchCursor:
+		m.ResetBatchCursor()
+		return nil
+	case migrationexecution.FieldBatchesDone:
+		m.ResetBatchesDone()
+		return nil
+	case migrationexecution.FieldRowsDone:
+		m.ResetRowsDone()
+		return nil
+	case migrationexecution.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case migrationexecution.FieldFinishedAt:
+		m.ResetFinishedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown MigrationExecution field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *MigrationExecutionMutation) AddedEdges() []string {
+	edges := make([]string, 0, 5)
+	if m.migration != nil {
+		edges = append(edges, migrationexecution.EdgeMigration)
+	}
+	if m.actor != nil {
+		edges = append(edges, migrationexecution.EdgeActor)
+	}
+	if m.reverted != nil {
+		edges = append(edges, migrationexecution.EdgeReverted)
+	}
+	if m.jobs != nil {
+		edges = append(edges, migrationexecution.EdgeJobs)
+	}
+	if m.snapshots != nil {
+		edges = append(edges, migrationexecution.EdgeSnapshots)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *MigrationExecutionMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case migrationexecution.EdgeMigration:
+		if id := m.migration; id != nil {
+			return []ent.Value{*id}
+		}
+	case migrationexecution.EdgeActor:
+		if id := m.actor; id != nil {
+			return []ent.Value{*id}
+		}
+	case migrationexecution.EdgeReverted:
+		if id := m.reverted; id != nil {
+			return []ent.Value{*id}
+		}
+	case migrationexecution.EdgeJobs:
+		ids := make([]ent.Value, 0, len(m.jobs))
+		for id := range m.jobs {
+			ids = append(ids, id)
+		}
+		return ids
+	case migrationexecution.EdgeSnapshots:
+		ids := make([]ent.Value, 0, len(m.snapshots))
+		for id := range m.snapshots {
+			ids = append(ids, id)
+		}
+		return ids
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *MigrationExecutionMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 5)
+	if m.removedjobs != nil {
+		edges = append(edges, migrationexecution.EdgeJobs)
+	}
+	if m.removedsnapshots != nil {
+		edges = append(edges, migrationexecution.EdgeSnapshots)
+	}
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *MigrationExecutionMutation) RemovedIDs(name string) []ent.Value {
+	switch name {
+	case migrationexecution.EdgeJobs:
+		ids := make([]ent.Value, 0, len(m.removedjobs))
+		for id := range m.removedjobs {
+			ids = append(ids, id)
+		}
+		return ids
+	case migrationexecution.EdgeSnapshots:
+		ids := make([]ent.Value, 0, len(m.removedsnapshots))
+		for id := range m.removedsnapshots {
+			ids = append(ids, id)
+		}
+		return ids
+	}
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *MigrationExecutionMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 5)
+	if m.clearedmigration {
+		edges = append(edges, migrationexecution.EdgeMigration)
+	}
+	if m.clearedactor {
+		edges = append(edges, migrationexecution.EdgeActor)
+	}
+	if m.clearedreverted {
+		edges = append(edges, migrationexecution.EdgeReverted)
+	}
+	if m.clearedjobs {
+		edges = append(edges, migrationexecution.EdgeJobs)
+	}
+	if m.clearedsnapshots {
+		edges = append(edges, migrationexecution.EdgeSnapshots)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *MigrationExecutionMutation) EdgeCleared(name string) bool {
+	switch name {
+	case migrationexecution.EdgeMigration:
+		return m.clearedmigration
+	case migrationexecution.EdgeActor:
+		return m.clearedactor
+	case migrationexecution.EdgeReverted:
+		return m.clearedreverted
+	case migrationexecution.EdgeJobs:
+		return m.clearedjobs
+	case migrationexecution.EdgeSnapshots:
+		return m.clearedsnapshots
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *MigrationExecutionMutation) ClearEdge(name string) error {
+	switch name {
+	case migrationexecution.EdgeMigration:
+		m.ClearMigration()
+		return nil
+	case migrationexecution.EdgeActor:
+		m.ClearActor()
+		return nil
+	case migrationexecution.EdgeReverted:
+		m.ClearReverted()
+		return nil
+	}
+	return fmt.Errorf("unknown MigrationExecution unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *MigrationExecutionMutation) ResetEdge(name string) error {
+	switch name {
+	case migrationexecution.EdgeMigration:
+		m.ResetMigration()
+		return nil
+	case migrationexecution.EdgeActor:
+		m.ResetActor()
+		return nil
+	case migrationexecution.EdgeReverted:
+		m.ResetReverted()
+		return nil
+	case migrationexecution.EdgeJobs:
+		m.ResetJobs()
+		return nil
+	case migrationexecution.EdgeSnapshots:
+		m.ResetSnapshots()
+		return nil
+	}
+	return fmt.Errorf("unknown MigrationExecution edge %s", name)
+}
+
+// MigrationJobMutation represents an operation that mutates the MigrationJob nodes in the graph.
+type MigrationJobMutation struct {
+	config
+	op               Op
+	typ              string
+	id               *int
+	connection_id    *int
+	addconnection_id *int
+	status           *migrationjob.Status
+	attempts         *int
+	addattempts      *int
+	traceparent      *string
+	locked_by        *string
+	locked_at        *time.Time
+	heartbeat_at     *time.Time
+	claimed_at       *time.Time
+	error            *string
+	batch_cursor     *int64
+	addbatch_cursor  *int64
+	batches_done     *int
+	addbatches_done  *int
+	rows_done        *int64
+	addrows_done     *int64
+	created_at       *time.Time
+	started_at       *time.Time
+	finished_at      *time.Time
+	clearedFields    map[string]struct{}
+	execution        *int
+	clearedexecution bool
+	done             bool
+	oldValue         func(context.Context) (*MigrationJob, error)
+	predicates       []predicate.MigrationJob
+}
+
+var _ ent.Mutation = (*MigrationJobMutation)(nil)
+
+// migrationjobOption allows management of the mutation configuration using functional options.
+type migrationjobOption func(*MigrationJobMutation)
+
+// newMigrationJobMutation creates new mutation for the MigrationJob entity.
+func newMigrationJobMutation(c config, op Op, opts ...migrationjobOption) *MigrationJobMutation {
+	m := &MigrationJobMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeMigrationJob,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withMigrationJobID sets the ID field of the mutation.
+func withMigrationJobID(id int) migrationjobOption {
+	return func(m *MigrationJobMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *MigrationJob
+		)
+		m.oldValue = func(ctx context.Context) (*MigrationJob, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().MigrationJob.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withMigrationJob sets the old MigrationJob of the mutation.
+func withMigrationJob(node *MigrationJob) migrationjobOption {
+	return func(m *MigrationJobMutation) {
+		m.oldValue = func(context.Context) (*MigrationJob, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m MigrationJobMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m MigrationJobMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *MigrationJobMutation) ID() (id int, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *MigrationJobMutation) IDs(ctx context.Context) ([]int, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().MigrationJob.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetExecutionID sets the "execution_id" field.
+func (m *MigrationJobMutation) SetExecutionID(i int) {
+	m.execution = &i
+}
+
+// ExecutionID returns the value of the "execution_id" field in the mutation.
+func (m *MigrationJobMutation) ExecutionID() (r int, exists bool) {
+	v := m.execution
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExecutionID returns the old "execution_id" field's value of the MigrationJob entity.
+// If the MigrationJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MigrationJobMutation) OldExecutionID(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExecutionID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExecutionID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExecutionID: %w", err)
+	}
+	return oldValue.ExecutionID, nil
+}
+
+// ResetExecutionID resets all changes to the "execution_id" field.
+func (m *MigrationJobMutation) ResetExecutionID() {
+	m.execution = nil
+}
+
+// SetConnectionID sets the "connection_id" field.
+func (m *MigrationJobMutation) SetConnectionID(i int) {
+	m.connection_id = &i
+	m.addconnection_id = nil
+}
+
+// ConnectionID returns the value of the "connection_id" field in the mutation.
+func (m *MigrationJobMutation) ConnectionID() (r int, exists bool) {
+	v := m.connection_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldConnectionID returns the old "connection_id" field's value of the MigrationJob entity.
+// If the MigrationJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MigrationJobMutation) OldConnectionID(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldConnectionID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldConnectionID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldConnectionID: %w", err)
+	}
+	return oldValue.ConnectionID, nil
+}
+
+// AddConnectionID adds i to the "connection_id" field.
+func (m *MigrationJobMutation) AddConnectionID(i int) {
+	if m.addconnection_id != nil {
+		*m.addconnection_id += i
+	} else {
+		m.addconnection_id = &i
+	}
+}
+
+// AddedConnectionID returns the value that was added to the "connection_id" field in this mutation.
+func (m *MigrationJobMutation) AddedConnectionID() (r int, exists bool) {
+	v := m.addconnection_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetConnectionID resets all changes to the "connection_id" field.
+func (m *MigrationJobMutation) ResetConnectionID() {
+	m.connection_id = nil
+	m.addconnection_id = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *MigrationJobMutation) SetStatus(value migrationjob.Status) {
+	m.status = &value
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *MigrationJobMutation) Status() (r migrationjob.Status, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the MigrationJob entity.
+// If the MigrationJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MigrationJobMutation) OldStatus(ctx context.Context) (v migrationjob.Status, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *MigrationJobMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetAttempts sets the "attempts" field.
+func (m *MigrationJobMutation) SetAttempts(i int) {
+	m.attempts = &i
+	m.addattempts = nil
+}
+
+// Attempts returns the value of the "attempts" field in the mutation.
+func (m *MigrationJobMutation) Attempts() (r int, exists bool) {
+	v := m.attempts
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAttempts returns the old "attempts" field's value of the MigrationJob entity.
+// If the MigrationJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MigrationJobMutation) OldAttempts(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAttempts is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAttempts requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAttempts: %w", err)
+	}
+	return oldValue.Attempts, nil
+}
+
+// AddAttempts adds i to the "attempts" field.
+func (m *MigrationJobMutation) AddAttempts(i int) {
+	if m.addattempts != nil {
+		*m.addattempts += i
+	} else {
+		m.addattempts = &i
+	}
+}
+
+// AddedAttempts returns the value that was added to the "attempts" field in this mutation.
+func (m *MigrationJobMutation) AddedAttempts() (r int, exists bool) {
+	v := m.addattempts
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetAttempts resets all changes to the "attempts" field.
+func (m *MigrationJobMutation) ResetAttempts() {
+	m.attempts = nil
+	m.addattempts = nil
+}
+
+// SetTraceparent sets the "traceparent" field.
+func (m *MigrationJobMutation) SetTraceparent(s string) {
+	m.traceparent = &s
+}
+
+// Traceparent returns the value of the "traceparent" field in the mutation.
+func (m *MigrationJobMutation) Traceparent() (r string, exists bool) {
+	v := m.traceparent
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTraceparent returns the old "traceparent" field's value of the MigrationJob entity.
+// If the MigrationJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MigrationJobMutation) OldTraceparent(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTraceparent is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTraceparent requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTraceparent: %w", err)
+	}
+	return oldValue.Traceparent, nil
+}
+
+// ClearTraceparent clears the value of the "traceparent" field.
+func (m *MigrationJobMutation) ClearTraceparent() {
+	m.traceparent = nil
+	m.clearedFields[migrationjob.FieldTraceparent] = struct{}{}
+}
+
+// TraceparentCleared returns if the "traceparent" field was cleared in this mutation.
+func (m *MigrationJobMutation) TraceparentCleared() bool {
+	_, ok := m.clearedFields[migrationjob.FieldTraceparent]
+	return ok
+}
+
+// ResetTraceparent resets all changes to the "traceparent" field.
+func (m *MigrationJobMutation) ResetTraceparent() {
+	m.traceparent = nil
+	delete(m.clearedFields, migrationjob.FieldTraceparent)
+}
+
+// SetLockedBy sets the "locked_by" field.
+func (m *MigrationJobMutation) SetLockedBy(s string) {
+	m.locked_by = &s
+}
+
+// LockedBy returns the value of the "locked_by" field in the mutation.
+func (m *MigrationJobMutation) LockedBy() (r string, exists bool) {
+	v := m.locked_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLockedBy returns the old "locked_by" field's value of the MigrationJob entity.
+// If the MigrationJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MigrationJobMutation) OldLockedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLockedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLockedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLockedBy: %w", err)
+	}
+	return oldValue.LockedBy, nil
+}
+
+// ClearLockedBy clears the value of the "locked_by" field.
+func (m *MigrationJobMutation) ClearLockedBy() {
+	m.locked_by = nil
+	m.clearedFields[migrationjob.FieldLockedBy] = struct{}{}
+}
+
+// LockedByCleared returns if the "locked_by" field was cleared in this mutation.
+func (m *MigrationJobMutation) LockedByCleared() bool {
+	_, ok := m.clearedFields[migrationjob.FieldLockedBy]
+	return ok
+}
+
+// ResetLockedBy resets all changes to the "locked_by" field.
+func (m *MigrationJobMutation) ResetLockedBy() {
+	m.locked_by = nil
+	delete(m.clearedFields, migrationjob.FieldLockedBy)
+}
+
+// SetLockedAt sets the "locked_at" field.
+func (m *MigrationJobMutation) SetLockedAt(t time.Time) {
+	m.locked_at = &t
+}
+
+// LockedAt returns the value of the "locked_at" field in the mutation.
+func (m *MigrationJobMutation) LockedAt() (r time.Time, exists bool) {
+	v := m.locked_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLockedAt returns the old "locked_at" field's value of the MigrationJob entity.
+// If the MigrationJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MigrationJobMutation) OldLockedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLockedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLockedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLockedAt: %w", err)
+	}
+	return oldValue.LockedAt, nil
+}
+
+// ClearLockedAt clears the value of the "locked_at" field.
+func (m *MigrationJobMutation) ClearLockedAt() {
+	m.locked_at = nil
+	m.clearedFields[migrationjob.FieldLockedAt] = struct{}{}
+}
+
+// LockedAtCleared returns if the "locked_at" field was cleared in this mutation.
+func (m *MigrationJobMutation) LockedAtCleared() bool {
+	_, ok := m.clearedFields[migrationjob.FieldLockedAt]
+	return ok
+}
+
+// ResetLockedAt resets all changes to the "locked_at" field.
+func (m *MigrationJobMutation) ResetLockedAt() {
+	m.locked_at = nil
+	delete(m.clearedFields, migrationjob.FieldLockedAt)
+}
+
+// SetHeartbeatAt sets the "heartbeat_at" field.
+func (m *MigrationJobMutation) SetHeartbeatAt(t time.Time) {
+	m.heartbeat_at = &t
+}
+
+// HeartbeatAt returns the value of the "heartbeat_at" field in the mutation.
+func (m *MigrationJobMutation) HeartbeatAt() (r time.Time, exists bool) {
+	v := m.heartbeat_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldHeartbeatAt returns the old "heartbeat_at" field's value of the MigrationJob entity.
+// If the MigrationJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MigrationJobMutation) OldHeartbeatAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldHeartbeatAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldHeartbeatAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldHeartbeatAt: %w", err)
+	}
+	return oldValue.HeartbeatAt, nil
+}
+
+// ClearHeartbeatAt clears the value of the "heartbeat_at" field.
+func (m *MigrationJobMutation) ClearHeartbeatAt() {
+	m.heartbeat_at = nil
+	m.clearedFields[migrationjob.FieldHeartbeatAt] = struct{}{}
+}
+
+// HeartbeatAtCleared returns if the "heartbeat_at" field was cleared in this mutation.
+func (m *MigrationJobMutation) HeartbeatAtCleared() bool {
+	_, ok := m.clearedFields[migrationjob.FieldHeartbeatAt]
+	return ok
+}
+
+// ResetHeartbeatAt resets all changes to the "heartbeat_at" field.
+func (m *MigrationJobMutation) ResetHeartbeatAt() {
+	m.heartbeat_at = nil
+	delete(m.clearedFields, migrationjob.FieldHeartbeatAt)
+}
+
+// SetClaimedAt sets the "claimed_at" field.
+func (m *MigrationJobMutation) SetClaimedAt(t time.Time) {
+	m.claimed_at = &t
+}
+
+// ClaimedAt returns the value of the "claimed_at" field in the mutation.
+func (m *MigrationJobMutation) ClaimedAt() (r time.Time, exists bool) {
+	v := m.claimed_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldClaimedAt returns the old "claimed_at" field's value of the MigrationJob entity.
+// If the MigrationJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MigrationJobMutation) OldClaimedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldClaimedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldClaimedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldClaimedAt: %w", err)
+	}
+	return oldValue.ClaimedAt, nil
+}
+
+// ClearClaimedAt clears the value of the "claimed_at" field.
+func (m *MigrationJobMutation) ClearClaimedAt() {
+	m.claimed_at = nil
+	m.clearedFields[migrationjob.FieldClaimedAt] = struct{}{}
+}
+
+// ClaimedAtCleared returns if the "claimed_at" field was cleared in this mutation.
+func (m *MigrationJobMutation) ClaimedAtCleared() bool {
+	_, ok := m.clearedFields[migrationjob.FieldClaimedAt]
+	return ok
+}
+
+// ResetClaimedAt resets all changes to the "claimed_at" field.
+func (m *MigrationJobMutation) ResetClaimedAt() {
+	m.claimed_at = nil
+	delete(m.clearedFields, migrationjob.FieldClaimedAt)
+}
+
+// SetError sets the "error" field.
+func (m *MigrationJobMutation) SetError(s string) {
+	m.error = &s
+}
+
+// Error returns the value of the "error" field in the mutation.
+func (m *MigrationJobMutation) Error() (r string, exists bool) {
+	v := m.error
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldError returns the old "error" field's value of the MigrationJob entity.
+// If the MigrationJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MigrationJobMutation) OldError(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldError is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldError requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldError: %w", err)
+	}
+	return oldValue.Error, nil
+}
+
+// ClearError clears the value of the "error" field.
+func (m *MigrationJobMutation) ClearError() {
+	m.error = nil
+	m.clearedFields[migrationjob.FieldError] = struct{}{}
+}
+
+// ErrorCleared returns if the "error" field was cleared in this mutation.
+func (m *MigrationJobMutation) ErrorCleared() bool {
+	_, ok := m.clearedFields[migrationjob.FieldError]
+	return ok
+}
+
+// ResetError resets all changes to the "error" field.
+func (m *MigrationJobMutation) ResetError() {
+	m.error = nil
+	delete(m.clearedFields, migrationjob.FieldError)
+}
+
+// SetBatchCursor sets the "batch_cursor" field.
+func (m *MigrationJobMutation) SetBatchCursor(i int64) {
+	m.batch_cursor = &i
+	m.addbatch_cursor = nil
+}
+
+// BatchCursor returns the value of the "batch_cursor" field in the mutation.
+func (m *MigrationJobMutation) BatchCursor() (r int64, exists bool) {
+	v := m.batch_cursor
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBatchCursor returns the old "batch_cursor" field's value of the MigrationJob entity.
+// If the MigrationJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MigrationJobMutation) OldBatchCursor(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBatchCursor is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBatchCursor requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBatchCursor: %w", err)
+	}
+	return oldValue.BatchCursor, nil
+}
+
+// AddBatchCursor adds i to the "batch_cursor" field.
+func (m *MigrationJobMutation) AddBatchCursor(i int64) {
+	if m.addbatch_cursor != nil {
+		*m.addbatch_cursor += i
+	} else {
+		m.addbatch_cursor = &i
+	}
+}
+
+// AddedBatchCursor returns the value that was added to the "batch_cursor" field in this mutation.
+func (m *MigrationJobMutation) AddedBatchCursor() (r int64, exists bool) {
+	v := m.addbatch_cursor
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearBatchCursor clears the value of the "batch_cursor" field.
+func (m *MigrationJobMutation) ClearBatchCursor() {
+	m.batch_cursor = nil
+	m.addbatch_cursor = nil
+	m.clearedFields[migrationjob.FieldBatchCursor] = struct{}{}
+}
+
+// BatchCursorCleared returns if the "batch_cursor" field was cleared in this mutation.
+func (m *MigrationJobMutation) BatchCursorCleared() bool {
+	_, ok := m.clearedFields[migrationjob.FieldBatchCursor]
+	return ok
+}
+
+// ResetBatchCursor resets all changes to the "batch_cursor" field.
+func (m *MigrationJobMutation) ResetBatchCursor() {
+	m.batch_cursor = nil
+	m.addbatch_cursor = nil
+	delete(m.clearedFields, migrationjob.FieldBatchCursor)
+}
+
+// SetBatchesDone sets the "batches_done" field.
+func (m *MigrationJobMutation) SetBatchesDone(i int) {
+	m.batches_done = &i
+	m.addbatches_done = nil
+}
+
+// BatchesDone returns the value of the "batches_done" field in the mutation.
+func (m *MigrationJobMutation) BatchesDone() (r int, exists bool) {
+	v := m.batches_done
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBatchesDone returns the old "batches_done" field's value of the MigrationJob entity.
+// If the MigrationJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MigrationJobMutation) OldBatchesDone(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBatchesDone is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBatchesDone requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBatchesDone: %w", err)
+	}
+	return oldValue.BatchesDone, nil
+}
+
+// AddBatchesDone adds i to the "batches_done" field.
+func (m *MigrationJobMutation) AddBatchesDone(i int) {
+	if m.addbatches_done != nil {
+		*m.addbatches_done += i
+	} else {
+		m.addbatches_done = &i
+	}
+}
+
+// AddedBatchesDone returns the value that was added to the "batches_done" field in this mutation.
+func (m *MigrationJobMutation) AddedBatchesDone() (r int, exists bool) {
+	v := m.addbatches_done
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetBatchesDone resets all changes to the "batches_done" field.
+func (m *MigrationJobMutation) ResetBatchesDone() {
+	m.batches_done = nil
+	m.addbatches_done = nil
+}
+
+// SetRowsDone sets the "rows_done" field.
+func (m *MigrationJobMutation) SetRowsDone(i int64) {
+	m.rows_done = &i
+	m.addrows_done = nil
+}
+
+// RowsDone returns the value of the "rows_done" field in the mutation.
+func (m *MigrationJobMutation) RowsDone() (r int64, exists bool) {
+	v := m.rows_done
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRowsDone returns the old "rows_done" field's value of the MigrationJob entity.
+// If the MigrationJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MigrationJobMutation) OldRowsDone(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRowsDone is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRowsDone requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRowsDone: %w", err)
+	}
+	return oldValue.RowsDone, nil
+}
+
+// AddRowsDone adds i to the "rows_done" field.
+func (m *MigrationJobMutation) AddRowsDone(i int64) {
+	if m.addrows_done != nil {
+		*m.addrows_done += i
+	} else {
+		m.addrows_done = &i
+	}
+}
+
+// AddedRowsDone returns the value that was added to the "rows_done" field in this mutation.
+func (m *MigrationJobMutation) AddedRowsDone() (r int64, exists bool) {
+	v := m.addrows_done
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetRowsDone resets all changes to the "rows_done" field.
+func (m *MigrationJobMutation) ResetRowsDone() {
+	m.rows_done = nil
+	m.addrows_done = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *MigrationJobMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *MigrationJobMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the MigrationJob entity.
+// If the MigrationJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MigrationJobMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *MigrationJobMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetStartedAt sets the "started_at" field.
+func (m *MigrationJobMutation) SetStartedAt(t time.Time) {
+	m.started_at = &t
+}
+
+// StartedAt returns the value of the "started_at" field in the mutation.
+func (m *MigrationJobMutation) StartedAt() (r time.Time, exists bool) {
+	v := m.started_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStartedAt returns the old "started_at" field's value of the MigrationJob entity.
+// If the MigrationJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MigrationJobMutation) OldStartedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStartedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStartedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStartedAt: %w", err)
+	}
+	return oldValue.StartedAt, nil
+}
+
+// ClearStartedAt clears the value of the "started_at" field.
+func (m *MigrationJobMutation) ClearStartedAt() {
+	m.started_at = nil
+	m.clearedFields[migrationjob.FieldStartedAt] = struct{}{}
+}
+
+// StartedAtCleared returns if the "started_at" field was cleared in this mutation.
+func (m *MigrationJobMutation) StartedAtCleared() bool {
+	_, ok := m.clearedFields[migrationjob.FieldStartedAt]
+	return ok
+}
+
+// ResetStartedAt resets all changes to the "started_at" field.
+func (m *MigrationJobMutation) ResetStartedAt() {
+	m.started_at = nil
+	delete(m.clearedFields, migrationjob.FieldStartedAt)
+}
+
+// SetFinishedAt sets the "finished_at" field.
+func (m *MigrationJobMutation) SetFinishedAt(t time.Time) {
+	m.finished_at = &t
+}
+
+// FinishedAt returns the value of the "finished_at" field in the mutation.
+func (m *MigrationJobMutation) FinishedAt() (r time.Time, exists bool) {
+	v := m.finished_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldFinishedAt returns the old "finished_at" field's value of the MigrationJob entity.
+// If the MigrationJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MigrationJobMutation) OldFinishedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldFinishedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldFinishedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldFinishedAt: %w", err)
+	}
+	return oldValue.FinishedAt, nil
+}
+
+// ClearFinishedAt clears the value of the "finished_at" field.
+func (m *MigrationJobMutation) ClearFinishedAt() {
+	m.finished_at = nil
+	m.clearedFields[migrationjob.FieldFinishedAt] = struct{}{}
+}
+
+// FinishedAtCleared returns if the "finished_at" field was cleared in this mutation.
+func (m *MigrationJobMutation) FinishedAtCleared() bool {
+	_, ok := m.clearedFields[migrationjob.FieldFinishedAt]
+	return ok
+}
+
+// ResetFinishedAt resets all changes to the "finished_at" field.
+func (m *MigrationJobMutation) ResetFinishedAt() {
+	m.finished_at = nil
+	delete(m.clearedFields, migrationjob.FieldFinishedAt)
+}
+
+// ClearExecution clears the "execution" edge to the MigrationExecution entity.
+func (m *MigrationJobMutation) ClearExecution() {
+	m.clearedexecution = true
+	m.clearedFields[migrationjob.FieldExecutionID] = struct{}{}
+}
+
+// ExecutionCleared reports if the "execution" edge to the MigrationExecution entity was cleared.
+func (m *MigrationJobMutation) ExecutionCleared() bool {
+	return m.clearedexecution
+}
+
+// ExecutionIDs returns the "execution" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// ExecutionID instead. It exists only for internal usage by the builders.
+func (m *MigrationJobMutation) ExecutionIDs() (ids []int) {
+	if id := m.execution; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetExecution resets all changes to the "execution" edge.
+func (m *MigrationJobMutation) ResetExecution() {
+	m.execution = nil
+	m.clearedexecution = false
+}
+
+// Where appends a list predicates to the MigrationJobMutation builder.
+func (m *MigrationJobMutation) Where(ps ...predicate.MigrationJob) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the MigrationJobMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *MigrationJobMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.MigrationJob, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *MigrationJobMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *MigrationJobMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (MigrationJob).
+func (m *MigrationJobMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *MigrationJobMutation) Fields() []string {
+	fields := make([]string, 0, 16)
+	if m.execution != nil {
+		fields = append(fields, migrationjob.FieldExecutionID)
+	}
+	if m.connection_id != nil {
+		fields = append(fields, migrationjob.FieldConnectionID)
+	}
+	if m.status != nil {
+		fields = append(fields, migrationjob.FieldStatus)
+	}
+	if m.attempts != nil {
+		fields = append(fields, migrationjob.FieldAttempts)
+	}
+	if m.traceparent != nil {
+		fields = append(fields, migrationjob.FieldTraceparent)
+	}
+	if m.locked_by != nil {
+		fields = append(fields, migrationjob.FieldLockedBy)
+	}
+	if m.locked_at != nil {
+		fields = append(fields, migrationjob.FieldLockedAt)
+	}
+	if m.heartbeat_at != nil {
+		fields = append(fields, migrationjob.FieldHeartbeatAt)
+	}
+	if m.claimed_at != nil {
+		fields = append(fields, migrationjob.FieldClaimedAt)
+	}
+	if m.error != nil {
+		fields = append(fields, migrationjob.FieldError)
+	}
+	if m.batch_cursor != nil {
+		fields = append(fields, migrationjob.FieldBatchCursor)
+	}
+	if m.batches_done != nil {
+		fields = append(fields, migrationjob.FieldBatchesDone)
+	}
+	if m.rows_done != nil {
+		fields = append(fields, migrationjob.FieldRowsDone)
+	}
+	if m.created_at != nil {
+		fields = append(fields, migrationjob.FieldCreatedAt)
+	}
+	if m.started_at != nil {
+		fields = append(fields, migrationjob.FieldStartedAt)
+	}
+	if m.finished_at != nil {
+		fields = append(fields, migrationjob.FieldFinishedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *MigrationJobMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case migrationjob.FieldExecutionID:
+		return m.ExecutionID()
+	case migrationjob.FieldConnectionID:
+		return m.ConnectionID()
+	case migrationjob.FieldStatus:
+		return m.Status()
+	case migrationjob.FieldAttempts:
+		return m.Attempts()
+	case migrationjob.FieldTraceparent:
+		return m.Traceparent()
+	case migrationjob.FieldLockedBy:
+		return m.LockedBy()
+	case migrationjob.FieldLockedAt:
+		return m.LockedAt()
+	case migrationjob.FieldHeartbeatAt:
+		return m.HeartbeatAt()
+	case migrationjob.FieldClaimedAt:
+		return m.ClaimedAt()
+	case migrationjob.FieldError:
+		return m.Error()
+	case migrationjob.FieldBatchCursor:
+		return m.BatchCursor()
+	case migrationjob.FieldBatchesDone:
+		return m.BatchesDone()
+	case migrationjob.FieldRowsDone:
+		return m.RowsDone()
+	case migrationjob.FieldCreatedAt:
+		return m.CreatedAt()
+	case migrationjob.FieldStartedAt:
+		return m.StartedAt()
+	case migrationjob.FieldFinishedAt:
+		return m.FinishedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *MigrationJobMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case migrationjob.FieldExecutionID:
+		return m.OldExecutionID(ctx)
+	case migrationjob.FieldConnectionID:
+		return m.OldConnectionID(ctx)
+	case migrationjob.FieldStatus:
+		return m.OldStatus(ctx)
+	case migrationjob.FieldAttempts:
+		return m.OldAttempts(ctx)
+	case migrationjob.FieldTraceparent:
+		return m.OldTraceparent(ctx)
+	case migrationjob.FieldLockedBy:
+		return m.OldLockedBy(ctx)
+	case migrationjob.FieldLockedAt:
+		return m.OldLockedAt(ctx)
+	case migrationjob.FieldHeartbeatAt:
+		return m.OldHeartbeatAt(ctx)
+	case migrationjob.FieldClaimedAt:
+		return m.OldClaimedAt(ctx)
+	case migrationjob.FieldError:
+		return m.OldError(ctx)
+	case migrationjob.FieldBatchCursor:
+		return m.OldBatchCursor(ctx)
+	case migrationjob.FieldBatchesDone:
+		return m.OldBatchesDone(ctx)
+	case migrationjob.FieldRowsDone:
+		return m.OldRowsDone(ctx)
+	case migrationjob.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case migrationjob.FieldStartedAt:
+		return m.OldStartedAt(ctx)
+	case migrationjob.FieldFinishedAt:
+		return m.OldFinishedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown MigrationJob field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *MigrationJobMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case migrationjob.FieldExecutionID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExecutionID(v)
+		return nil
+	case migrationjob.FieldConnectionID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetConnectionID(v)
+		return nil
+	case migrationjob.FieldStatus:
+		v, ok := value.(migrationjob.Status)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case migrationjob.FieldAttempts:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAttempts(v)
+		return nil
+	case migrationjob.FieldTraceparent:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTraceparent(v)
+		return nil
+	case migrationjob.FieldLockedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLockedBy(v)
+		return nil
+	case migrationjob.FieldLockedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLockedAt(v)
+		return nil
+	case migrationjob.FieldHeartbeatAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetHeartbeatAt(v)
+		return nil
+	case migrationjob.FieldClaimedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetClaimedAt(v)
+		return nil
+	case migrationjob.FieldError:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetError(v)
+		return nil
+	case migrationjob.FieldBatchCursor:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBatchCursor(v)
+		return nil
+	case migrationjob.FieldBatchesDone:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBatchesDone(v)
+		return nil
+	case migrationjob.FieldRowsDone:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRowsDone(v)
+		return nil
+	case migrationjob.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case migrationjob.FieldStartedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStartedAt(v)
+		return nil
+	case migrationjob.FieldFinishedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetFinishedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown MigrationJob field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *MigrationJobMutation) AddedFields() []string {
+	var fields []string
+	if m.addconnection_id != nil {
+		fields = append(fields, migrationjob.FieldConnectionID)
+	}
+	if m.addattempts != nil {
+		fields = append(fields, migrationjob.FieldAttempts)
+	}
+	if m.addbatch_cursor != nil {
+		fields = append(fields, migrationjob.FieldBatchCursor)
+	}
+	if m.addbatches_done != nil {
+		fields = append(fields, migrationjob.FieldBatchesDone)
+	}
+	if m.addrows_done != nil {
+		fields = append(fields, migrationjob.FieldRowsDone)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *MigrationJobMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case migrationjob.FieldConnectionID:
+		return m.AddedConnectionID()
+	case migrationjob.FieldAttempts:
+		return m.AddedAttempts()
+	case migrationjob.FieldBatchCursor:
+		return m.AddedBatchCursor()
+	case migrationjob.FieldBatchesDone:
+		return m.AddedBatchesDone()
+	case migrationjob.FieldRowsDone:
+		return m.AddedRowsDone()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *MigrationJobMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case migrationjob.FieldConnectionID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddConnectionID(v)
+		return nil
+	case migrationjob.FieldAttempts:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddAttempts(v)
+		return nil
+	case migrationjob.FieldBatchCursor:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddBatchCursor(v)
+		return nil
+	case migrationjob.FieldBatchesDone:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddBatchesDone(v)
+		return nil
+	case migrationjob.FieldRowsDone:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddRowsDone(v)
+		return nil
+	}
+	return fmt.Errorf("unknown MigrationJob numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *MigrationJobMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(migrationjob.FieldTraceparent) {
+		fields = append(fields, migrationjob.FieldTraceparent)
+	}
+	if m.FieldCleared(migrationjob.FieldLockedBy) {
+		fields = append(fields, migrationjob.FieldLockedBy)
+	}
+	if m.FieldCleared(migrationjob.FieldLockedAt) {
+		fields = append(fields, migrationjob.FieldLockedAt)
+	}
+	if m.FieldCleared(migrationjob.FieldHeartbeatAt) {
+		fields = append(fields, migrationjob.FieldHeartbeatAt)
+	}
+	if m.FieldCleared(migrationjob.FieldClaimedAt) {
+		fields = append(fields, migrationjob.FieldClaimedAt)
+	}
+	if m.FieldCleared(migrationjob.FieldError) {
+		fields = append(fields, migrationjob.FieldError)
+	}
+	if m.FieldCleared(migrationjob.FieldBatchCursor) {
+		fields = append(fields, migrationjob.FieldBatchCursor)
+	}
+	if m.FieldCleared(migrationjob.FieldStartedAt) {
+		fields = append(fields, migrationjob.FieldStartedAt)
+	}
+	if m.FieldCleared(migrationjob.FieldFinishedAt) {
+		fields = append(fields, migrationjob.FieldFinishedAt)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *MigrationJobMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *MigrationJobMutation) ClearField(name string) error {
+	switch name {
+	case migrationjob.FieldTraceparent:
+		m.ClearTraceparent()
+		return nil
+	case migrationjob.FieldLockedBy:
+		m.ClearLockedBy()
+		return nil
+	case migrationjob.FieldLockedAt:
+		m.ClearLockedAt()
+		return nil
+	case migrationjob.FieldHeartbeatAt:
+		m.ClearHeartbeatAt()
+		return nil
+	case migrationjob.FieldClaimedAt:
+		m.ClearClaimedAt()
+		return nil
+	case migrationjob.FieldError:
+		m.ClearError()
+		return nil
+	case migrationjob.FieldBatchCursor:
+		m.ClearBatchCursor()
+		return nil
+	case migrationjob.FieldStartedAt:
+		m.ClearStartedAt()
+		return nil
+	case migrationjob.FieldFinishedAt:
+		m.ClearFinishedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown MigrationJob nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *MigrationJobMutation) ResetField(name string) error {
+	switch name {
+	case migrationjob.FieldExecutionID:
+		m.ResetExecutionID()
+		return nil
+	case migrationjob.FieldConnectionID:
+		m.ResetConnectionID()
+		return nil
+	case migrationjob.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case migrationjob.FieldAttempts:
+		m.ResetAttempts()
+		return nil
+	case migrationjob.FieldTraceparent:
+		m.ResetTraceparent()
+		return nil
+	case migrationjob.FieldLockedBy:
+		m.ResetLockedBy()
+		return nil
+	case migrationjob.FieldLockedAt:
+		m.ResetLockedAt()
+		return nil
+	case migrationjob.FieldHeartbeatAt:
+		m.ResetHeartbeatAt()
+		return nil
+	case migrationjob.FieldClaimedAt:
+		m.ResetClaimedAt()
+		return nil
+	case migrationjob.FieldError:
+		m.ResetError()
+		return nil
+	case migrationjob.FieldBatchCursor:
+		m.ResetBatchCursor()
+		return nil
+	case migrationjob.FieldBatchesDone:
+		m.ResetBatchesDone()
+		return nil
+	case migrationjob.FieldRowsDone:
+		m.ResetRowsDone()
+		return nil
+	case migrationjob.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case migrationjob.FieldStartedAt:
+		m.ResetStartedAt()
+		return nil
+	case migrationjob.FieldFinishedAt:
+		m.ResetFinishedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown MigrationJob field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *MigrationJobMutation) AddedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.execution != nil {
+		edges = append(edges, migrationjob.EdgeExecution)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *MigrationJobMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case migrationjob.EdgeExecution:
+		if id := m.execution; id != nil {
+			return []ent.Value{*id}
+		}
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *MigrationJobMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 1)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *MigrationJobMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *MigrationJobMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.clearedexecution {
+		edges = append(edges, migrationjob.EdgeExecution)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *MigrationJobMutation) EdgeCleared(name string) bool {
+	switch name {
+	case migrationjob.EdgeExecution:
+		return m.clearedexecution
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *MigrationJobMutation) ClearEdge(name string) error {
+	switch name {
+	case migrationjob.EdgeExecution:
+		m.ClearExecution()
+		return nil
+	}
+	return fmt.Errorf("unknown MigrationJob unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *MigrationJobMutation) ResetEdge(name string) error {
+	switch name {
+	case migrationjob.EdgeExecution:
+		m.ResetExecution()
+		return nil
+	}
+	return fmt.Errorf("unknown MigrationJob edge %s", name)
 }
 
 // PlatformUserMutation represents an operation that mutates the PlatformUser nodes in the graph.
@@ -3740,6 +8826,9 @@ type PlatformUserMutation struct {
 	sessions           map[int]struct{}
 	removedsessions    map[int]struct{}
 	clearedsessions    bool
+	approvals          map[int]struct{}
+	removedapprovals   map[int]struct{}
+	clearedapprovals   bool
 	done               bool
 	oldValue           func(context.Context) (*PlatformUser, error)
 	predicates         []predicate.PlatformUser
@@ -4167,6 +9256,60 @@ func (m *PlatformUserMutation) ResetSessions() {
 	m.removedsessions = nil
 }
 
+// AddApprovalIDs adds the "approvals" edge to the MigrationApproval entity by ids.
+func (m *PlatformUserMutation) AddApprovalIDs(ids ...int) {
+	if m.approvals == nil {
+		m.approvals = make(map[int]struct{})
+	}
+	for i := range ids {
+		m.approvals[ids[i]] = struct{}{}
+	}
+}
+
+// ClearApprovals clears the "approvals" edge to the MigrationApproval entity.
+func (m *PlatformUserMutation) ClearApprovals() {
+	m.clearedapprovals = true
+}
+
+// ApprovalsCleared reports if the "approvals" edge to the MigrationApproval entity was cleared.
+func (m *PlatformUserMutation) ApprovalsCleared() bool {
+	return m.clearedapprovals
+}
+
+// RemoveApprovalIDs removes the "approvals" edge to the MigrationApproval entity by IDs.
+func (m *PlatformUserMutation) RemoveApprovalIDs(ids ...int) {
+	if m.removedapprovals == nil {
+		m.removedapprovals = make(map[int]struct{})
+	}
+	for i := range ids {
+		delete(m.approvals, ids[i])
+		m.removedapprovals[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedApprovals returns the removed IDs of the "approvals" edge to the MigrationApproval entity.
+func (m *PlatformUserMutation) RemovedApprovalsIDs() (ids []int) {
+	for id := range m.removedapprovals {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ApprovalsIDs returns the "approvals" edge IDs in the mutation.
+func (m *PlatformUserMutation) ApprovalsIDs() (ids []int) {
+	for id := range m.approvals {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetApprovals resets all changes to the "approvals" edge.
+func (m *PlatformUserMutation) ResetApprovals() {
+	m.approvals = nil
+	m.clearedapprovals = false
+	m.removedapprovals = nil
+}
+
 // Where appends a list predicates to the PlatformUserMutation builder.
 func (m *PlatformUserMutation) Where(ps ...predicate.PlatformUser) {
 	m.predicates = append(m.predicates, ps...)
@@ -4385,12 +9528,15 @@ func (m *PlatformUserMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *PlatformUserMutation) AddedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 3)
 	if m.memberships != nil {
 		edges = append(edges, platformuser.EdgeMemberships)
 	}
 	if m.sessions != nil {
 		edges = append(edges, platformuser.EdgeSessions)
+	}
+	if m.approvals != nil {
+		edges = append(edges, platformuser.EdgeApprovals)
 	}
 	return edges
 }
@@ -4411,18 +9557,27 @@ func (m *PlatformUserMutation) AddedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case platformuser.EdgeApprovals:
+		ids := make([]ent.Value, 0, len(m.approvals))
+		for id := range m.approvals {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *PlatformUserMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 3)
 	if m.removedmemberships != nil {
 		edges = append(edges, platformuser.EdgeMemberships)
 	}
 	if m.removedsessions != nil {
 		edges = append(edges, platformuser.EdgeSessions)
+	}
+	if m.removedapprovals != nil {
+		edges = append(edges, platformuser.EdgeApprovals)
 	}
 	return edges
 }
@@ -4443,18 +9598,27 @@ func (m *PlatformUserMutation) RemovedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case platformuser.EdgeApprovals:
+		ids := make([]ent.Value, 0, len(m.removedapprovals))
+		for id := range m.removedapprovals {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *PlatformUserMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 3)
 	if m.clearedmemberships {
 		edges = append(edges, platformuser.EdgeMemberships)
 	}
 	if m.clearedsessions {
 		edges = append(edges, platformuser.EdgeSessions)
+	}
+	if m.clearedapprovals {
+		edges = append(edges, platformuser.EdgeApprovals)
 	}
 	return edges
 }
@@ -4467,6 +9631,8 @@ func (m *PlatformUserMutation) EdgeCleared(name string) bool {
 		return m.clearedmemberships
 	case platformuser.EdgeSessions:
 		return m.clearedsessions
+	case platformuser.EdgeApprovals:
+		return m.clearedapprovals
 	}
 	return false
 }
@@ -4489,6 +9655,9 @@ func (m *PlatformUserMutation) ResetEdge(name string) error {
 	case platformuser.EdgeSessions:
 		m.ResetSessions()
 		return nil
+	case platformuser.EdgeApprovals:
+		m.ResetApprovals()
+		return nil
 	}
 	return fmt.Errorf("unknown PlatformUser edge %s", name)
 }
@@ -4504,6 +9673,8 @@ type SchemaSnapshotMutation struct {
 	clearedFields    map[string]struct{}
 	migration        *int
 	clearedmigration bool
+	execution        *int
+	clearedexecution bool
 	done             bool
 	oldValue         func(context.Context) (*SchemaSnapshot, error)
 	predicates       []predicate.SchemaSnapshot
@@ -4643,6 +9814,55 @@ func (m *SchemaSnapshotMutation) ResetMigrationID() {
 	m.migration = nil
 }
 
+// SetExecutionID sets the "execution_id" field.
+func (m *SchemaSnapshotMutation) SetExecutionID(i int) {
+	m.execution = &i
+}
+
+// ExecutionID returns the value of the "execution_id" field in the mutation.
+func (m *SchemaSnapshotMutation) ExecutionID() (r int, exists bool) {
+	v := m.execution
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExecutionID returns the old "execution_id" field's value of the SchemaSnapshot entity.
+// If the SchemaSnapshot object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SchemaSnapshotMutation) OldExecutionID(ctx context.Context) (v *int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExecutionID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExecutionID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExecutionID: %w", err)
+	}
+	return oldValue.ExecutionID, nil
+}
+
+// ClearExecutionID clears the value of the "execution_id" field.
+func (m *SchemaSnapshotMutation) ClearExecutionID() {
+	m.execution = nil
+	m.clearedFields[schemasnapshot.FieldExecutionID] = struct{}{}
+}
+
+// ExecutionIDCleared returns if the "execution_id" field was cleared in this mutation.
+func (m *SchemaSnapshotMutation) ExecutionIDCleared() bool {
+	_, ok := m.clearedFields[schemasnapshot.FieldExecutionID]
+	return ok
+}
+
+// ResetExecutionID resets all changes to the "execution_id" field.
+func (m *SchemaSnapshotMutation) ResetExecutionID() {
+	m.execution = nil
+	delete(m.clearedFields, schemasnapshot.FieldExecutionID)
+}
+
 // SetPhase sets the "phase" field.
 func (m *SchemaSnapshotMutation) SetPhase(s schemasnapshot.Phase) {
 	m.phase = &s
@@ -4742,6 +9962,33 @@ func (m *SchemaSnapshotMutation) ResetMigration() {
 	m.clearedmigration = false
 }
 
+// ClearExecution clears the "execution" edge to the MigrationExecution entity.
+func (m *SchemaSnapshotMutation) ClearExecution() {
+	m.clearedexecution = true
+	m.clearedFields[schemasnapshot.FieldExecutionID] = struct{}{}
+}
+
+// ExecutionCleared reports if the "execution" edge to the MigrationExecution entity was cleared.
+func (m *SchemaSnapshotMutation) ExecutionCleared() bool {
+	return m.ExecutionIDCleared() || m.clearedexecution
+}
+
+// ExecutionIDs returns the "execution" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// ExecutionID instead. It exists only for internal usage by the builders.
+func (m *SchemaSnapshotMutation) ExecutionIDs() (ids []int) {
+	if id := m.execution; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetExecution resets all changes to the "execution" edge.
+func (m *SchemaSnapshotMutation) ResetExecution() {
+	m.execution = nil
+	m.clearedexecution = false
+}
+
 // Where appends a list predicates to the SchemaSnapshotMutation builder.
 func (m *SchemaSnapshotMutation) Where(ps ...predicate.SchemaSnapshot) {
 	m.predicates = append(m.predicates, ps...)
@@ -4776,9 +10023,12 @@ func (m *SchemaSnapshotMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SchemaSnapshotMutation) Fields() []string {
-	fields := make([]string, 0, 3)
+	fields := make([]string, 0, 4)
 	if m.migration != nil {
 		fields = append(fields, schemasnapshot.FieldMigrationID)
+	}
+	if m.execution != nil {
+		fields = append(fields, schemasnapshot.FieldExecutionID)
 	}
 	if m.phase != nil {
 		fields = append(fields, schemasnapshot.FieldPhase)
@@ -4796,6 +10046,8 @@ func (m *SchemaSnapshotMutation) Field(name string) (ent.Value, bool) {
 	switch name {
 	case schemasnapshot.FieldMigrationID:
 		return m.MigrationID()
+	case schemasnapshot.FieldExecutionID:
+		return m.ExecutionID()
 	case schemasnapshot.FieldPhase:
 		return m.Phase()
 	case schemasnapshot.FieldJSON:
@@ -4811,6 +10063,8 @@ func (m *SchemaSnapshotMutation) OldField(ctx context.Context, name string) (ent
 	switch name {
 	case schemasnapshot.FieldMigrationID:
 		return m.OldMigrationID(ctx)
+	case schemasnapshot.FieldExecutionID:
+		return m.OldExecutionID(ctx)
 	case schemasnapshot.FieldPhase:
 		return m.OldPhase(ctx)
 	case schemasnapshot.FieldJSON:
@@ -4830,6 +10084,13 @@ func (m *SchemaSnapshotMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetMigrationID(v)
+		return nil
+	case schemasnapshot.FieldExecutionID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExecutionID(v)
 		return nil
 	case schemasnapshot.FieldPhase:
 		v, ok := value.(schemasnapshot.Phase)
@@ -4877,7 +10138,11 @@ func (m *SchemaSnapshotMutation) AddField(name string, value ent.Value) error {
 // ClearedFields returns all nullable fields that were cleared during this
 // mutation.
 func (m *SchemaSnapshotMutation) ClearedFields() []string {
-	return nil
+	var fields []string
+	if m.FieldCleared(schemasnapshot.FieldExecutionID) {
+		fields = append(fields, schemasnapshot.FieldExecutionID)
+	}
+	return fields
 }
 
 // FieldCleared returns a boolean indicating if a field with the given name was
@@ -4890,6 +10155,11 @@ func (m *SchemaSnapshotMutation) FieldCleared(name string) bool {
 // ClearField clears the value of the field with the given name. It returns an
 // error if the field is not defined in the schema.
 func (m *SchemaSnapshotMutation) ClearField(name string) error {
+	switch name {
+	case schemasnapshot.FieldExecutionID:
+		m.ClearExecutionID()
+		return nil
+	}
 	return fmt.Errorf("unknown SchemaSnapshot nullable field %s", name)
 }
 
@@ -4899,6 +10169,9 @@ func (m *SchemaSnapshotMutation) ResetField(name string) error {
 	switch name {
 	case schemasnapshot.FieldMigrationID:
 		m.ResetMigrationID()
+		return nil
+	case schemasnapshot.FieldExecutionID:
+		m.ResetExecutionID()
 		return nil
 	case schemasnapshot.FieldPhase:
 		m.ResetPhase()
@@ -4912,9 +10185,12 @@ func (m *SchemaSnapshotMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *SchemaSnapshotMutation) AddedEdges() []string {
-	edges := make([]string, 0, 1)
+	edges := make([]string, 0, 2)
 	if m.migration != nil {
 		edges = append(edges, schemasnapshot.EdgeMigration)
+	}
+	if m.execution != nil {
+		edges = append(edges, schemasnapshot.EdgeExecution)
 	}
 	return edges
 }
@@ -4927,13 +10203,17 @@ func (m *SchemaSnapshotMutation) AddedIDs(name string) []ent.Value {
 		if id := m.migration; id != nil {
 			return []ent.Value{*id}
 		}
+	case schemasnapshot.EdgeExecution:
+		if id := m.execution; id != nil {
+			return []ent.Value{*id}
+		}
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *SchemaSnapshotMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 1)
+	edges := make([]string, 0, 2)
 	return edges
 }
 
@@ -4945,9 +10225,12 @@ func (m *SchemaSnapshotMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *SchemaSnapshotMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 1)
+	edges := make([]string, 0, 2)
 	if m.clearedmigration {
 		edges = append(edges, schemasnapshot.EdgeMigration)
+	}
+	if m.clearedexecution {
+		edges = append(edges, schemasnapshot.EdgeExecution)
 	}
 	return edges
 }
@@ -4958,6 +10241,8 @@ func (m *SchemaSnapshotMutation) EdgeCleared(name string) bool {
 	switch name {
 	case schemasnapshot.EdgeMigration:
 		return m.clearedmigration
+	case schemasnapshot.EdgeExecution:
+		return m.clearedexecution
 	}
 	return false
 }
@@ -4969,6 +10254,9 @@ func (m *SchemaSnapshotMutation) ClearEdge(name string) error {
 	case schemasnapshot.EdgeMigration:
 		m.ClearMigration()
 		return nil
+	case schemasnapshot.EdgeExecution:
+		m.ClearExecution()
+		return nil
 	}
 	return fmt.Errorf("unknown SchemaSnapshot unique edge %s", name)
 }
@@ -4979,6 +10267,9 @@ func (m *SchemaSnapshotMutation) ResetEdge(name string) error {
 	switch name {
 	case schemasnapshot.EdgeMigration:
 		m.ResetMigration()
+		return nil
+	case schemasnapshot.EdgeExecution:
+		m.ResetExecution()
 		return nil
 	}
 	return fmt.Errorf("unknown SchemaSnapshot edge %s", name)

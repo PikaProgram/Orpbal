@@ -68,6 +68,42 @@ func (f MigrationFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, e
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.MigrationMutation", m)
 }
 
+// The MigrationApprovalFunc type is an adapter to allow the use of ordinary
+// function as MigrationApproval mutator.
+type MigrationApprovalFunc func(context.Context, *ent.MigrationApprovalMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f MigrationApprovalFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.MigrationApprovalMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.MigrationApprovalMutation", m)
+}
+
+// The MigrationExecutionFunc type is an adapter to allow the use of ordinary
+// function as MigrationExecution mutator.
+type MigrationExecutionFunc func(context.Context, *ent.MigrationExecutionMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f MigrationExecutionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.MigrationExecutionMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.MigrationExecutionMutation", m)
+}
+
+// The MigrationJobFunc type is an adapter to allow the use of ordinary
+// function as MigrationJob mutator.
+type MigrationJobFunc func(context.Context, *ent.MigrationJobMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f MigrationJobFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.MigrationJobMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.MigrationJobMutation", m)
+}
+
 // The PlatformUserFunc type is an adapter to allow the use of ordinary
 // function as PlatformUser mutator.
 type PlatformUserFunc func(context.Context, *ent.PlatformUserMutation) (ent.Value, error)

@@ -26,6 +26,15 @@ const AdminConnectionsPage = lazy(() =>
 const AdminGrantsPage = lazy(() =>
 	import("@/pages/admin/grants").then((m) => ({ default: m.AdminGrantsPage })),
 );
+const MigrationsPage = lazy(() =>
+	import("@/pages/MigrationsPage").then((m) => ({ default: m.MigrationsPage })),
+);
+const JobDetailPage = lazy(() =>
+	import("@/pages/JobDetailPage").then((m) => ({ default: m.JobDetailPage })),
+);
+const ApprovalsPage = lazy(() =>
+	import("@/pages/ApprovalsPage").then((m) => ({ default: m.ApprovalsPage })),
+);
 
 function ChunkFallback() {
 	return (
@@ -54,6 +63,18 @@ export function App() {
 						<Route
 							path="/databases/:id"
 							element={<SuspenseRoute><DatabaseDetailPage /></SuspenseRoute>}
+						/>
+						<Route
+							path="/databases/:id/migrations"
+							element={<SuspenseRoute><MigrationsPage /></SuspenseRoute>}
+						/>
+						<Route
+							path="/databases/:id/jobs/:jobId"
+							element={<SuspenseRoute><JobDetailPage /></SuspenseRoute>}
+						/>
+						<Route
+							path="/approvals"
+							element={<SuspenseRoute><ApprovalsPage /></SuspenseRoute>}
 						/>
 						<Route element={<RequireAdmin />}>
 							<Route

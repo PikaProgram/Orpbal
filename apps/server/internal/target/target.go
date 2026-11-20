@@ -36,6 +36,9 @@ type Target struct {
 	dialect Dialect
 }
 
+// Dialect exposes the engine adapter (identifier quoting for worker SQL).
+func (t *Target) Dialect() Dialect { return t.dialect }
+
 // ErrInvalidMutation wraps dialect mutation validation errors so handlers can
 // map them to 400.
 var ErrInvalidMutation = errors.New("invalid mutation request")
