@@ -275,18 +275,18 @@ func dropTargetTable(t *testing.T, adminDB *sql.DB, schema, table string) {
 }
 
 func TestWorkerRunsSimpleMigration(t *testing.T) {
-	r, adminDB, client, connectionID, schema := newWorkerEnv(t)
+	r, adminDB, client, connectionID, _ := newWorkerEnv(t)
 	
 	table := fmt.Sprintf("w_simple_%d_%d", os.Getpid(), wkSeq.Add(1))
-	dropTargetTable(t, adminDB, table)
-	t.Cleanup(func() { dropTargetTable(t, adminDB, table) })
+	dropTargetTable(t, adminDB, "public", table)
+	t.Cleanup(func() { dropTargetTable(t, adminDB, "public", table) })
 
 	_, exec, job := seedMigration(t, client, connectionID,
 		fmt.Sprintf("CREATE TABLE %s (id int PRIMARY KEY)", table),
 		fmt.Sprintf("DROP TABLE %s", table))
 	runOneJob(t, r, job.ID)
 
-	if !tableExists(t, adminDB, table) {
+	if !tableExists(t, adminDB, "public", table) {
 		t.Fatalf("target table %s missing after successful run", table)
 	}
 	row := jobRow(t, client, job.ID)
@@ -323,17 +323,17 @@ func TestWorkerRunsSimpleMigration(t *testing.T) {
 }
 
 func TestWorkerRollbackUsesOriginalDown(t *testing.T) {
-	r, adminDB, client, connectionID, schema := newWorkerEnv(t)
+	r, adminDB, client, connectionID, _ := newWorkerEnv(t)
 	
 	table := fmt.Sprintf("w_rb_%d_%d", os.Getpid(), wkSeq.Add(1))
-	dropTargetTable(t, adminDB, table)
-	t.Cleanup(func() { dropTargetTable(t, adminDB, table) })
+	dropTargetTable(t, adminDB, "public", table)
+	t.Cleanup(func() { dropTargetTable(t, adminDB, "public", table) })
 
 	mig, exec, job := seedMigration(t, client, connectionID,
 		fmt.Sprintf("CREATE TABLE %s (id int PRIMARY KEY)", table),
 		fmt.Sprintf("DROP TABLE %s", table))
 	runOneJob(t, r, job.ID)
-	if !tableExists(t, adminDB, table) {
+	if !tableExists(t, adminDB, "public", table) {
 		t.Fatalf("setup: table %s missing after up", table)
 	}
 
@@ -358,7 +358,7 @@ func TestWorkerRollbackUsesOriginalDown(t *testing.T) {
 	}
 	runOneJob(t, r, rollbackJob.ID)
 
-	if tableExists(t, adminDB, table) {
+	if tableExists(t, adminDB, "public", table) {
 		t.Fatalf("table %s still exists after rollback", table)
 	}
 	row := jobRow(t, client, rollbackJob.ID)
@@ -379,13 +379,13 @@ func TestWorkerRollbackUsesOriginalDown(t *testing.T) {
 }
 
 func TestWorkerBatchCheckpoints(t *testing.T) {
-	r, adminDB, client, connectionID, schema := newWorkerEnv(t)
+	r, adminDB, client, connectionID, _ := newWorkerEnv(t)
 	
 	table := fmt.Sprintf("w_batch_%d_%d", os.Getpid(), wkSeq.Add(1))
-	dropTargetTable(t, adminDB, table)
-	t.Cleanup(func() { dropTargetTable(t, adminDB, table) })
+	dropTargetTable(t, adminDB, "public", table)
+	t.Cleanup(func() { dropTargetTable(t, adminDB, "public", table) })
 	_, err := adminDB.Exec(fmt.Sprintf(
-		"CREATE TABLE %s (id int PRIMARY KEY, status text)", table))
+		"CREATE TABLE public.%s (id int PRIMARY KEY, status text)", table))
 	if err != nil {
 		t.Fatalf("create demo table: %v", err)
 	}
@@ -396,7 +396,7 @@ func TestWorkerBatchCheckpoints(t *testing.T) {
 		}
 		values += fmt.Sprintf("(%d,'new')", i)
 	}
-	if _, err := adminDB.Exec(fmt.Sprintf("INSERT INTO %s (id, status) VALUES %s", table, values)); err != nil {
+	if _, err := adminDB.Exec(fmt.Sprintf("INSERT INTO public.%s (id, status) VALUES %s", table, values)); err != nil {
 		t.Fatalf("seed rows: %v", err)
 	}
 
@@ -469,7 +469,7 @@ func TestWorkerBatchCheckpoints(t *testing.T) {
 	}
 	var done int
 	if err := adminDB.QueryRow(
-		fmt.Sprintf("SELECT count(*) FROM %s WHERE status='done'", table)).Scan(&done); err != nil {
+		fmt.Sprintf("SELECT count(*) FROM public.%s WHERE status='done'", table)).Scan(&done); err != nil {
 		t.Fatalf("count done rows: %v", err)
 	}
 	if done != 50 {
@@ -485,13 +485,13 @@ func TestWorkerBatchCheckpoints(t *testing.T) {
 }
 
 func TestWorkerBatchCancel(t *testing.T) {
-	r, adminDB, client, connectionID, schema := newWorkerEnv(t)
+	r, adminDB, client, connectionID, _ := newWorkerEnv(t)
 	
 	table := fmt.Sprintf("w_bcancel_%d_%d", os.Getpid(), wkSeq.Add(1))
-	dropTargetTable(t, adminDB, table)
-	t.Cleanup(func() { dropTargetTable(t, adminDB, table) })
+	dropTargetTable(t, adminDB, "public", table)
+	t.Cleanup(func() { dropTargetTable(t, adminDB, "public", table) })
 	_, err := adminDB.Exec(fmt.Sprintf(
-		"CREATE TABLE %s (id int PRIMARY KEY, status text)", table))
+		"CREATE TABLE public.%s (id int PRIMARY KEY, status text)", table))
 	if err != nil {
 		t.Fatalf("create demo table: %v", err)
 	}
@@ -502,7 +502,7 @@ func TestWorkerBatchCancel(t *testing.T) {
 		}
 		values += fmt.Sprintf("(%d,'new')", i)
 	}
-	if _, err := adminDB.Exec(fmt.Sprintf("INSERT INTO %s (id, status) VALUES %s", table, values)); err != nil {
+	if _, err := adminDB.Exec(fmt.Sprintf("INSERT INTO public.%s (id, status) VALUES %s", table, values)); err != nil {
 		t.Fatalf("seed rows: %v", err)
 	}
 
