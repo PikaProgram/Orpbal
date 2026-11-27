@@ -4,8 +4,8 @@ node_modules
 .pnp.js
 
 # Build outputs
-dist
-build
+/dist
+/build
 *.tsbuildinfo
 
 # Environment variables
