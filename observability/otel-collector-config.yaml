@@ -1,0 +1,73 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+        cors:
+          allowed_origins: ["*"]
+
+processors:
+  resource:
+    attributes:
+      - key: service.namespace
+        value: orpbal
+        action: insert
+      - key: deployment.environment
+        value: ${env:APP_ENV}
+        action: insert
+  attributes/redact:
+    actions:
+      - key: password
+        action: delete
+      - key: passwd
+        action: delete
+      - key: pwd
+        action: delete
+      - key: secret
+        action: delete
+      - key: token
+        action: delete
+      - key: authorization
+        action: delete
+      - key: cookie
+        action: delete
+      - key: session_id
+        action: delete
+      - key: dsn
+        action: delete
+  batch:
+    timeout: 5s
+
+exporters:
+  otlp/tempo:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+  loki:
+    endpoint: http://loki:3100/loki/api/v1/push
+    tenant_id: default
+    labels:
+      resource:
+        service.name: service_name
+        deployment.environment: environment
+      record:
+        severity_text: severity
+        event: event
+  debug:
+    verbosity: normalized
+
+service:
+  telemetry:
+    metrics:
+      address: 0.0.0.0:8889
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [resource, batch]
+      exporters: [otlp/tempo, debug]
+    logs:
+      receivers: [otlp]
+      processors: [resource, attributes/redact, batch]
+      exporters: [loki, debug]
