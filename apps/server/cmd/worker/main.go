@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"io"
 	"os"
 	"os/signal"
 	"strconv"
@@ -17,35 +18,43 @@ import (
 
 	"Orpbal/ent"
 	"Orpbal/ent/migrate"
+	"Orpbal/internal/observability"
 	"Orpbal/internal/queue"
 	"Orpbal/internal/security/crypto"
 	"Orpbal/internal/target"
-	"Orpbal/internal/tracing"
 	"Orpbal/internal/worker"
 )
 
 var logger zerolog.Logger
 
-func initLogger() {
-	logLevel := os.Getenv("LOG_LEVEL")
-	if logLevel == "production" {
-		logger = zerolog.New(os.Stdout).With().Timestamp().Logger()
-	} else {
-		logger = zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr}).With().Timestamp().Logger()
+func initLogger(base io.Writer) {
+	if !observability.JSONLogs() {
+		base = zerolog.ConsoleWriter{Out: base}
 	}
+	logger = zerolog.New(base).With().Timestamp().Logger()
 }
 
 func main() {
 	godotenv.Load()
 
-	initLogger()
+	telemetry, err := observability.Init(observability.ServiceName("orpbal-worker"), os.Stdout)
+	if err != nil {
+		// No zerolog logger yet; keep local startup visible.
+		_, _ = io.WriteString(os.Stderr, "telemetry init failed: "+err.Error()+"\n")
+	}
+	defer func() {
+		if telemetry != nil {
+			_ = telemetry.Shutdown(context.Background())
+		}
+	}()
+
+	var logOutput io.Writer = os.Stdout
+	if telemetry != nil {
+		logOutput = telemetry.LogWriter
+	}
+	initLogger(logOutput)
 
 	logger.Info().Str("event", "startup").Msg("Starting Orpbal worker")
-
-	shutdownTracing, err := tracing.Init("orpbal-worker")
-	if err != nil {
-		logger.Warn().Err(err).Msg("Tracing init failed; continuing without spans")
-	}
 
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
@@ -89,6 +98,17 @@ func main() {
 	}
 	logger.Info().Str("event", "startup").Msg("Platform database ready")
 
+	observability.RegisterDB(db, "platform", false)
+	metricsAddr := os.Getenv("ORPBAL_METRICS_ADDR")
+	if metricsAddr == "" {
+		metricsAddr = ":9090"
+	}
+	if err := observability.StartMetricsServer(ctx, metricsAddr); err != nil {
+		logger.Warn().Err(err).Str("event", "metrics_start_error").Msg("metrics endpoint unavailable")
+	} else {
+		logger.Info().Str("event", "metrics_ready").Str("address", metricsAddr).Msg("Worker metrics ready")
+	}
+
 	cipher, err := crypto.NewFromBase64(encodedKey)
 	if err != nil {
 		logger.Fatal().Err(err).Msg("Invalid ORPBAL_ENCRYPTION_KEY")
@@ -100,12 +120,6 @@ func main() {
 
 	runCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-
-	go func() {
-		if err := shutdownTracing(runCtx); err != nil {
-			logger.Warn().Err(err).Msg("Tracing shutdown failed")
-		}
-	}()
 
 	logger.Info().Str("event", "startup").Str("worker_id", workerID).Msg("Worker polling for jobs")
 	runner.Run(runCtx, workerID, pollInterval)
