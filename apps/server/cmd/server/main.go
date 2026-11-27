@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"io"
 	"net/http"
 	"os"
 
@@ -15,25 +17,38 @@ import (
 	"Orpbal/internal/config"
 	"Orpbal/internal/database"
 	"Orpbal/internal/handler"
+	"Orpbal/internal/observability"
 	"Orpbal/internal/security/crypto"
 	"Orpbal/internal/security/csrf"
 )
 
 var logger zerolog.Logger
 
-func initLogger() {
-	logLevel := os.Getenv("LOG_LEVEL")
-	if logLevel == "production" {
-		logger = zerolog.New(os.Stdout).With().Timestamp().Logger()
-	} else {
-		logger = zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr}).With().Timestamp().Logger()
+func initLogger(base io.Writer) {
+	if !observability.JSONLogs() {
+		base = zerolog.ConsoleWriter{Out: base}
 	}
+	logger = zerolog.New(base).With().Timestamp().Logger()
 }
 
 func main() {
 	godotenv.Load()
 
-	initLogger()
+	telemetry, err := observability.Init(observability.ServiceName("orpbal-server"), os.Stdout)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "telemetry init failed: %v\n", err)
+	}
+	defer func() {
+		if telemetry != nil {
+			_ = telemetry.Shutdown(context.Background())
+		}
+	}()
+
+	var logOutput io.Writer = os.Stdout
+	if telemetry != nil {
+		logOutput = telemetry.LogWriter
+	}
+	initLogger(logOutput)
 
 	logger.Info().Msg("Starting Orpbal server")
 
@@ -53,6 +68,7 @@ func main() {
 		}
 	}()
 	logger.Info().Msg("Platform database ready")
+	observability.RegisterDB(database.RawDB(), "platform", true)
 
 	if err := bootstrap.EnsureAdmin(ctx, db, logger); err != nil {
 		logger.Fatal().Err(err).Msg("Failed to bootstrap platform admin")
@@ -84,6 +100,9 @@ func main() {
 
 	r := gin.Default()
 	_ = r.SetTrustedProxies(nil)
+	r.Use(observability.HTTPMiddleware())
+
+	r.GET("/metrics", gin.WrapH(observability.Handler()))
 
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
