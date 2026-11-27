@@ -422,7 +422,13 @@ Setiap temuan CodeQL didokumentasikan dan diputuskan secara terstruktur. Untuk s
 
 ### Scan results
 
-Hasil scan pertama direkam di sini setelah workflow CodeQL pertama kali berjalan pada `push` ke `main`. Setiap finding baru (atau perubahan status dari *fix*/*accept*) akan ditambahkan ke daftar berikut beserta rule, severity, location, impact, keputusan, dan link bukti rescan.
+Hasil scan dipantau di [docs/codeql-findings.md](docs/codeql-findings.md): konfigurasi, riwayat run, dan tabel temuan lengkap (rule, severity, lokasi, dampak, keputusan fix/accept + justifikasi dan bukti rescan).
+
+Ringkasan terkini (run `02aa9b0`, 2026-11-27 — scan sukses pertama):
+
+- 5 alert `go/sql-injection` (high, CWE-089), semuanya di `internal/target` — platform ini sengaja mengeksekusi SQL yang disetujui/dibangun dari identifier tervalidasi, jadi temuan dievaluasi per lokasi.
+- 2 lokasi diperbaiki: `PostgresDialect.GuardRead` kini menegakkan *keyword allowlist* read-only (commit `fac0f15`), bukan mengandalkan read-only transaction saja.
+- 3 lokasi diterima dengan mitigasi berlapis (allowlist keyword, read-only transaction, identifier validation, immutable approved SQL) — rincian di dokumen temuan.
 
 ---
 
