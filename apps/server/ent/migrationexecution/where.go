@@ -802,6 +802,29 @@ func HasJobsWith(preds ...predicate.MigrationJob) predicate.MigrationExecution {
 	})
 }
 
+// HasAttempts applies the HasEdge predicate on the "attempts" edge.
+func HasAttempts() predicate.MigrationExecution {
+	return predicate.MigrationExecution(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, AttemptsTable, AttemptsColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasAttemptsWith applies the HasEdge predicate on the "attempts" edge with a given conditions (other predicates).
+func HasAttemptsWith(preds ...predicate.MigrationAttempt) predicate.MigrationExecution {
+	return predicate.MigrationExecution(func(s *sql.Selector) {
+		step := newAttemptsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
 // HasSnapshots applies the HasEdge predicate on the "snapshots" edge.
 func HasSnapshots() predicate.MigrationExecution {
 	return predicate.MigrationExecution(func(s *sql.Selector) {

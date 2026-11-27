@@ -6,6 +6,7 @@ import (
 	"Orpbal/ent/databaseconnection"
 	"Orpbal/ent/migration"
 	"Orpbal/ent/migrationapproval"
+	"Orpbal/ent/migrationattempt"
 	"Orpbal/ent/migrationexecution"
 	"Orpbal/ent/platformuser"
 	"Orpbal/ent/predicate"
@@ -329,6 +330,21 @@ func (mu *MigrationUpdate) AddExecutions(m ...*MigrationExecution) *MigrationUpd
 	return mu.AddExecutionIDs(ids...)
 }
 
+// AddAttemptIDs adds the "attempts" edge to the MigrationAttempt entity by IDs.
+func (mu *MigrationUpdate) AddAttemptIDs(ids ...int) *MigrationUpdate {
+	mu.mutation.AddAttemptIDs(ids...)
+	return mu
+}
+
+// AddAttempts adds the "attempts" edges to the MigrationAttempt entity.
+func (mu *MigrationUpdate) AddAttempts(m ...*MigrationAttempt) *MigrationUpdate {
+	ids := make([]int, len(m))
+	for i := range m {
+		ids[i] = m[i].ID
+	}
+	return mu.AddAttemptIDs(ids...)
+}
+
 // AddApprovalIDs adds the "approvals" edge to the MigrationApproval entity by IDs.
 func (mu *MigrationUpdate) AddApprovalIDs(ids ...int) *MigrationUpdate {
 	mu.mutation.AddApprovalIDs(ids...)
@@ -395,6 +411,27 @@ func (mu *MigrationUpdate) RemoveExecutions(m ...*MigrationExecution) *Migration
 		ids[i] = m[i].ID
 	}
 	return mu.RemoveExecutionIDs(ids...)
+}
+
+// ClearAttempts clears all "attempts" edges to the MigrationAttempt entity.
+func (mu *MigrationUpdate) ClearAttempts() *MigrationUpdate {
+	mu.mutation.ClearAttempts()
+	return mu
+}
+
+// RemoveAttemptIDs removes the "attempts" edge to MigrationAttempt entities by IDs.
+func (mu *MigrationUpdate) RemoveAttemptIDs(ids ...int) *MigrationUpdate {
+	mu.mutation.RemoveAttemptIDs(ids...)
+	return mu
+}
+
+// RemoveAttempts removes "attempts" edges to MigrationAttempt entities.
+func (mu *MigrationUpdate) RemoveAttempts(m ...*MigrationAttempt) *MigrationUpdate {
+	ids := make([]int, len(m))
+	for i := range m {
+		ids[i] = m[i].ID
+	}
+	return mu.RemoveAttemptIDs(ids...)
 }
 
 // ClearApprovals clears all "approvals" edges to the MigrationApproval entity.
@@ -682,6 +719,51 @@ func (mu *MigrationUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(migrationexecution.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if mu.mutation.AttemptsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   migration.AttemptsTable,
+			Columns: []string{migration.AttemptsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(migrationattempt.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := mu.mutation.RemovedAttemptsIDs(); len(nodes) > 0 && !mu.mutation.AttemptsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   migration.AttemptsTable,
+			Columns: []string{migration.AttemptsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(migrationattempt.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := mu.mutation.AttemptsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   migration.AttemptsTable,
+			Columns: []string{migration.AttemptsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(migrationattempt.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {
@@ -1096,6 +1178,21 @@ func (muo *MigrationUpdateOne) AddExecutions(m ...*MigrationExecution) *Migratio
 	return muo.AddExecutionIDs(ids...)
 }
 
+// AddAttemptIDs adds the "attempts" edge to the MigrationAttempt entity by IDs.
+func (muo *MigrationUpdateOne) AddAttemptIDs(ids ...int) *MigrationUpdateOne {
+	muo.mutation.AddAttemptIDs(ids...)
+	return muo
+}
+
+// AddAttempts adds the "attempts" edges to the MigrationAttempt entity.
+func (muo *MigrationUpdateOne) AddAttempts(m ...*MigrationAttempt) *MigrationUpdateOne {
+	ids := make([]int, len(m))
+	for i := range m {
+		ids[i] = m[i].ID
+	}
+	return muo.AddAttemptIDs(ids...)
+}
+
 // AddApprovalIDs adds the "approvals" edge to the MigrationApproval entity by IDs.
 func (muo *MigrationUpdateOne) AddApprovalIDs(ids ...int) *MigrationUpdateOne {
 	muo.mutation.AddApprovalIDs(ids...)
@@ -1162,6 +1259,27 @@ func (muo *MigrationUpdateOne) RemoveExecutions(m ...*MigrationExecution) *Migra
 		ids[i] = m[i].ID
 	}
 	return muo.RemoveExecutionIDs(ids...)
+}
+
+// ClearAttempts clears all "attempts" edges to the MigrationAttempt entity.
+func (muo *MigrationUpdateOne) ClearAttempts() *MigrationUpdateOne {
+	muo.mutation.ClearAttempts()
+	return muo
+}
+
+// RemoveAttemptIDs removes the "attempts" edge to MigrationAttempt entities by IDs.
+func (muo *MigrationUpdateOne) RemoveAttemptIDs(ids ...int) *MigrationUpdateOne {
+	muo.mutation.RemoveAttemptIDs(ids...)
+	return muo
+}
+
+// RemoveAttempts removes "attempts" edges to MigrationAttempt entities.
+func (muo *MigrationUpdateOne) RemoveAttempts(m ...*MigrationAttempt) *MigrationUpdateOne {
+	ids := make([]int, len(m))
+	for i := range m {
+		ids[i] = m[i].ID
+	}
+	return muo.RemoveAttemptIDs(ids...)
 }
 
 // ClearApprovals clears all "approvals" edges to the MigrationApproval entity.
@@ -1479,6 +1597,51 @@ func (muo *MigrationUpdateOne) sqlSave(ctx context.Context) (_node *Migration, e
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(migrationexecution.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if muo.mutation.AttemptsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   migration.AttemptsTable,
+			Columns: []string{migration.AttemptsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(migrationattempt.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := muo.mutation.RemovedAttemptsIDs(); len(nodes) > 0 && !muo.mutation.AttemptsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   migration.AttemptsTable,
+			Columns: []string{migration.AttemptsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(migrationattempt.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := muo.mutation.AttemptsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   migration.AttemptsTable,
+			Columns: []string{migration.AttemptsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(migrationattempt.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {

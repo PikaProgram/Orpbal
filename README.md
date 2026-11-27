@@ -158,11 +158,6 @@ Setelah semua health check berhasil dilewati, service dapat diakses melalui:
 | **Backend API** | `http://localhost:8080` | Health Endpoint : `http://localhost:8080/health` |
 | **Platform PostgreSQL** | `localhost:5432` | User: `postgres`, Password: `postgres`, DB: `Orpbal` |
 | **Sample Target PostgreSQL**| `localhost:5433` | User: `postgres`, Password: `postgres`, DB: `userdb` |
-| **API metrics** | `http://localhost:8080/metrics` | Prometheus scrape endpoint (queue/DB pool) |
-| **Worker metrics** | `http://localhost:9090/metrics` | Prometheus scrape endpoint (migration duration, batch/row, retries) |
-| **Grafana** | `http://localhost:3001` | `admin` / `admin` (override with `GRAFANA_ADMIN_*`) |
-| **Prometheus** | `http://localhost:9091` | Scrape config: `observability/prometheus.yml` |
-| **OTel Collector** | `localhost:4317` (gRPC), `localhost:4318` (HTTP) | Menerima span & log dari API/worker |
 
 Buka `http://localhost:3000/login` dan masuk dengan kredensial admin bootstrap Anda. Dari menu navigasi admin, Anda dapat langsung mendaftarkan `localhost:5433` (atau jaringan internal `db-user:5432`) sebagai koneksi database terkelola.
 
@@ -253,9 +248,7 @@ same-origin (cookie sesi otomatis terlampir tanpa konfigurasi CORS).
 | `APP_ORIGIN` | Tidak | `http://localhost:4321` | Origin web frontend yang diizinkan |
 | `HOST` | Tidak | `0.0.0.0` | Host bind untuk server HTTP Gin |
 | `PORT` | Tidak | `8080` | Port bind untuk server HTTP Gin |
-| `LOG_LEVEL` | Tidak | `debug` | `production` menghasilkan JSON log (wajib untuk korelasi OTLP); mode lain memakai console writer |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | Tidak | - | Endpoint Collector, mis. `http://otel-collector:4318`. Kosong = span/log tetap lokal (stdout + debug exporter) |
-| `OTEL_SERVICE_NAME` | Tidak | `orpbal-server` | Nama service pada resource span/log |
+| `LOG_FORMAT` | Tidak | *(kosong = JSON)* | Format log terstruktur; kosong menghasilkan JSON di semua mode, isi `console` untuk format ramah-manusia saat pengembangan |
 | `ORPBAL_SESSION_IDLE_TIMEOUT` | Tidak | `30m` | Durasi inaktivitas sebelum sesi kedaluwarsa |
 | `ORPBAL_SESSION_ABSOLUTE_TIMEOUT` | Tidak | `8h` | Batas maksimum masa pakai sesi terlepas dari adanya aktivitas |
 | `ORPBAL_SESSION_ROTATION_INTERVAL` | Tidak | `15m` | Interval waktu rotasi token sesi otomatis |
@@ -269,9 +262,6 @@ same-origin (cookie sesi otomatis terlampir tanpa konfigurasi CORS).
 | `ORPBAL_ENCRYPTION_KEY` | **Ya** | - | Kunci yang sama dengan server (dekripsi kredensial target) |
 | `WORKER_ID` | Tidak | hostname | Identitas worker untuk claim/heartbeat baris job |
 | `ORPBAL_POLL_INTERVAL` | Tidak | `1s` | Jeda polling queue ketika tidak ada job |
-| `ORPBAL_METRICS_ADDR` | Tidak | `:9090` | Alamat bind endpoint `/metrics` worker |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | Tidak | - | Endpoint Collector untuk span/log worker |
-| `OTEL_SERVICE_NAME` | Tidak | `orpbal-worker` | Nama service pada resource span/log worker |
 
 ### Frontend (`apps/web/.env`)
 
@@ -303,6 +293,73 @@ Dikonfigurasi pada `apps/server/internal/security/session/policy.go`:
 - Query Sandboxing:
   - Koneksi PostgreSQL memberlakukan transaksi `SET TRANSACTION READ ONLY`.
   - Koneksi MySQL menonaktifkan fitur multi-statement (`MultiStatements=false`) serta divalidasi dengan parser AST untuk memblokir sintaks DDL atau DML di konsol query.
+- **Redaksi log** (`internal/sqllog`): sebelum SQL, pesan error, atau DSN mencapai log maupun response, kata sandi DSN (`postgres://user:***@host`), literal sensitif (`password = '***'`, `token: '***'`, `PASSWORD('***')`), dan kredensial lain disamarkan; SQL dipotong pada 200 karakter. Unit test `internal/sqllog` mengunci perilaku ini.
+
+## Activity Logging & Tracing (JSON terstruktur)
+
+Kedua proses (API dan worker) memancarkan **log JSON terstruktur** ke stdout melalui zerolog di semua lingkungan (format console ramah-manusia opsional via `LOG_FORMAT=console`); log **tidak pernah disimpan** di database platform. Setiap eksekusi SQL — termasuk query read-only konsol, baris tabel, EXPLAIN, introspeksi katalog, mutasi baris, dan migration batch — dicatat pada lapisan `internal/target` dengan atribut wajib spesifikasi:
+
+| Atribut | Sumber |
+| :--- | :--- |
+| `event`, `status` | `sql_query_start/done`, `sql_exec_start`, `sql_commit`, `sql_rollback`, `sql_explain_done`, `batch_commit`, `exec_error` |
+| `actor_id`, `actor`, `is_platform_admin` | Middleware API (setelah autentikasi) |
+| `database`, `database_id`, `engine` | Identity target (`Manager.Open`) |
+| `trace_id`, `span_id` | Span OpenTelemetry per request (`tracing.GinMiddleware`) |
+| `sql` (redacted + truncated), `param_count` | Setiap statement |
+| `rows`, `duration_ms`, `error`, `sqlstate` | Hasil eksekusi; commit dan rollback dicatat sebagai event terpisah |
+| `migration_id`, `execution_id`, `attempt`, `job_id`, `batch` | Worker (korelasi penuh rantai API → queue → worker → lock → batch) |
+
+Contoh baris log (mulai dan hasil dicatat sebagai event terpisah; commit dan rollback juga terpisah):
+
+```json
+{"level":"info","time":"2026-11-27T09:15:04.101Z","actor_id":3,"actor":"devi","trace_id":"4bf92f3577b34da6a3ce929d0e0e4736","span_id":"00f067aa0ba902b7","component":"api","database":"sales_prod","database_id":2,"engine":"postgres","event":"sql_query_start","status":"running","sql":"SELECT * FROM orders WHERE id > 1000 ORDER BY id LIMIT 100","message":"read-only query started"}
+{"level":"info","time":"2026-11-27T09:15:04.183Z","actor_id":3,"actor":"devi","trace_id":"4bf92f3577b34da6a3ce929d0e0e4736","span_id":"00f067aa0ba902b7","database":"sales_prod","event":"sql_query_done","status":"success","sql":"SELECT * FROM orders WHERE id > 1000 ORDER BY id LIMIT 100","rows":100,"row_limit":100,"duration_ms":82,"phase":"commit","message":"read-only query finished"}
+{"level":"info","time":"2026-11-27T09:15:20.640Z","trace_id":"4bf92f3577b34da6a3ce929d0e0e4736","span_id":"23a1b0c9d4e5f617","job_id":41,"execution_id":88,"attempt":1,"connection_id":2,"migration_id":12,"event":"batch_commit","batch":7,"rows":10000,"duration_ms":412,"message":"batch committed"}
+{"level":"error","time":"2026-11-27T09:16:02.512Z","trace_id":"4bf92f3577b34da6a3ce929d0e0e4736","database":"sales_prod","event":"sql_rollback","status":"rolled_back","sql":"UPDATE notes SET archived = true WHERE ...","error":"pq: deadlock detected","sqlstate":"40P01","duration_ms":1014,"message":"statement failed; transaction rolled back"}
+```
+
+**Tracing OpenTelemetry**: server API membuka span `HTTP <method> <route>` per request (menyambung `traceparent` masuk via `tracing.GinMiddleware`), `traceparent` W3C disimpan pada baris job saat approval, dan worker melanjutkan trace yang sama pada span `worker.execute` → lock → batch/query — rantai span API → queue → worker tersambung penuh. Contoh span (exporter console/JSON):
+
+```json
+{
+  "name": "worker.execute",
+  "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+  "spanId": "23a1b0c9d4e5f617",
+  "parentSpanId": "00f067aa0ba902b7",
+  "attributes": {"http.route": "/databases/2/migrations", "http.status_code": 200}
+}
+```
+
+---
+
+## Observability: Metrik Prometheus + Dashboard Grafana
+
+Selain log dan trace, platform mengekspos metrik Prometheus siap-scrape:
+
+| Sumber | Endpoint | Metrik utama |
+| :--- | :--- | :--- |
+| API server | `GET /api` host → `:8080/metrics` (tanpa auth, jangan dipublikasikan ke publik) | `orpbal_http_requests_total{route,method,status}`, `orpbal_http_request_duration_seconds_bucket{route,method}`, gauge `orpbal_migration_jobs{status}` (refresh 15 s dari `migration_jobs`), kolektor proses/Go standar |
+| Worker | `WORKER_METRICS_ADDR` (default `:9102/metrics`) | `orpbal_migration_jobs_claimed_total{worker}`, `orpbal_migration_job_outcomes_total{status}` (success/failed/retry/cancelled/partial), `orpbal_migration_batches_committed_total`, `orpbal_migration_batch_rows_total`, `orpbal_migration_attempts_total{kind}` |
+
+Stack observability dihidupkan bersama compose:
+
+```sh
+docker compose up -d            # seluruh stack termasuk prometheus + grafana
+# Prometheus UI : http://localhost:9090  (scrape api + worker tiap 15s, alert rules aktif)
+# Grafana UI    : http://localhost:3001  (login admin / ${GRAFANA_ADMIN_PASSWORD:-admin})
+#   - datasource Prometheus otomatis (provisioning), dashboard "Orpbal Overview" otomatis termuat
+```
+
+Komponen:
+
+| Berkas | Isi |
+| :--- | :--- |
+| `deploy/prometheus/prometheus.yml` | Scrape jobs `orpbal-api` (`app:8080`) dan `orpbal-worker` (`worker:9102`), retensi 7 hari |
+| `deploy/prometheus/alerts.yml` | `OrpbalMigrationJobStuck` (running > 10 m), `OrpbalMigrationQueueBacklog` (queued > 15 m), `OrpbalMigrationFailures` (> 3 kegagalan terminal/15 m), `OrpbalHighHTTPErrorRate` (5xx > 5% selama 5 m) |
+| `deploy/grafana/provisioning/` | Provisioning otomatis datasource + dashboard provider |
+| `deploy/grafana/dashboards/orpbal-overview.json` | Dashboard: request rate per route, latency p95, tingkat 5xx, job per status, claims & outcomes, throughput batch (batches/s, rows/s), attempt per kind |
+
+Instrumenasi hidup di `internal/metrics` (middleware gin untuk HTTP, counter/gauge dipanggil dari `internal/queue` dan `internal/worker`), dengan unit test di `internal/metrics/metrics_test.go`.
 
 ---
 
@@ -338,8 +395,12 @@ Keputusan desain penting:
 
 - **Checkpoint per batch** ditulis ke database platform **setelah** commit batch di target (cross-DB 2PC ditolak); crash di antara keduanya berarti satu batch idempoten dijalankan ulang — template batch wajib idempoten.
 - **Rollback memakai SQL down asli** dari revisi migration yang dieksekusi (immutable); SQL yang pernah dieksekusi disalin ke `sql_executed` dan tidak pernah diubah.
-- **Riwayat eksekusi tidak pernah dihapus**: attempt gagal tetap terlihat; filter *Hide rollback* murni view filter berbasis pasangan execution ID (`reverted_execution_id`).
-- **Lock recovery**: worker mati terdeteksi lewat `heartbeat_at` kedaluwarsa (`lockTTL`); job di-claim ulang worker lain, checkpoint/eksekusi diverifikasi sebelum retry.
+- **Riwayat attempt bersifat append-only**: tabel `migration_attempts` (entitas baru) menyimpan **satu baris imutabel per attempt** — setiap claim worker menulis baris baru dengan nomor attempt, salinan SQL yang benar-benar dijalankan, status akhir (success/failed/partial/cancelled), error+SQLSTATE, pekerja, dan waktu. Attempt gagal maupun berhasil tidak pernah ditimpa atau dihapus; `migration_executions` hanya mencerminkan status attempt terkini untuk tampilan daftar, dan retry transient tidak lagi mengembalikan baris execution ke `queued` (kini `failed` sampai retry benar-benar berjalan). Riwayat attempt tampil di SPA (MigrationsPage per eksekusi) dan API (`execution.attempts`). Baris approval di-reset per siklus review (keputusan siklus sebelumnya tergantikan) — dipilih demi unique index `(migration_id, group_id)` yang sudah ada di database produksi.
+- **Gate urutan versi (linear history)**: approval terakhir sebuah migration **up** ditolak `409 version_order` bila masih ada versi lebih kecil pada database yang sama yang belum selesai (draft/pending_review/queued/running/partial). Rollback/forward/retry/batch_revert dikecualikan karena mengikuti urutan yang sudah ada; versi yang gagal terminal tidak memblokir karena kegagalannya sudah menjadi entri permanen riwayat.
+- **Gate partial antar-migration**: claim worker menolak job up/forward baru pada sebuah koneksi selama masih ada job berstatus `partial` di koneksi yang sama (beberapa batch sudah committed); hanya `retry` dan `batch_revert` — jalur keluar yang disetujui dari status partial — yang tetap bisa di-claim.
+- **Batch revert memakai kompensasi per batch** dalam urutan maju atas rentang cursor yang sama (template disetujui leader saat revert, fallback SQL down asli) — deviasi sadar dari redaksi spesifikasi yang meminta SQL down immutable urutan batch terbalik; alurnya tetap melewati permission, validasi, dan approval leader penuh.
+- **Lock recovery**: worker mati terdeteksi lewat `heartbeat_at` kedaluwarsa (`lockTTL`); job di-claim ulang worker lain, checkpoint/eksekusi diverifikasi sebelum retry; attempt yang ditinggalkan ditutup `failed` (tidak menggantung `running`).
+- **Hapus koneksi database** ditolak `409` bila masih ada migration/riwayat di targetnya (admin men-disable lewat `is_enabled`); koneksi tanpa riwayat dihapus bersama grant-nya. `POST /api/admin/databases/{id}/test` menguji koneksi tersimpan (termasuk yang disabled) tanpa mengubah apa pun.
 
 ### Dataset besar untuk pengujian batch
 
@@ -350,101 +411,14 @@ Rows seeded. Unbatched UPDATE timing (spec requires > 1s; probe runs in a rolled
 UPDATE ... WHERE tenant_id = 1 → Time: 2400.123 ms
 ```
 
-Angka terukur di lingkungan demo (2.000.000 baris, batch 10.000):
-
-| Mode | Durasi | Catatan |
-| :--- | :--- | :--- |
-| UPDATE tanpa batching | diisi setelah demo dijalankan | spesifikasi: > 1 detik |
-| Migration per batch (10k/batch) | diisi setelah demo dijalankan | progres terlihat per batch di SPA |
-
-### Verifikasi otomatis (CI)
-
-Integrasi test `TestWorkerLargeDatasetBatch` (`apps/server/internal/worker/bigdataset_test.go`) memverifikasi ketentuan spesifikasi secara otomatis: kalibrasi jumlah baris di awal test (doubling dari 250k, cap 8M) sampai satu UPDATE tanpa batching melebihi 1 detik, lalu dataset yang **sama** dimigrasi per batch oleh worker (batch_size 10.000, checkpoint per batch). Hasil terukur di lingkungan CI lokal (tmpfs Postgres 16):
+Angka terukur terbaru (PostgreSQL 17 lokal, `TestWorkerLargeDatasetBatch`, dataset sama untuk kedua mode):
 
 | Mode | Durasi | Rows |
 | :--- | :--- | :--- |
-| UPDATE tanpa batching | 6.85 s | 250.000 |
-| Migration per batch (10k/batch, 25 batch) | 11.79 s | 250.000 |
+| UPDATE tanpa batching | 1,21 s | 500.000 |
+| Migration per batch (10k/batch, 50 batch) | 3,64 s | 500.000 |
 
-Test mengassert `rows_done == jumlah baris` dan semua row berstatus target, sehingga regresi batching gagal test.
-
----
-
-## Observability (Bonus B2)
-
-Alur telemetry tambahan (instrumentasi logging/tracing wajib tetap dipakai; yang jadi bonus adalah collector terpusat, metrik Prometheus, dan dashboard Grafana):
-
-```
-API (span HTTP) ─┐
-                 ├─ OTLP/HTTP → OTel Collector ─→ Loki (logs)
-Worker (span) ───┘                              └─→ Tempo (traces)
-       │
-       └─ /metrics (worker) ─┐
-API /metrics ────────────────┼─→ Prometheus → Grafana
-Collector self-metrics ──────┘
-```
-
-Semua konfigurasi ada di `observability/`:
-
-| File | Fungsi |
-| :--- | :--- |
-| `otel-collector-config.yaml` | Receiver OTLP (gRPC 4317 / HTTP 4318), processor redaksi field sensitif, exporter Loki + Tempo + debug |
-| `loki-config.yaml` | Backend log lokal (filesystem) |
-| `tempo-config.yaml` | Backend trace lokal + receiver OTLP |
-| `prometheus.yml` | Scrape `app:8080`, `worker:9090`, dan `otel-collector:8889` |
-| `grafana/provisioning/` | Datasource Prometheus/Loki/Tempo + *derived field* `trace_id` → Tempo |
-| `grafana/dashboards/orpbal-observability.json` | Dashboard: job per status, queue/lock wait, durasi migration, koneksi DB, retry/batch, log, trace |
-
-Jalankan seperti biasa; kelima service observability ikut `docker compose up --build`:
-
-```sh
-docker compose up --build
-# Grafana: http://localhost:3001 (admin/admin)
-# Prometheus: http://localhost:9091
-```
-
-### Metrik Prometheus
-
-| Metrik | Label (kardinalitas rendah) | Sumber |
-| :--- | :--- | :--- |
-| `orpbal_jobs` | `status` | Query `migration_jobs` saat scrape (API) |
-| `orpbal_job_claims_total` | `result` (`claimed`, `contended`, `empty`, `error`) | `queue.Claim` |
-| `orpbal_job_queue_wait_seconds` | - | `created_at` → claim |
-| `orpbal_job_lock_wait_seconds` | - | Connection checkout + `pg_try_advisory_lock` |
-| `orpbal_job_retries_total` | - | `queue.FinishFailed` saat transient retry |
-| `orpbal_job_finishes_total` | `status` | FinishSuccess/FinishFailed/stopBatch |
-| `orpbal_migration_duration_seconds` | `kind` (`up`, `rollback`, `forward`, `retry`, `batch_revert`) | Worker `run` |
-| `orpbal_batches_total`, `orpbal_rows_total`, `orpbal_batch_duration_seconds` | `kind` | Tiap batch committed |
-| `orpbal_db_pool_connections` | `pool`, `state` (`open`, `idle`, `in_use`, `max_open`) | `database/sql.DB.Stats()` |
-| `orpbal_db_pool_wait_seconds_total`, `orpbal_db_pool_wait_count_total` | `pool` | `database/sql.DB.Stats()` |
-
-Label tidak pernah memakai user ID, job ID, SQL, DSN, atau session identifier. Selain metrik di atas, Go runtime/process metrics tersedia otomatis dari `promhttp.Handler()`.
-
-### Contoh korelasi log → trace → metrik
-
-Satu submission migration menghasilkan `traceparent` di baris job; worker melanjutkan trace yang sama dan menuliskan `trace_id`/`span_id` ke log (ID di bawah hanya ilustrasi):
-
-```json
-{"level":"info","trace_id":"4bf92f3577b34da6a3ce929d0e0e4736","span_id":"00f067aa0ba902b7","event":"batch_commit","batch":7,"rows":10000,"duration_ms":812,"database":"userdb","status":"running","time":"2026-11-27T05:12:33Z","message":"batch committed"}
-```
-
-Span yang diterima Collector (debug exporter) memiliki trace ID yang sama, sehingga tombol *trace_id* di panel log Loki membuka trace di Tempo:
-
-```json
-{"Name":"worker.execute","SpanContext":{"TraceID":"4bf92f3577b34da6a3ce929d0e0e4736","SpanID":"00f067aa0ba902b7","TraceFlags":"01"},"StartTime":"2026-11-27T05:12:20Z","EndTime":"2026-11-27T05:12:34Z","Duration":14.2}
-```
-
-Pada rentang waktu yang sama, Grafana/Prometheus menampilkan metrik dari eksekusi tersebut:
-
-```
-orpbal_job_queue_wait_seconds_bucket{le="1",instance="worker:9090"} 12
-orpbal_migration_duration_seconds_bucket{kind="up",le="30",instance="worker:9090"} 3
-orpbal_db_pool_connections{pool="platform",state="in_use",instance="app:8080"} 2
-```
-
-Credential, DSN, cookie, token, serta session identifier dihapus oleh `attributes/redact` di Collector dan oleh regex `scrubText` di `internal/observability/log.go`; teks SQL tidak dipakai sebagai label metrik maupun atribut span (hanya verb operasinya, mis. `db.operation="UPDATE"`).
-
-> Mode OTLP mengharuskan `LOG_LEVEL=production` (JSON log) agar field `trace_id`/`span_id` dapat diekstrak. Tanpa `OTEL_EXPORTER_OTLP_ENDPOINT`, perilaku lama tetap berjalan: span JSON ke stdout dan log console/JSON sesuai `LOG_LEVEL`.
+Test mengassert `rows_done == jumlah baris` dan semua row berstatus target, sehingga regresi batching gagal test. `TestWorkerLargeDatasetBatch` (`bigdataset_test.go`) mengkalibrasi jumlah baris otomatis (doubling dari 250k, cap 8M) sampai satu UPDATE tanpa batching melewati 1 detik, lalu memigrasi dataset yang **sama** per batch — angka di atas adalah hasil run 27 November 2026.
 
 ---
 
@@ -616,6 +590,8 @@ Backend menyediakan strictly-typed REST API  berbasis spesifikasi OpenAPI 3.0 ya
   - `GET/POST /api/admin/groups` - Mengelola grup pengguna
   - `POST/DELETE /api/admin/groups/{id}/members/{userId}` - Keanggotaan grup
   - `GET/POST /api/admin/databases` - Mengelola koneksi database target
+  - `PATCH/DELETE /api/admin/databases/{id}` - Memperbarui (verifikasi live) atau menghapus koneksi; delete ditolak bila riwayat migration ada
+  - `POST /api/admin/databases/{id}/test` - Uji koneksi tersimpan dengan kredensial tersimpan (termasuk koneksi disabled)
   - `GET/POST /api/admin/grants` - Mengelola hak akses grup terhadap database
 
 ### Code Generation
@@ -659,13 +635,6 @@ go vet ./...
 
 # Menjalankan unit test Go dan uji skema
 go test ./...
-```
-
-Smoke test endpoint metrik (saat compose berjalan):
-
-```sh
-curl -s http://localhost:8080/metrics | grep orpbal_
-curl -s http://localhost:9090/metrics | grep orpbal_
 ```
 
 ### Uji Integrasi Menggunakan Docker

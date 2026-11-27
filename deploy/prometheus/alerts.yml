@@ -1,0 +1,41 @@
+groups:
+  - name: orpbal-migrations
+    rules:
+      - alert: OrpbalMigrationJobStuck
+        expr: orpbal_migration_jobs{status="running"} > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Migration job running longer than 10 minutes"
+          description: "A migration job has stayed in the running state for over 10 minutes. Check the worker heartbeat and the target database (long batch or dead worker awaiting reclaim)."
+
+      - alert: OrpbalMigrationQueueBacklog
+        expr: orpbal_migration_jobs{status="queued"} > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Queued migration jobs for more than 15 minutes"
+          description: "Jobs are waiting in the queue for 15+ minutes — no worker is claiming them (worker down, or a partial gate is holding new migrations until retry/revert)."
+
+      - alert: OrpbalMigrationFailures
+        expr: increase(orpbal_migration_job_outcomes_total{status="failed"}[15m]) > 3
+        labels:
+          severity: critical
+        annotations:
+          summary: "More than 3 terminal migration failures in 15 minutes"
+          description: "Terminal (non-retryable) migration failures are accumulating — inspect the migration history and worker logs."
+
+  - name: orpbal-api
+    rules:
+      - alert: OrpbalHighHTTPErrorRate
+        expr: |
+          sum(rate(orpbal_http_requests_total{status=~"5.."}[5m]))
+            / clamp_min(sum(rate(orpbal_http_requests_total[5m])), 0.001) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "API 5xx error rate above 5% for 5 minutes"
+          description: "The API is returning server errors for more than 5% of requests."

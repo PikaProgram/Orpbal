@@ -204,6 +204,63 @@ var (
 			},
 		},
 	}
+	// MigrationAttemptsColumns holds the columns for the "migration_attempts" table.
+	MigrationAttemptsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "connection_id", Type: field.TypeInt},
+		{Name: "attempt", Type: field.TypeInt, Default: 1},
+		{Name: "kind", Type: field.TypeEnum, Enums: []string{"up", "rollback", "forward", "retry", "batch_revert"}},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"running", "success", "failed", "partial", "cancelled"}},
+		{Name: "sql_executed", Type: field.TypeString, Nullable: true, Size: 2147483647},
+		{Name: "error", Type: field.TypeString, Nullable: true, Size: 2147483647},
+		{Name: "worker_id", Type: field.TypeString, Nullable: true},
+		{Name: "batch_cursor", Type: field.TypeInt64, Nullable: true},
+		{Name: "batches_done", Type: field.TypeInt, Default: 0},
+		{Name: "rows_done", Type: field.TypeInt64, Default: 0},
+		{Name: "started_at", Type: field.TypeTime},
+		{Name: "finished_at", Type: field.TypeTime, Nullable: true},
+		{Name: "migration_id", Type: field.TypeInt},
+		{Name: "actor_id", Type: field.TypeInt},
+		{Name: "execution_id", Type: field.TypeInt},
+	}
+	// MigrationAttemptsTable holds the schema information for the "migration_attempts" table.
+	MigrationAttemptsTable = &schema.Table{
+		Name:       "migration_attempts",
+		Columns:    MigrationAttemptsColumns,
+		PrimaryKey: []*schema.Column{MigrationAttemptsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "migration_attempts_migrations_attempts",
+				Columns:    []*schema.Column{MigrationAttemptsColumns[13]},
+				RefColumns: []*schema.Column{MigrationsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+			{
+				Symbol:     "migration_attempts_platform_users_actor",
+				Columns:    []*schema.Column{MigrationAttemptsColumns[14]},
+				RefColumns: []*schema.Column{PlatformUsersColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+			{
+				Symbol:     "migration_attempts_migration_executions_attempts",
+				Columns:    []*schema.Column{MigrationAttemptsColumns[15]},
+				RefColumns: []*schema.Column{MigrationExecutionsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "migrationattempt_execution_id_attempt",
+				Unique:  true,
+				Columns: []*schema.Column{MigrationAttemptsColumns[15], MigrationAttemptsColumns[2]},
+			},
+			{
+				Name:    "migrationattempt_migration_id_started_at",
+				Unique:  false,
+				Columns: []*schema.Column{MigrationAttemptsColumns[13], MigrationAttemptsColumns[11]},
+			},
+		},
+	}
 	// MigrationExecutionsColumns holds the columns for the "migration_executions" table.
 	MigrationExecutionsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
@@ -395,6 +452,7 @@ var (
 		GroupMembershipsTable,
 		MigrationsTable,
 		MigrationApprovalsTable,
+		MigrationAttemptsTable,
 		MigrationExecutionsTable,
 		MigrationJobsTable,
 		PlatformUsersTable,
@@ -413,6 +471,9 @@ func init() {
 	MigrationApprovalsTable.ForeignKeys[0].RefTable = GroupsTable
 	MigrationApprovalsTable.ForeignKeys[1].RefTable = MigrationsTable
 	MigrationApprovalsTable.ForeignKeys[2].RefTable = PlatformUsersTable
+	MigrationAttemptsTable.ForeignKeys[0].RefTable = MigrationsTable
+	MigrationAttemptsTable.ForeignKeys[1].RefTable = PlatformUsersTable
+	MigrationAttemptsTable.ForeignKeys[2].RefTable = MigrationExecutionsTable
 	MigrationExecutionsTable.ForeignKeys[0].RefTable = MigrationsTable
 	MigrationExecutionsTable.ForeignKeys[1].RefTable = PlatformUsersTable
 	MigrationExecutionsTable.ForeignKeys[2].RefTable = MigrationExecutionsTable

@@ -24,6 +24,9 @@ type Migration func(*sql.Selector)
 // MigrationApproval is the predicate function for migrationapproval builders.
 type MigrationApproval func(*sql.Selector)
 
+// MigrationAttempt is the predicate function for migrationattempt builders.
+type MigrationAttempt func(*sql.Selector)
+
 // MigrationExecution is the predicate function for migrationexecution builders.
 type MigrationExecution func(*sql.Selector)
 

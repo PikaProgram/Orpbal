@@ -63,11 +63,13 @@ type MigrationExecutionEdges struct {
 	Reverted *MigrationExecution `json:"reverted,omitempty"`
 	// Jobs holds the value of the jobs edge.
 	Jobs []*MigrationJob `json:"jobs,omitempty"`
+	// Attempts holds the value of the attempts edge.
+	Attempts []*MigrationAttempt `json:"attempts,omitempty"`
 	// Snapshots holds the value of the snapshots edge.
 	Snapshots []*SchemaSnapshot `json:"snapshots,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [5]bool
+	loadedTypes [6]bool
 }
 
 // MigrationOrErr returns the Migration value or an error if the edge
@@ -112,10 +114,19 @@ func (e MigrationExecutionEdges) JobsOrErr() ([]*MigrationJob, error) {
 	return nil, &NotLoadedError{edge: "jobs"}
 }
 
+// AttemptsOrErr returns the Attempts value or an error if the edge
+// was not loaded in eager-loading.
+func (e MigrationExecutionEdges) AttemptsOrErr() ([]*MigrationAttempt, error) {
+	if e.loadedTypes[4] {
+		return e.Attempts, nil
+	}
+	return nil, &NotLoadedError{edge: "attempts"}
+}
+
 // SnapshotsOrErr returns the Snapshots value or an error if the edge
 // was not loaded in eager-loading.
 func (e MigrationExecutionEdges) SnapshotsOrErr() ([]*SchemaSnapshot, error) {
-	if e.loadedTypes[4] {
+	if e.loadedTypes[5] {
 		return e.Snapshots, nil
 	}
 	return nil, &NotLoadedError{edge: "snapshots"}
@@ -271,6 +282,11 @@ func (me *MigrationExecution) QueryReverted() *MigrationExecutionQuery {
 // QueryJobs queries the "jobs" edge of the MigrationExecution entity.
 func (me *MigrationExecution) QueryJobs() *MigrationJobQuery {
 	return NewMigrationExecutionClient(me.config).QueryJobs(me)
+}
+
+// QueryAttempts queries the "attempts" edge of the MigrationExecution entity.
+func (me *MigrationExecution) QueryAttempts() *MigrationAttemptQuery {
+	return NewMigrationExecutionClient(me.config).QueryAttempts(me)
 }
 
 // QuerySnapshots queries the "snapshots" edge of the MigrationExecution entity.

@@ -13,10 +13,7 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"Orpbal/internal/observability"
-	"Orpbal/internal/tracing"
-
-	"go.opentelemetry.io/otel/attribute"
+	"Orpbal/internal/metrics"
 )
 
 // Table is the migration job table name (ent default pluralization).
@@ -72,78 +69,69 @@ var ErrNotOwner = errors.New("queue: job not locked by this worker")
 // ErrTerminal is returned by RequestCancel when the job already finished.
 var ErrTerminal = errors.New("queue: job already terminal")
 
+// claimSQL claims the next eligible job. The partial gate holds a NEW
+// migration on a connection whose last run ended 'partial' (some batches
+// committed): while such a state exists on the connection, only retry and
+// batch_revert jobs — the designated ways out of the partial state — are
+// claimable (spec: hold the next migration while the previous one is
+// partial/unresolved).
 const claimSQL = `UPDATE ` + table + ` SET
 	status='running', locked_by=$1, claimed_at=now(), heartbeat_at=now(),
 	attempts=attempts+1, started_at=COALESCE(started_at, now())
 WHERE id = (
 	SELECT id FROM ` + table + `
-	WHERE status='queued'
-	   OR (status='running' AND heartbeat_at < now() - $2::interval)
+	WHERE (status='queued'
+	    OR (status='running' AND heartbeat_at < now() - $2::interval))
+	  AND (
+		NOT EXISTS (
+			SELECT 1 FROM ` + table + ` j2
+			WHERE j2.connection_id = ` + table + `.connection_id
+			  AND j2.status = 'partial'
+		)
+		OR (SELECT e.kind FROM migration_executions e WHERE e.id = ` + table + `.execution_id)
+			IN ('retry', 'batch_revert')
+	  )
 	ORDER BY created_at
 	FOR UPDATE SKIP LOCKED
 	LIMIT 1
 )
 RETURNING id, execution_id, connection_id, attempts,
-	COALESCE(traceparent, ''), batch_cursor, batches_done, rows_done,
-	EXTRACT(EPOCH FROM now() - created_at)::double precision`
+	COALESCE(traceparent, ''), batch_cursor, batches_done, rows_done`
 
 // Claim atomically leases the next queued job (or one whose worker died,
 // heartbeat older than lockTTL) and takes the per-connection advisory lock on
 // a dedicated checked-out platform connection. The caller MUST Release.
 func (q *Queue) Claim(ctx context.Context, workerID string, lockTTL time.Duration) (*ClaimedJob, error) {
-	connStart := time.Now()
 	conn, err := q.db.Conn(ctx)
-	connWait := time.Since(connStart)
 	if err != nil {
-		observability.JobClaimed("error", 0, connWait, 0)
 		return nil, fmt.Errorf("queue: checkout conn: %w", err)
 	}
 
 	var (
-		job         ClaimedJob
-		tracep      sql.NullString
-		batchCur    sql.NullInt64
-		waitSeconds float64
+		job      ClaimedJob
+		tracep   sql.NullString
+		batchCur sql.NullInt64
 	)
 	err = conn.QueryRowContext(ctx, claimSQL, workerID, int64(lockTTL/time.Second)).
-		Scan(&job.ID, &job.ExecutionID, &job.ConnectionID, &job.Attempts, &tracep, &batchCur, &job.BatchesDone, &job.RowsDone, &waitSeconds)
-	queuedFor := time.Duration(waitSeconds * float64(time.Second))
+		Scan(&job.ID, &job.ExecutionID, &job.ConnectionID, &job.Attempts, &tracep, &batchCur, &job.BatchesDone, &job.RowsDone)
 	if errors.Is(err, sql.ErrNoRows) {
 		_ = conn.Close()
-		observability.JobClaimed("empty", 0, connWait, 0)
 		return nil, ErrNotClaimed
 	}
 	if err != nil {
 		_ = conn.Close()
-		observability.JobClaimed("error", 0, connWait, 0)
 		return nil, fmt.Errorf("queue: claim: %w", err)
 	}
 
-	// Span only for real work: an empty poll should not emit a span every second.
-	ctx, span := tracing.StartSpan(ctx, tracep.String, "queue.lock")
-	defer span.End()
-	span.SetAttributes(
-		attribute.String("db.system", "postgresql"),
-		attribute.Float64("queue.conn_wait_seconds", connWait.Seconds()),
-		attribute.Float64("queue.wait_seconds", waitSeconds),
-	)
-
 	// Advisory lock second: if another worker already runs this connection,
 	// put the job back so it isn't held hostage by a losing claimer.
-	lockStart := time.Now()
 	var locked bool
 	if err := conn.QueryRowContext(ctx,
 		"SELECT pg_try_advisory_lock(hashtext('orpbal:conn:' || $1))", job.ConnectionID,
 	).Scan(&locked); err != nil {
 		_ = conn.Close()
-		observability.JobClaimed("error", queuedFor, connWait, time.Since(lockStart))
 		return nil, fmt.Errorf("queue: advisory lock: %w", err)
 	}
-	advisoryWait := time.Since(lockStart)
-	span.SetAttributes(
-		attribute.Float64("queue.lock_wait_seconds", advisoryWait.Seconds()),
-		attribute.Bool("queue.lock_acquired", locked),
-	)
 	if !locked {
 		if _, err := conn.ExecContext(ctx,
 			"UPDATE "+table+" SET status='queued', locked_by=NULL, heartbeat_at=NULL WHERE id=$1 AND locked_by=$2",
@@ -151,10 +139,8 @@ func (q *Queue) Claim(ctx context.Context, workerID string, lockTTL time.Duratio
 			q.logger.Error().Err(err).Int("job_id", job.ID).Msg("queue: unlock-contended revert failed")
 		}
 		_ = conn.Close()
-		observability.JobClaimed("contended", queuedFor, connWait, advisoryWait)
 		return nil, ErrNotClaimed
 	}
-	observability.JobClaimed("claimed", queuedFor, connWait, advisoryWait)
 
 	job.Traceparent = tracep.String
 	if batchCur.Valid {
@@ -162,6 +148,7 @@ func (q *Queue) Claim(ctx context.Context, workerID string, lockTTL time.Duratio
 		job.BatchCursor = &v
 	}
 	job.conn = conn
+	metrics.JobsClaimed.WithLabelValues(workerID).Inc()
 	return &job, nil
 }
 
@@ -206,7 +193,7 @@ func (q *Queue) FinishSuccess(ctx context.Context, jobID int, workerID string) e
 	if n, _ := res.RowsAffected(); n == 0 {
 		return ErrNotOwner
 	}
-	observability.JobFinished("success")
+	metrics.ObserveOutcome("success")
 	return nil
 }
 
@@ -223,8 +210,11 @@ func isTransient(errMsg string) bool {
 
 // FinishFailed marks the job failed, mirroring the failure onto the
 // execution. If the cause is transient and attempts remain, the job returns
-// to queued for another worker to pick up (willRetry=true); the execution is
-// reset to queued so the retry reuses it.
+// to queued for another worker to pick up (willRetry=true). The execution
+// row keeps its failed status and error (the live view of the last attempt);
+// the per-attempt outcome itself is append-only history in
+// migration_attempts written by the worker, so retrying never overwrites or
+// erases what already ran (M2: attempt history must not be overwritten).
 func (q *Queue) FinishFailed(ctx context.Context, jobID int, workerID string, errMsg string) (willRetry bool, err error) {
 	tx, err := q.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -247,10 +237,12 @@ func (q *Queue) FinishFailed(ctx context.Context, jobID int, workerID string, er
 	}
 
 	retry := attempts < maxAttempts && isTransient(errMsg)
-	// The execution only carries the error text when the run is terminal.
-	jobStatus, execStatus := "failed", "failed"
+	// The job mirrors the run: terminal failure closes it, a retry keeps it
+	// queued. The execution row is NOT reset to queued here — the worker
+	// flips it back to running when the retry actually starts.
+	jobStatus := "failed"
 	if retry {
-		jobStatus, execStatus = "queued", "queued"
+		jobStatus = "queued"
 	}
 	if _, err := tx.ExecContext(ctx,
 		"UPDATE "+table+" SET status=$3::text, error=$4, finished_at=CASE WHEN $3::text='failed' THEN now() ELSE NULL END, locked_by=NULL WHERE id=$1 AND locked_by=$2",
@@ -258,17 +250,17 @@ func (q *Queue) FinishFailed(ctx context.Context, jobID int, workerID string, er
 		return false, fmt.Errorf("queue: finish failed job update: %w", err)
 	}
 	if _, err := tx.ExecContext(ctx,
-		"UPDATE migration_executions SET status=$2::text, error=$3, finished_at=CASE WHEN $2::text='failed' THEN now() ELSE finished_at END WHERE id=(SELECT execution_id FROM "+table+" WHERE id=$1)",
-		jobID, execStatus, errMsg); err != nil {
+		"UPDATE migration_executions SET status='failed', error=$2, finished_at=COALESCE(finished_at, now()) WHERE id=(SELECT execution_id FROM "+table+" WHERE id=$1)",
+		jobID, errMsg); err != nil {
 		return false, fmt.Errorf("queue: finish failed execution update: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
 		return false, fmt.Errorf("queue: finish failed commit: %w", err)
 	}
 	if retry {
-		observability.JobRetried()
+		metrics.ObserveOutcome("retry")
 	} else {
-		observability.JobFinished("failed")
+		metrics.ObserveOutcome("failed")
 	}
 	return retry, nil
 }
@@ -285,6 +277,13 @@ func (q *Queue) RequestCancel(ctx context.Context, jobID int) error {
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
 		return ErrTerminal
+	}
+	// A queued job is terminal right away; a running job lands its outcome
+	// when the worker records the stopped state.
+	var status string
+	if err := q.db.QueryRowContext(ctx,
+		"SELECT status FROM "+table+" WHERE id=$1", jobID).Scan(&status); err == nil && status == "cancelled" {
+		metrics.ObserveOutcome("cancelled")
 	}
 	return nil
 }

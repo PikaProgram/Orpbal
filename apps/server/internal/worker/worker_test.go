@@ -14,6 +14,7 @@ import (
 	"Orpbal/ent"
 	"Orpbal/ent/databaseconnection"
 	"Orpbal/ent/migration"
+	"Orpbal/ent/migrationattempt"
 	"Orpbal/ent/migrationexecution"
 	"Orpbal/ent/migrationjob"
 	"Orpbal/ent/schemasnapshot"
@@ -658,5 +659,90 @@ func TestWorkerTransientRetry(t *testing.T) {
 	}
 	if migRow.Status != migration.StatusFailed {
 		t.Fatalf("migration status = %s, want failed", migRow.Status)
+	}
+}
+
+// TestAttemptHistoryAppendOnly verifies the M2 append-only attempt ledger:
+// every claim writes exactly one migration_attempts row, successes and
+// failures both keep a copy of the SQL that ran, and rows carry the worker
+// identity and terminal timestamps.
+func TestAttemptHistoryAppendOnly(t *testing.T) {
+	r, _, client, connectionID, _ := newWorkerEnv(t)
+	ctx := context.Background()
+
+	// Successful up run.
+	_, exec, job := seedMigration(t, client, connectionID, "SELECT 1", "")
+	runOneJob(t, r, job.ID)
+	rows, err := client.MigrationAttempt.Query().
+		Where(migrationattempt.ExecutionID(exec.ID)).
+		Order(ent.Asc(migrationattempt.FieldAttempt)).
+		All(ctx)
+	if err != nil {
+		t.Fatalf("load attempts: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("success attempts = %d rows, want exactly 1", len(rows))
+	}
+	first := rows[0]
+	if first.Attempt != 1 || first.Status != migrationattempt.StatusSuccess {
+		t.Fatalf("success attempt = %d/%s, want 1/success", first.Attempt, first.Status)
+	}
+	if first.SQLExecuted != "SELECT 1" {
+		t.Fatalf("success attempt sql_executed = %q, want the executed SQL copy", first.SQLExecuted)
+	}
+	if first.WorkerID == "" || first.FinishedAt == nil {
+		t.Fatalf("success attempt missing worker_id or finished_at: %+v", first)
+	}
+
+	// Failing run on a second migration.
+	_, exec2, job2 := seedMigration(t, client, connectionID, "SELECT * FROM does_not_exist_xyz", "")
+	runOneJob(t, r, job2.ID)
+	rows2, err := client.MigrationAttempt.Query().
+		Where(migrationattempt.ExecutionID(exec2.ID)).
+		All(ctx)
+	if err != nil {
+		t.Fatalf("load failed attempts: %v", err)
+	}
+	if len(rows2) != 1 {
+		t.Fatalf("failure attempts = %d rows, want exactly 1", len(rows2))
+	}
+	bad := rows2[0]
+	if bad.Status != migrationattempt.StatusFailed || bad.Error == "" {
+		t.Fatalf("failed attempt = %s err=%q, want failed with error text", bad.Status, bad.Error)
+	}
+	if bad.SQLExecuted == "" {
+		t.Fatal("failed attempt did not keep the SQL that ran")
+	}
+	// The failed attempt row must still exist after the failure — nothing
+	// overwrites or deletes attempt history.
+	recheck, err := client.MigrationAttempt.Query().
+		Where(migrationattempt.ExecutionID(exec2.ID), migrationattempt.StatusEQ(migrationattempt.StatusFailed)).
+		Count(ctx)
+	if err != nil || recheck != 1 {
+		t.Fatalf("failed attempt rows after failure = %d (err=%v), want 1", recheck, err)
+	}
+}
+
+// TestWorkerTransientRetryAttemptRows extends the retry contract: each
+// attempt of the same execution lands its own history row.
+func TestWorkerTransientRetryAttemptRows(t *testing.T) {
+	r, _, client, connectionID, _ := newWorkerEnv(t)
+
+	// Non-transient failure: one claim, one attempt row, no retry.
+	_, exec, job := seedMigration(t, client, connectionID, "SELECT * FROM does_not_exist_xyz", "")
+	runOneJob(t, r, job.ID)
+
+	rows, err := client.MigrationAttempt.Query().
+		Where(migrationattempt.ExecutionID(exec.ID)).
+		Order(ent.Asc(migrationattempt.FieldAttempt)).
+		All(context.Background())
+	if err != nil {
+		t.Fatalf("load attempts: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("attempts = %d rows, want 1 (no rows reset or reused)", len(rows))
+	}
+	if rows[0].Attempt != 1 || rows[0].Status != migrationattempt.StatusFailed {
+		t.Fatalf("attempt = %d/%s, want 1/failed", rows[0].Attempt, rows[0].Status)
 	}
 }

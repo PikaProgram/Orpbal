@@ -16,11 +16,13 @@ import (
 
 	"Orpbal/ent"
 	"Orpbal/ent/migration"
+	"Orpbal/ent/migrationattempt"
 	"Orpbal/ent/migrationexecution"
 	"Orpbal/ent/migrationjob"
 	"Orpbal/ent/schemasnapshot"
-	"Orpbal/internal/observability"
+	"Orpbal/internal/metrics"
 	"Orpbal/internal/queue"
+	"Orpbal/internal/sqllog"
 	"Orpbal/internal/target"
 	"Orpbal/internal/tracing"
 
@@ -111,25 +113,50 @@ func (r *Runner) run(ctx context.Context, workerID string, job *queue.ClaimedJob
 		return
 	}
 
+	// Append-only attempt history: every claim of this job gets exactly one
+	// migration_attempts row (M2 spec — migration history records ALL
+	// attempts, successful or failed, and rows are never overwritten). The
+	// execution row keeps mirroring the live status for list views.
+	attempt, err := r.client.MigrationAttempt.Create().
+		SetExecutionID(exec.ID).
+		SetMigrationID(mig.ID).
+		SetConnectionID(job.ConnectionID).
+		SetAttempt(job.Attempts).
+		SetKind(migrationattempt.Kind(exec.Kind)).
+		SetStatus(migrationattempt.StatusRunning).
+		SetActorID(exec.ActorID).
+		SetWorkerID(workerID).
+		Save(ctx)
+	if err != nil {
+		log.Error().Err(err).Str("event", "attempt_record_error").Str("status", "failed").Msg("record attempt failed")
+		_, _ = r.queue.FinishFailed(context.Background(), job.ID, workerID, "record attempt: "+err.Error())
+		return
+	}
+	// Target-layer SQL audit logs inherit the full correlation set.
+	metrics.Attempts.WithLabelValues(string(exec.Kind)).Inc()
+	ctx = sqllog.Attach(ctx, log)
+
 	t, err := r.targets.Open(ctx, r.client, job.ConnectionID)
 	if err != nil {
 		log.Error().Err(err).Str("status", "failed").Msg("open target")
-		r.failExecution(ctx, job, workerID, exec, "open target: "+err.Error())
+		r.failExecution(ctx, job, workerID, exec, attempt, "open target: "+err.Error())
 		return
 	}
 
 	stopHeartbeat := make(chan struct{})
 	go r.heartbeat(context.Background(), job.ID, workerID, stopHeartbeat)
 
-	kind, status := r.execute(ctx, log, workerID, job, exec, mig, t)
+	kind, status := r.execute(ctx, log, workerID, job, exec, mig, t, attempt)
 
-	elapsed := time.Since(start)
-	observability.MigrationFinished(string(kind), elapsed)
-	if status == migrationexecution.StatusPartial || status == migrationexecution.StatusCancelled {
-		observability.JobFinished(string(status))
-	}
 	close(stopHeartbeat)
-	log = log.With().Int64("duration_ms", elapsed.Milliseconds()).Logger()
+	log = log.With().Int64("duration_ms", time.Since(start).Milliseconds()).Logger()
+
+	if status == migrationexecution.StatusRunning {
+		// Abandoned mid-run (e.g. checkpoint failure): the job goes stale and
+		// is reclaimed as a NEW attempt; this attempt row must not stay
+		// "running" forever in the append-only history.
+		r.finalizeAttempt(ctx, attempt, migrationattempt.StatusFailed, "", "abandoned before terminal state; job returned to the queue for reclaim", nil)
+	}
 
 	switch status {
 	case migrationexecution.StatusSuccess:
@@ -159,12 +186,39 @@ func (r *Runner) heartbeat(ctx context.Context, jobID int, workerID string, stop
 	}
 }
 
-// failExecution marks the execution failed, mirrors migration status, and
-// finishes the job through the queue (which decides retryability).
-func (r *Runner) failExecution(ctx context.Context, job *queue.ClaimedJob, workerID string, exec *ent.MigrationExecution, msg string) {
+// failExecution marks the execution failed, mirrors migration status, closes
+// the attempt row, and finishes the job through the queue (which decides
+// retryability).
+func (r *Runner) failExecution(ctx context.Context, job *queue.ClaimedJob, workerID string, exec *ent.MigrationExecution, attempt *ent.MigrationAttempt, msg string) {
 	_ = exec.Update().SetStatus(migrationexecution.StatusFailed).SetError(msg).SetNillableFinishedAt(now()).Exec(ctx)
 	_ = r.client.Migration.Update().Where(migration.ID(exec.MigrationID)).SetStatus(migration.StatusFailed).Exec(ctx)
+	r.finalizeAttempt(ctx, attempt, migrationattempt.StatusFailed, "", msg, nil)
 	_, _ = r.queue.FinishFailed(ctx, job.ID, workerID, msg)
+}
+
+// finalizeAttempt closes the attempt row exactly once with its terminal
+// outcome; attempt rows are append-only history and never reset afterwards.
+func (r *Runner) finalizeAttempt(ctx context.Context, attempt *ent.MigrationAttempt, status migrationattempt.Status, sqlExecuted, errText string, cursor *int64) {
+	if attempt == nil {
+		return
+	}
+	finish := now()
+	update := attempt.Update().
+		SetStatus(status).
+		SetNillableFinishedAt(finish)
+	if sqlExecuted != "" {
+		update.SetSQLExecuted(sqlExecuted)
+	}
+	if errText != "" {
+		update.SetError(errText)
+	}
+	if cursor != nil {
+		update.SetNillableBatchCursor(cursor)
+	}
+	if err := update.Exec(ctx); err != nil {
+		r.logger.Error().Err(err).Str("event", "attempt_close_error").
+			Int("attempt_id", attempt.ID).Msg("finalize attempt failed")
+	}
 }
 
 func now() *time.Time {
@@ -173,21 +227,21 @@ func now() *time.Time {
 }
 
 // execute runs the claimed execution per its kind and drives every terminal
-// state transition (execution, migration, job). Returns the kind and the
-// final execution status for logging.
-func (r *Runner) execute(ctx context.Context, log zerolog.Logger, workerID string, job *queue.ClaimedJob, exec *ent.MigrationExecution, mig *ent.Migration, t *target.Target) (migrationexecution.Kind, migrationexecution.Status) {
+// state transition (execution, migration, attempt, job). Returns the kind and
+// the final execution status for logging.
+func (r *Runner) execute(ctx context.Context, log zerolog.Logger, workerID string, job *queue.ClaimedJob, exec *ent.MigrationExecution, mig *ent.Migration, t *target.Target, attempt *ent.MigrationAttempt) (migrationexecution.Kind, migrationexecution.Status) {
 	switch exec.Kind {
 	case migrationexecution.KindUp, migrationexecution.KindForward, migrationexecution.KindRetry:
 		// Batch-mode data migrations walk a cursor template instead of one
 		// whole statement (spec: mode per batch).
 		if mig.BatchSize > 0 && strings.TrimSpace(mig.Template) != "" && strings.TrimSpace(mig.BatchTable) != "" {
-			return r.runBatch(ctx, log, workerID, job, exec, mig, t, mig.Template)
+			return r.runBatch(ctx, log, workerID, job, exec, mig, t, attempt, mig.Template)
 		}
-		return r.runNonBatch(ctx, log, workerID, job, exec, mig, t, mig.SQLUp)
+		return r.runNonBatch(ctx, log, workerID, job, exec, mig, t, attempt, mig.SQLUp)
 	case migrationexecution.KindRollback:
 		// Rollback always runs the migration's ORIGINAL sql_down (immutable
 		// per spec); never request-supplied SQL.
-		return r.runNonBatch(ctx, log, workerID, job, exec, mig, t, mig.SQLDown)
+		return r.runNonBatch(ctx, log, workerID, job, exec, mig, t, attempt, mig.SQLDown)
 	case migrationexecution.KindBatchRevert:
 		// Compensation SQL rides on the batch_revert execution itself
 		// (request-supplied at revert-approval time, stored in
@@ -196,44 +250,48 @@ func (r *Runner) execute(ctx context.Context, log zerolog.Logger, workerID strin
 		if strings.TrimSpace(template) == "" {
 			template = mig.SQLDown
 		}
-		return r.runBatch(ctx, log, workerID, job, exec, mig, t, template)
+		return r.runBatch(ctx, log, workerID, job, exec, mig, t, attempt, template)
 	default:
-		r.failExecution(ctx, job, workerID, exec, "unsupported execution kind "+string(exec.Kind))
+		r.failExecution(ctx, job, workerID, exec, attempt, "unsupported execution kind "+string(exec.Kind))
 		return exec.Kind, migrationexecution.StatusFailed
 	}
 }
 
 // runNonBatch executes one whole statement (no batching).
-func (r *Runner) runNonBatch(ctx context.Context, log zerolog.Logger, workerID string, job *queue.ClaimedJob, exec *ent.MigrationExecution, mig *ent.Migration, t *target.Target, statement string) (migrationexecution.Kind, migrationexecution.Status) {
+func (r *Runner) runNonBatch(ctx context.Context, log zerolog.Logger, workerID string, job *queue.ClaimedJob, exec *ent.MigrationExecution, mig *ent.Migration, t *target.Target, attempt *ent.MigrationAttempt, statement string) (migrationexecution.Kind, migrationexecution.Status) {
 	if strings.TrimSpace(statement) == "" {
-		r.failExecution(ctx, job, workerID, exec, "no SQL to execute")
+		r.failExecution(ctx, job, workerID, exec, attempt, "no SQL to execute")
 		return exec.Kind, migrationexecution.StatusFailed
 	}
-	// Immutable from here on: record exactly what ran.
+	// Immutable from here on: record exactly what ran (execution row mirrors
+	// the live attempt; the attempt row keeps the immutable copy).
 	if err := exec.Update().SetSQLExecuted(statement).SetStatus(migrationexecution.StatusRunning).Exec(ctx); err != nil {
-		r.failExecution(ctx, job, workerID, exec, "mark running: "+err.Error())
+		r.failExecution(ctx, job, workerID, exec, attempt, "mark running: "+err.Error())
 		return exec.Kind, migrationexecution.StatusFailed
+	}
+	if attempt != nil {
+		_ = attempt.Update().SetSQLExecuted(statement).Exec(ctx)
 	}
 	log.Info().Str("event", "exec_start").Str("status", "running").
 		Str("migration_id", fmt.Sprint(mig.ID)).Str("kind", string(exec.Kind)).
 		Str("sql", truncate(statement)).Msg("executing statement")
 
 	if err := r.captureSnapshot(ctx, t, exec.ID, mig.ID, schemasnapshot.PhaseBefore); err != nil {
-		r.failExecution(ctx, job, workerID, exec, "before snapshot: "+err.Error())
+		r.failExecution(ctx, job, workerID, exec, attempt, "before snapshot: "+err.Error())
 		return exec.Kind, migrationexecution.StatusFailed
 	}
 
 	start := time.Now()
 	if _, err := t.ExecuteArgs(ctx, statement, nil); err != nil {
 		log.Error().Err(err).Str("event", "exec_error").Str("sql", truncate(statement)).Msg("statement failed")
-		r.failExecution(ctx, job, workerID, exec, err.Error())
+		r.failExecution(ctx, job, workerID, exec, attempt, err.Error())
 		return exec.Kind, migrationexecution.StatusFailed
 	}
 	log.Info().Str("event", "exec_commit").Int64("duration_ms", time.Since(start).Milliseconds()).Msg("statement committed")
 
 	// Rollback: the migration leaves the active state; verify the link first.
 	if exec.Kind == migrationexecution.KindRollback && exec.RevertedExecutionID == nil {
-		r.failExecution(ctx, job, workerID, exec, "rollback execution missing reverted_execution_id")
+		r.failExecution(ctx, job, workerID, exec, attempt, "rollback execution missing reverted_execution_id")
 		return exec.Kind, migrationexecution.StatusFailed
 	}
 
@@ -246,9 +304,10 @@ func (r *Runner) runNonBatch(ctx context.Context, log zerolog.Logger, workerID s
 		SetStatus(migrationexecution.StatusSuccess).
 		SetNillableFinishedAt(&finish).
 		Exec(ctx); err != nil {
-		r.failExecution(ctx, job, workerID, exec, "mark success: "+err.Error())
+		r.failExecution(ctx, job, workerID, exec, attempt, "mark success: "+err.Error())
 		return exec.Kind, migrationexecution.StatusFailed
 	}
+	r.finalizeAttempt(ctx, attempt, migrationattempt.StatusSuccess, statement, "", nil)
 
 	// Migration rows mirror the latest execution status for the list view.
 	migStatus := migration.StatusSuccess
@@ -267,21 +326,24 @@ func (r *Runner) runNonBatch(ctx context.Context, log zerolog.Logger, workerID s
 // is one tx inside ExecuteArgs; the platform checkpoint is written right
 // AFTER the batch commit (no cross-DB 2PC; a crash between the two re-runs
 // one idempotent batch on reclaim — documented contract deviation).
-func (r *Runner) runBatch(ctx context.Context, log zerolog.Logger, workerID string, job *queue.ClaimedJob, exec *ent.MigrationExecution, mig *ent.Migration, t *target.Target, template string) (migrationexecution.Kind, migrationexecution.Status) {
+func (r *Runner) runBatch(ctx context.Context, log zerolog.Logger, workerID string, job *queue.ClaimedJob, exec *ent.MigrationExecution, mig *ent.Migration, t *target.Target, attempt *ent.MigrationAttempt, template string) (migrationexecution.Kind, migrationexecution.Status) {
 	if strings.TrimSpace(template) == "" || mig.BatchSize <= 0 || !identifier.MatchString(mig.CursorColumn) {
-		r.failExecution(ctx, job, workerID, exec, "batch migration missing template, batch_size, or valid cursor_column")
+		r.failExecution(ctx, job, workerID, exec, attempt, "batch migration missing template, batch_size, or valid cursor_column")
 		return exec.Kind, migrationexecution.StatusFailed
 	}
 	if err := exec.Update().SetSQLExecuted(template).SetStatus(migrationexecution.StatusRunning).Exec(ctx); err != nil {
-		r.failExecution(ctx, job, workerID, exec, "mark running: "+err.Error())
+		r.failExecution(ctx, job, workerID, exec, attempt, "mark running: "+err.Error())
 		return exec.Kind, migrationexecution.StatusFailed
+	}
+	if attempt != nil {
+		_ = attempt.Update().SetSQLExecuted(template).Exec(ctx)
 	}
 	log.Info().Str("event", "exec_start").Str("status", "running").
 		Str("migration_id", fmt.Sprint(mig.ID)).Str("kind", string(exec.Kind)).
 		Str("sql", truncate(template)).Msg("starting batch migration")
 
 	if err := r.captureSnapshot(ctx, t, exec.ID, mig.ID, schemasnapshot.PhaseBefore); err != nil {
-		r.failExecution(ctx, job, workerID, exec, "before snapshot: "+err.Error())
+		r.failExecution(ctx, job, workerID, exec, attempt, "before snapshot: "+err.Error())
 		return exec.Kind, migrationexecution.StatusFailed
 	}
 
@@ -320,7 +382,7 @@ func (r *Runner) runBatch(ctx context.Context, log zerolog.Logger, workerID stri
 
 	dialect := target.NewPostgresDialect()
 	if _, err := dialect.QuoteIdent(mig.CursorColumn); err != nil {
-		r.failExecution(ctx, job, workerID, exec, "invalid cursor column: "+mig.CursorColumn)
+		r.failExecution(ctx, job, workerID, exec, attempt, "invalid cursor column: "+mig.CursorColumn)
 		return exec.Kind, migrationexecution.StatusFailed
 	}
 
@@ -334,7 +396,7 @@ func (r *Runner) runBatch(ctx context.Context, log zerolog.Logger, workerID stri
 			if batchesDone > 0 {
 				status = migrationexecution.StatusPartial
 			}
-			return r.stopBatch(ctx, log, workerID, job, exec, mig, status, batchesDone, rowsDone)
+			return r.stopBatch(ctx, log, workerID, job, exec, mig, attempt, status, batchesDone, rowsDone)
 		}
 
 		// Probe the next upper bound: the smallest cursor value above `last`
@@ -342,7 +404,7 @@ func (r *Runner) runBatch(ctx context.Context, log zerolog.Logger, workerID stri
 		// batch_size rows), or max+1 when the tail is smaller than a batch.
 		upper, err := r.probeUpper(ctx, t, mig.BatchTable, mig.CursorColumn, last, maxID, batchSize)
 		if err != nil {
-			r.failExecution(ctx, job, workerID, exec, "cursor probe: "+err.Error())
+			r.failExecution(ctx, job, workerID, exec, attempt, "cursor probe: "+err.Error())
 			return exec.Kind, migrationexecution.StatusFailed
 		}
 		if upper > maxID {
@@ -351,7 +413,7 @@ func (r *Runner) runBatch(ctx context.Context, log zerolog.Logger, workerID stri
 
 		statement, rErr := render(last, upper)
 		if rErr != nil {
-			r.failExecution(ctx, job, workerID, exec, "render template: "+rErr.Error())
+			r.failExecution(ctx, job, workerID, exec, attempt, "render template: "+rErr.Error())
 			return exec.Kind, migrationexecution.StatusFailed
 		}
 
@@ -359,19 +421,24 @@ func (r *Runner) runBatch(ctx context.Context, log zerolog.Logger, workerID stri
 		affected, err := t.ExecuteArgs(ctx, statement, nil)
 		if err != nil {
 			log.Error().Err(err).Str("event", "batch_error").Str("sql", truncate(statement)).Msg("batch failed")
-			r.failExecution(ctx, job, workerID, exec, err.Error())
+			r.failExecution(ctx, job, workerID, exec, attempt, err.Error())
 			return exec.Kind, migrationexecution.StatusFailed
 		}
 		batchesDone++
 		rowsDone += affected
-		batchElapsed := time.Since(batchStart)
-		observability.BatchCommitted(string(exec.Kind), affected, batchElapsed)
+		metrics.BatchesCommitted.Inc()
+		metrics.BatchRows.Add(float64(affected))
 		log.Info().
 			Str("event", "batch_commit").
 			Int("batch", batchesDone).
 			Int64("rows", affected).
-			Int64("duration_ms", batchElapsed.Milliseconds()).
+			Int64("duration_ms", time.Since(batchStart).Milliseconds()).
 			Msg("batch committed")
+		if attempt != nil {
+			// Live progress on the running attempt row; terminal state lands
+			// once via finalizeAttempt.
+			_ = attempt.Update().SetBatchesDone(batchesDone).SetRowsDone(rowsDone).Exec(ctx)
+		}
 
 		// Checkpoint AFTER commit; on error abort without touching statuses —
 		// the job goes stale and gets reclaimed, re-running this batch
@@ -397,10 +464,11 @@ func (r *Runner) runBatch(ctx context.Context, log zerolog.Logger, workerID stri
 		SetBatchesDone(batchesDone).
 		SetRowsDone(rowsDone).
 		Exec(ctx); err != nil {
-		r.failExecution(ctx, job, workerID, exec, "mark success: "+err.Error())
+		r.failExecution(ctx, job, workerID, exec, attempt, "mark success: "+err.Error())
 		return exec.Kind, migrationexecution.StatusFailed
 	}
 	_ = r.client.Migration.Update().Where(migration.ID(mig.ID)).SetStatus(migration.StatusSuccess).Exec(ctx)
+	r.finalizeAttempt(ctx, attempt, migrationattempt.StatusSuccess, template, "", &maxID)
 	if err := r.queue.FinishSuccess(ctx, job.ID, workerID); err != nil {
 		log.Error().Err(err).Str("event", "finish_error").Msg("job finish failed; execution stays success")
 	}
@@ -409,8 +477,8 @@ func (r *Runner) runBatch(ctx context.Context, log zerolog.Logger, workerID stri
 }
 
 // stopBatch lands the terminal "stopped" state (cancelled or partial) on
-// execution, migration, and job.
-func (r *Runner) stopBatch(ctx context.Context, log zerolog.Logger, workerID string, job *queue.ClaimedJob, exec *ent.MigrationExecution, mig *ent.Migration, status migrationexecution.Status, batchesDone int, rowsDone int64) (migrationexecution.Kind, migrationexecution.Status) {
+// execution, migration, attempt, and job.
+func (r *Runner) stopBatch(ctx context.Context, log zerolog.Logger, workerID string, job *queue.ClaimedJob, exec *ent.MigrationExecution, mig *ent.Migration, attempt *ent.MigrationAttempt, status migrationexecution.Status, batchesDone int, rowsDone int64) (migrationexecution.Kind, migrationexecution.Status) {
 	finish := time.Now()
 	if err := exec.Update().
 		SetStatus(status).
@@ -426,6 +494,14 @@ func (r *Runner) stopBatch(ctx context.Context, log zerolog.Logger, workerID str
 	}
 	_ = r.client.Migration.Update().Where(migration.ID(mig.ID)).SetStatus(migStatus).Exec(ctx)
 
+	// Attempt history keeps the stopped outcome (partial rows stay visible).
+	attemptStatus := migrationattempt.StatusCancelled
+	if status == migrationexecution.StatusPartial {
+		attemptStatus = migrationattempt.StatusPartial
+	}
+	cursor := exec.BatchCursor
+	r.finalizeAttempt(ctx, attempt, attemptStatus, "", "", cursor)
+
 	// Job mirrors: partial keeps the checkpoint for a later retry/revert.
 	jobStatus := "cancelled"
 	if status == migrationexecution.StatusPartial {
@@ -438,16 +514,13 @@ func (r *Runner) stopBatch(ctx context.Context, log zerolog.Logger, workerID str
 // finishJobStatus writes a terminal job status directly (cancel/partial path;
 // FinishSuccess/FinishFailed cover the rest).
 func (r *Runner) finishJobStatus(ctx context.Context, jobID int, workerID string, status string) error {
-	err := r.client.MigrationJob.Update().
+	metrics.ObserveOutcome(status)
+	return r.client.MigrationJob.Update().
 		Where(migrationjob.ID(jobID), migrationjob.LockedBy(workerID)).
 		SetStatus(migrationjob.Status(status)).
 		SetNillableFinishedAt(now()).
 		ClearLockedBy().
 		Exec(ctx)
-	if err == nil {
-		observability.JobFinished(status)
-	}
-	return err
 }
 
 // probeUpper returns MIN(cursor) above last within (last, max_id], or

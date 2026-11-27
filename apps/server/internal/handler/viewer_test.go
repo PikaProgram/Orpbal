@@ -269,11 +269,30 @@ func TestMigrationLifecycle(t *testing.T) {
 	}
 
 	// The second group's leader approves: now every required leader is in.
+	// The FIRST final-approval attempt must be refused: version 1 of this
+	// database is still a draft, and linear history requires it to be applied
+	// before version 2 can run (version_order guard).
 	var secondApprovalID int
 	for _, a := range submitted.Approvals {
 		if a.Id != submitted.Approvals[0].Id {
 			secondApprovalID = a.Id
 		}
+	}
+	rec = env.do(http.MethodPost, fmt.Sprintf("/api/approvals/%d/approve", secondApprovalID),
+		nil, leaderCookie, leaderCSRF)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("approve with earlier draft migration status = %d, body = %s; want 409 version_order", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "version_order") {
+		t.Fatalf("approve with earlier draft migration body = %s; want version_order error", rec.Body.String())
+	}
+
+	// Remove the still-draft version 1 so version 2 becomes runnable, then
+	// the same pending approval can be decided.
+	rec = env.do(http.MethodDelete, fmt.Sprintf("/api/databases/%d/migrations/%d", connectionID, first.Id),
+		nil, userCookie, userCSRF)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("delete draft migration status = %d, body = %s", rec.Code, rec.Body.String())
 	}
 	rec = env.do(http.MethodPost, fmt.Sprintf("/api/approvals/%d/approve", secondApprovalID),
 		nil, leaderCookie, leaderCSRF)
@@ -386,8 +405,16 @@ func TestMigrationLifecycle(t *testing.T) {
 		t.Fatalf("failed migration status = %q, want failed", failedStatus)
 	}
 
-	// A draft can still be edited and deleted; executed ones cannot.
-	rec = env.do(http.MethodPatch, fmt.Sprintf("/api/databases/%d/migrations/%d", connectionID, first.Id),
+	// A draft can still be edited and deleted; executed ones cannot. The
+	// version-1 draft was removed by the version-order check above, so a
+	// fresh draft exercises the draft-only edit/delete rules.
+	rec = env.do(http.MethodPost, fmt.Sprintf("/api/databases/%d/migrations", connectionID),
+		map[string]any{"sql_up": "SELECT 1"}, userCookie, userCSRF)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create scratch draft migration status = %d", rec.Code)
+	}
+	scratch := decode[api.Migration](t, rec)
+	rec = env.do(http.MethodPatch, fmt.Sprintf("/api/databases/%d/migrations/%d", connectionID, scratch.Id),
 		map[string]any{"sql_up": "SELECT 1"}, userCookie, userCSRF)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("update draft migration status = %d, body = %s", rec.Code, rec.Body.String())
@@ -397,7 +424,7 @@ func TestMigrationLifecycle(t *testing.T) {
 	if rec.Code != http.StatusConflict {
 		t.Fatalf("update executed migration status = %d, want 409", rec.Code)
 	}
-	rec = env.do(http.MethodDelete, fmt.Sprintf("/api/databases/%d/migrations/%d", connectionID, first.Id),
+	rec = env.do(http.MethodDelete, fmt.Sprintf("/api/databases/%d/migrations/%d", connectionID, scratch.Id),
 		nil, userCookie, userCSRF)
 	if rec.Code != http.StatusNoContent {
 		t.Fatalf("delete draft migration status = %d, body = %s", rec.Code, rec.Body.String())

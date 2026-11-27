@@ -51,6 +51,8 @@ const (
 	EdgeReverted = "reverted"
 	// EdgeJobs holds the string denoting the jobs edge name in mutations.
 	EdgeJobs = "jobs"
+	// EdgeAttempts holds the string denoting the attempts edge name in mutations.
+	EdgeAttempts = "attempts"
 	// EdgeSnapshots holds the string denoting the snapshots edge name in mutations.
 	EdgeSnapshots = "snapshots"
 	// Table holds the table name of the migrationexecution in the database.
@@ -80,6 +82,13 @@ const (
 	JobsInverseTable = "migration_jobs"
 	// JobsColumn is the table column denoting the jobs relation/edge.
 	JobsColumn = "execution_id"
+	// AttemptsTable is the table that holds the attempts relation/edge.
+	AttemptsTable = "migration_attempts"
+	// AttemptsInverseTable is the table name for the MigrationAttempt entity.
+	// It exists in this package in order to avoid circular dependency with the "migrationattempt" package.
+	AttemptsInverseTable = "migration_attempts"
+	// AttemptsColumn is the table column denoting the attempts relation/edge.
+	AttemptsColumn = "execution_id"
 	// SnapshotsTable is the table that holds the snapshots relation/edge.
 	SnapshotsTable = "schema_snapshots"
 	// SnapshotsInverseTable is the table name for the SchemaSnapshot entity.
@@ -302,6 +311,20 @@ func ByJobs(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	}
 }
 
+// ByAttemptsCount orders the results by attempts count.
+func ByAttemptsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newAttemptsStep(), opts...)
+	}
+}
+
+// ByAttempts orders the results by attempts terms.
+func ByAttempts(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newAttemptsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
 // BySnapshotsCount orders the results by snapshots count.
 func BySnapshotsCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -341,6 +364,13 @@ func newJobsStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(JobsInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, JobsTable, JobsColumn),
+	)
+}
+func newAttemptsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(AttemptsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, AttemptsTable, AttemptsColumn),
 	)
 }
 func newSnapshotsStep() *sqlgraph.Step {

@@ -11,6 +11,7 @@ import (
 	"Orpbal/ent/databasegrant"
 	"Orpbal/ent/migration"
 	"Orpbal/ent/migrationapproval"
+	"Orpbal/ent/migrationattempt"
 	"Orpbal/ent/migrationexecution"
 	"Orpbal/ent/platformuser"
 	"Orpbal/internal/access"
@@ -28,7 +29,9 @@ func (h *Handler) ListMigrations(c *gin.Context, id api.Id, params api.ListMigra
 	entries, err := h.client.Migration.Query().
 		Where(migration.ConnectionID(int(id))).
 		WithExecutions(func(q *ent.MigrationExecutionQuery) {
-			q.WithActor().WithSnapshots().Order(ent.Desc(migrationexecution.FieldCreatedAt))
+			q.WithActor().WithSnapshots().WithAttempts(func(aq *ent.MigrationAttemptQuery) {
+				aq.Order(ent.Asc(migrationattempt.FieldAttempt))
+			}).Order(ent.Desc(migrationexecution.FieldCreatedAt))
 		}).
 		WithApprovals().
 		Order(ent.Asc(migration.FieldVersion)).
@@ -192,7 +195,9 @@ func (h *Handler) writeMigrationResult(c *gin.Context, entry *ent.Migration, err
 	loaded, err := h.client.Migration.Query().
 		Where(migration.ID(entry.ID)).
 		WithExecutions(func(q *ent.MigrationExecutionQuery) {
-			q.WithActor().WithSnapshots().Order(ent.Desc(migrationexecution.FieldCreatedAt))
+			q.WithActor().WithSnapshots().WithAttempts(func(aq *ent.MigrationAttemptQuery) {
+				aq.Order(ent.Asc(migrationattempt.FieldAttempt))
+			}).Order(ent.Desc(migrationexecution.FieldCreatedAt))
 		}).
 		WithApprovals().
 		Only(c.Request.Context())
@@ -218,6 +223,8 @@ func (h *Handler) writeServiceError(c *gin.Context, err error) bool {
 		writeError(c, http.StatusConflict, "no_leader", "group has no leader")
 	case errors.Is(err, service.ErrNotLeader):
 		writeError(c, http.StatusForbidden, "forbidden", "only the current group leader can decide approvals")
+	case errors.Is(err, service.ErrVersionOrder):
+		writeError(c, http.StatusConflict, "version_order", err.Error())
 	case errors.Is(err, service.ErrConflict):
 		writeError(c, http.StatusConflict, "conflict", err.Error())
 	default:
@@ -366,9 +373,14 @@ func toAPIJobSimple(job *ent.MigrationJob) api.Job {
 	return out
 }
 
-// toAPIExecution maps an execution to the API shape.
+// toAPIExecution maps an execution to the API shape, including its
+// append-only per-attempt history.
 func (h *Handler) toAPIExecution(ctx context.Context, e *ent.MigrationExecution, snapshots []api.SchemaSnapshotInfo) api.Execution {
-	names := h.userNames(ctx, e.ActorID)
+	ids := []int{e.ActorID}
+	for _, a := range e.Edges.Attempts {
+		ids = append(ids, a.ActorID)
+	}
+	names := h.userNames(ctx, ids...)
 	out := api.Execution{
 		Id:            e.ID,
 		MigrationId:   e.MigrationID,
@@ -391,6 +403,43 @@ func (h *Handler) toAPIExecution(ctx context.Context, e *ent.MigrationExecution,
 	out.RevertedExecutionId = e.RevertedExecutionID
 	out.BatchCursor = e.BatchCursor
 	out.FinishedAt = e.FinishedAt
+	attempts := make([]api.MigrationAttempt, 0, len(e.Edges.Attempts))
+	for _, a := range e.Edges.Attempts {
+		attempts = append(attempts, toAPIAttempt(names, a))
+	}
+	out.Attempts = &attempts
+	return out
+}
+
+// toAPIAttempt maps one append-only attempt row to the API shape.
+func toAPIAttempt(names map[int]string, a *ent.MigrationAttempt) api.MigrationAttempt {
+	out := api.MigrationAttempt{
+		Id:           a.ID,
+		MigrationId:  a.MigrationID,
+		ExecutionId:  a.ExecutionID,
+		ConnectionId: a.ConnectionID,
+		Attempt:      a.Attempt,
+		Kind:         api.ExecutionKind(a.Kind),
+		Status:       api.MigrationAttemptStatus(a.Status),
+		ActorId:      a.ActorID,
+		BatchesDone:  a.BatchesDone,
+		RowsDone:     a.RowsDone,
+		StartedAt:    a.StartedAt,
+	}
+	if name := names[a.ActorID]; name != "" {
+		out.ActorUsername = &name
+	}
+	if a.WorkerID != "" {
+		out.WorkerId = &a.WorkerID
+	}
+	if a.SQLExecuted != "" {
+		out.SqlExecuted = &a.SQLExecuted
+	}
+	if a.Error != "" {
+		out.Error = &a.Error
+	}
+	out.BatchCursor = a.BatchCursor
+	out.FinishedAt = a.FinishedAt
 	return out
 }
 

@@ -4,6 +4,7 @@ package ent
 
 import (
 	"Orpbal/ent/migration"
+	"Orpbal/ent/migrationattempt"
 	"Orpbal/ent/migrationexecution"
 	"Orpbal/ent/migrationjob"
 	"Orpbal/ent/platformuser"
@@ -222,6 +223,21 @@ func (mec *MigrationExecutionCreate) AddJobs(m ...*MigrationJob) *MigrationExecu
 		ids[i] = m[i].ID
 	}
 	return mec.AddJobIDs(ids...)
+}
+
+// AddAttemptIDs adds the "attempts" edge to the MigrationAttempt entity by IDs.
+func (mec *MigrationExecutionCreate) AddAttemptIDs(ids ...int) *MigrationExecutionCreate {
+	mec.mutation.AddAttemptIDs(ids...)
+	return mec
+}
+
+// AddAttempts adds the "attempts" edges to the MigrationAttempt entity.
+func (mec *MigrationExecutionCreate) AddAttempts(m ...*MigrationAttempt) *MigrationExecutionCreate {
+	ids := make([]int, len(m))
+	for i := range m {
+		ids[i] = m[i].ID
+	}
+	return mec.AddAttemptIDs(ids...)
 }
 
 // AddSnapshotIDs adds the "snapshots" edge to the SchemaSnapshot entity by IDs.
@@ -475,6 +491,22 @@ func (mec *MigrationExecutionCreate) createSpec() (*MigrationExecution, *sqlgrap
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(migrationjob.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := mec.mutation.AttemptsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   migrationexecution.AttemptsTable,
+			Columns: []string{migrationexecution.AttemptsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(migrationattempt.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {

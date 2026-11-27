@@ -16,6 +16,7 @@ import {
 	type Approval,
 	type Execution,
 	type Migration,
+	type MigrationAttempt,
 	type MigrationStatus,
 } from "@/lib/migrations";
 import { useLoad, useMutation } from "@/lib/useApi";
@@ -26,7 +27,7 @@ const TEMPLATE_PLACEHOLDER =
 	"UPDATE notes SET archived = true WHERE id > {{last_id}} AND id <= {{last_id}} + {{batch_size}} -- scope {{min_id}}..{{max_id}}";
 
 function statusClass(status: MigrationStatus | string): string {
-	if (status === "success" || status === "approved") return "border-ok/40 bg-ok/10 text-ok";
+	if (status === "success") return "border-ok/40 bg-ok/10 text-ok";
 	if (status === "failed") return "border-error/40 bg-error/10 text-error";
 	if (status === "cancelled" || status === "rejected") return "border-dim/40 bg-dim/10 text-dim";
 	return "border-warning/40 bg-warning/10 text-warning";
@@ -36,19 +37,45 @@ function StatusBadge({ status }: { status: string }) {
 	return <span className={`border px-2 py-1 text-xs ${statusClass(status)}`}>{status.replace("_", " ")}</span>;
 }
 
+function AttemptRow({ attempt }: { attempt: MigrationAttempt }) {
+	return (
+		<li className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-dim">
+			<span className="mono">attempt #{attempt.attempt}</span>
+			<span className={`border px-1.5 py-0.5 ${statusClass(attempt.status)}`}>{attempt.status}</span>
+			{(attempt.rows_done !== undefined || attempt.batches_done !== undefined) && (
+				<span className="mono">
+					{attempt.batches_done ?? 0} batches · {attempt.rows_done ?? 0} rows
+				</span>
+			)}
+			{attempt.actor_username && <span>by {attempt.actor_username}</span>}
+			{attempt.worker_id && <span className="mono">worker {attempt.worker_id}</span>}
+			{attempt.error && <span className="text-error">{attempt.error}</span>}
+		</li>
+	);
+}
+
 function ExecutionRow({ execution }: { execution: Execution }) {
 	const isBatch = execution.batches_done !== undefined || execution.rows_done !== undefined;
 	return (
-		<li className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-			<span className="mono font-semibold text-brass-lit">{execution.kind.replace("_", " ")}</span>
-			<span className={`border px-1.5 py-0.5 ${statusClass(execution.status)}`}>{execution.status}</span>
-			{isBatch && (
-				<span className="mono text-dim">
-					{execution.batches_done ?? 0} batches · {execution.rows_done ?? 0} rows
-				</span>
+		<li className="flex flex-col gap-1 text-xs">
+			<div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+				<span className="mono font-semibold text-brass-lit">{execution.kind.replace("_", " ")}</span>
+				<span className={`border px-1.5 py-0.5 ${statusClass(execution.status)}`}>{execution.status}</span>
+				{isBatch && (
+					<span className="mono text-dim">
+						{execution.batches_done ?? 0} batches · {execution.rows_done ?? 0} rows
+					</span>
+				)}
+				<span className="text-dim">by {execution.actor_username || `#${execution.actor_id}`}</span>
+				{execution.error && <span className="text-error">{execution.error}</span>}
+			</div>
+			{(execution.attempts?.length ?? 0) > 0 && (
+				<ul className="ml-4 list-none space-y-1 border-l-2 border-seam pl-3">
+					{execution.attempts!.map((attempt) => (
+						<AttemptRow key={attempt.id} attempt={attempt} />
+					))}
+				</ul>
 			)}
-			<span className="text-dim">by {execution.actor_username || `#${execution.actor_id}`}</span>
-			{execution.error && <span className="text-error">{execution.error}</span>}
 		</li>
 	);
 }
@@ -396,7 +423,6 @@ function MigrationCard(props: {
 							</button>
 						</>
 					)}
-					{migration.status === "approved" && <span className="text-xs text-ok">Ready</span>}
 					{migration.status === "success" && (
 						<span title={migration.irreversible || !hasDown ? "This migration cannot be rolled back" : undefined}>
 							<button

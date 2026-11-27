@@ -5,7 +5,8 @@ package main
 import (
 	"context"
 	"database/sql"
-	"io"
+	"errors"
+	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
@@ -18,43 +19,38 @@ import (
 
 	"Orpbal/ent"
 	"Orpbal/ent/migrate"
-	"Orpbal/internal/observability"
+	"Orpbal/internal/metrics"
 	"Orpbal/internal/queue"
 	"Orpbal/internal/security/crypto"
 	"Orpbal/internal/target"
+	"Orpbal/internal/tracing"
 	"Orpbal/internal/worker"
 )
 
 var logger zerolog.Logger
 
-func initLogger(base io.Writer) {
-	if !observability.JSONLogs() {
-		base = zerolog.ConsoleWriter{Out: base}
+// initLogger emits structured JSON to stdout in every environment (M2
+// requires machine-readable activity logs); console format is opt-in via
+// LOG_FORMAT=console for local development.
+func initLogger() {
+	if os.Getenv("LOG_FORMAT") == "console" {
+		logger = zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr}).With().Timestamp().Logger()
+	} else {
+		logger = zerolog.New(os.Stdout).With().Timestamp().Logger()
 	}
-	logger = zerolog.New(base).With().Timestamp().Logger()
 }
 
 func main() {
 	godotenv.Load()
 
-	telemetry, err := observability.Init(observability.ServiceName("orpbal-worker"), os.Stdout)
-	if err != nil {
-		// No zerolog logger yet; keep local startup visible.
-		_, _ = io.WriteString(os.Stderr, "telemetry init failed: "+err.Error()+"\n")
-	}
-	defer func() {
-		if telemetry != nil {
-			_ = telemetry.Shutdown(context.Background())
-		}
-	}()
-
-	var logOutput io.Writer = os.Stdout
-	if telemetry != nil {
-		logOutput = telemetry.LogWriter
-	}
-	initLogger(logOutput)
+	initLogger()
 
 	logger.Info().Str("event", "startup").Msg("Starting Orpbal worker")
+
+	shutdownTracing, err := tracing.Init("orpbal-worker")
+	if err != nil {
+		logger.Warn().Err(err).Msg("Tracing init failed; continuing without spans")
+	}
 
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
@@ -98,17 +94,6 @@ func main() {
 	}
 	logger.Info().Str("event", "startup").Msg("Platform database ready")
 
-	observability.RegisterDB(db, "platform", false)
-	metricsAddr := os.Getenv("ORPBAL_METRICS_ADDR")
-	if metricsAddr == "" {
-		metricsAddr = ":9090"
-	}
-	if err := observability.StartMetricsServer(ctx, metricsAddr); err != nil {
-		logger.Warn().Err(err).Str("event", "metrics_start_error").Msg("metrics endpoint unavailable")
-	} else {
-		logger.Info().Str("event", "metrics_ready").Str("address", metricsAddr).Msg("Worker metrics ready")
-	}
-
 	cipher, err := crypto.NewFromBase64(encodedKey)
 	if err != nil {
 		logger.Fatal().Err(err).Msg("Invalid ORPBAL_ENCRYPTION_KEY")
@@ -120,6 +105,32 @@ func main() {
 
 	runCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	// Prometheus scrape endpoint for the worker (claims, outcomes, batch
+	// throughput). WORKER_METRICS_ADDR defaults to :9102.
+	metricsAddr := os.Getenv("WORKER_METRICS_ADDR")
+	if metricsAddr == "" {
+		metricsAddr = ":9102"
+	}
+	metricsServer := &http.Server{Addr: metricsAddr, Handler: metrics.Handler()}
+	go func() {
+		logger.Info().Str("event", "startup").Str("address", metricsAddr).Msg("Worker metrics server listening")
+		if err := metricsServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			logger.Error().Err(err).Str("event", "metrics_server_error").Msg("Worker metrics server failed")
+		}
+	}()
+	go func() {
+		<-runCtx.Done()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		_ = metricsServer.Shutdown(shutdownCtx)
+	}()
+
+	go func() {
+		if err := shutdownTracing(runCtx); err != nil {
+			logger.Warn().Err(err).Msg("Tracing shutdown failed")
+		}
+	}()
 
 	logger.Info().Str("event", "startup").Str("worker_id", workerID).Msg("Worker polling for jobs")
 	runner.Run(runCtx, workerID, pollInterval)

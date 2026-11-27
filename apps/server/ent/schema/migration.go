@@ -72,6 +72,8 @@ func (Migration) Edges() []ent.Edge {
 		edge.
 			To("executions", MigrationExecution.Type),
 		edge.
+			To("attempts", MigrationAttempt.Type),
+		edge.
 			To("approvals", MigrationApproval.Type),
 		edge.
 			To("snapshots", SchemaSnapshot.Type),

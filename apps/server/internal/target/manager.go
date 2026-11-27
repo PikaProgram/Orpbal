@@ -54,11 +54,22 @@ func (m *Manager) Invalidate(dsn string) {
 }
 
 // Open resolves one managed connection: ent lookup (enabled only), password
-// decrypt, dsn.Config assembly, pool open, dialect selection.
+// decrypt, dsn.Config assembly, pool open, dialect selection. The returned
+// Target carries its logical identity (id, name, engine) so the SQL audit
+// log can name the database on every line.
 func (m *Manager) Open(ctx context.Context, client *ent.Client, id int) (*Target, error) {
-	connection, err := client.DatabaseConnection.Query().
-		Where(databaseconnection.ID(id), databaseconnection.IsEnabled(true)).
-		Only(ctx)
+	return m.OpenByID(ctx, client, id, true)
+}
+
+// OpenByID resolves one managed connection by id; requireEnabled=false lets
+// the admin test a disabled connection with its stored credentials before
+// re-enabling it.
+func (m *Manager) OpenByID(ctx context.Context, client *ent.Client, id int, requireEnabled bool) (*Target, error) {
+	query := client.DatabaseConnection.Query().Where(databaseconnection.ID(id))
+	if requireEnabled {
+		query = query.Where(databaseconnection.IsEnabled(true))
+	}
+	connection, err := query.Only(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -66,7 +77,14 @@ func (m *Manager) Open(ctx context.Context, client *ent.Client, id int) (*Target
 	if err != nil {
 		return nil, err
 	}
-	return m.Target(stored)
+	t, err := m.Target(stored)
+	if err != nil {
+		return nil, err
+	}
+	t.ID = connection.ID
+	t.Name = connection.Name
+	t.Engine = string(connection.Engine)
+	return t, nil
 }
 
 // Target resolves one stored DSN directly (pool + dialect selection).

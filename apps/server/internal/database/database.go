@@ -9,32 +9,37 @@ import (
 	"Orpbal/ent"
 	"Orpbal/ent/migrate"
 
+	"entgo.io/ent/dialect"
 	entsql "entgo.io/ent/dialect/sql"
+
 	_ "github.com/lib/pq"
 )
 
-var (
-	client *ent.Client
-	rawDB  *sql.DB
-)
+var client *ent.Client
+var rawDB *sql.DB
 
 // InitDB opens the PlatformDatabase and applies the non-destructive Ent schema.
-// DATABASE_URL is required: the platform does not fall back to SQLite.
+// DATABASE_URL is required: the platform does not fall back to SQLite. One
+// shared *sql.DB backs both the ent client and direct-SQL consumers (queue
+// gauges), so pool settings stay consistent.
 func InitDB(ctx context.Context) (*ent.Client, error) {
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
 		return nil, fmt.Errorf("DATABASE_URL is required")
 	}
 
-	// Keep the *sql.DB handle so observability can expose pool stats without
-	// opening a second connection pool.
 	db, err := sql.Open("postgres", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)
 	}
-	c := ent.NewClient(ent.Driver(entsql.OpenDB("postgres", db)))
+	if err := db.PingContext(ctx); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("ping database: %w", err)
+	}
+	drv := entsql.OpenDB(dialect.Postgres, db)
+	c := ent.NewClient(ent.Driver(drv))
 	if err := c.Schema.Create(ctx, migrate.WithDropColumn(false), migrate.WithDropIndex(false)); err != nil {
-		_ = c.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("migrate database: %w", err)
 	}
 
@@ -43,8 +48,9 @@ func InitDB(ctx context.Context) (*ent.Client, error) {
 	return client, nil
 }
 
-// RawDB returns the pool behind the Ent client for Prometheus DB stats.
-func RawDB() *sql.DB { return rawDB }
+// SQLDB returns the raw platform pool (metrics gauge refresh and other
+// direct-SQL consumers). Nil before InitDB.
+func SQLDB() *sql.DB { return rawDB }
 
 // GetClient returns the initialized Ent client.
 func GetClient() *ent.Client {

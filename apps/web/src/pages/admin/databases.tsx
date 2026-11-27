@@ -1,7 +1,7 @@
 import { useState, type SubmitEvent } from "react";
 
 import { useSession } from "@/auth/session";
-import { api, type DatabaseConnection } from "@/lib/api";
+import { api, ApiError, type DatabaseConnection } from "@/lib/api";
 import { useAction, useLoad, useMutation, type MutationState } from "@/lib/useApi";
 
 const engines = [
@@ -154,6 +154,8 @@ function ConnectionSection(props: { connection: DatabaseConnection; csrf: string
 	const { connection, csrf, mutation } = props;
 	const [editing, setEditing] = useState(false);
 	const [edit, setEdit] = useState<ConnectionForm | null>(null);
+	const [testing, setTesting] = useState(false);
+	const [testNote, setTestNote] = useState<string | null>(null);
 
 	const startEdit = () =>
 		setEdit({
@@ -171,6 +173,24 @@ function ConnectionSection(props: { connection: DatabaseConnection; csrf: string
 		const body: Record<string, unknown> = { ...edit };
 		if (!edit.password) delete body.password;
 		await api(`/admin/databases/${connection.id}`, { method: "PATCH", body, csrf });
+	};
+
+	const runTest = async () => {
+		setTesting(true);
+		setTestNote(null);
+		try {
+			await api<{ reachable: boolean }>(`/admin/databases/${connection.id}/test`, { method: "POST", csrf });
+			setTestNote("Target reachable.");
+		} catch (err) {
+			setTestNote(err instanceof ApiError ? err.message : "Request failed");
+		} finally {
+			setTesting(false);
+		}
+	};
+
+	const remove = async () => {
+		if (!window.confirm(`Delete connection "${connection.name}"? Connections with migration history are refused; disable them instead.`)) return;
+		await mutation.run(() => api(`/admin/databases/${connection.id}`, { method: "DELETE", csrf }));
 	};
 
 	return (
@@ -192,7 +212,7 @@ function ConnectionSection(props: { connection: DatabaseConnection; csrf: string
 				</div>
 			</div>
 
-			<div className="mb-2">
+			<div className="mb-2 flex flex-wrap items-center gap-2">
 				<button
 					type="button"
 					disabled={mutation.busy}
@@ -209,6 +229,18 @@ function ConnectionSection(props: { connection: DatabaseConnection; csrf: string
 				>
 					{connection.is_enabled ? "Disable" : "Enable"}
 				</button>
+				<button type="button" disabled={testing} className={quietButtonClass} onClick={() => void runTest()}>
+					{testing ? "Testing…" : "Test connection"}
+				</button>
+				<button
+					type="button"
+					disabled={mutation.busy}
+					className="px-3 py-1.5 text-xs text-error underline"
+					onClick={() => void remove()}
+				>
+					Delete
+				</button>
+				{testNote && <span className={`text-xs ${testNote.startsWith("Target reachable") ? "text-emerald-400" : "text-error"}`}>{testNote}</span>}
 			</div>
 
 			<div className="border-t-2 border-seam pt-3">

@@ -9,6 +9,7 @@ import (
 	"Orpbal/ent/groupmembership"
 	"Orpbal/ent/migration"
 	"Orpbal/ent/migrationapproval"
+	"Orpbal/ent/migrationattempt"
 	"Orpbal/ent/migrationexecution"
 	"Orpbal/ent/migrationjob"
 	"Orpbal/ent/platformuser"
@@ -89,6 +90,7 @@ func checkColumn(table, column string) error {
 			groupmembership.Table:    groupmembership.ValidColumn,
 			migration.Table:          migration.ValidColumn,
 			migrationapproval.Table:  migrationapproval.ValidColumn,
+			migrationattempt.Table:   migrationattempt.ValidColumn,
 			migrationexecution.Table: migrationexecution.ValidColumn,
 			migrationjob.Table:       migrationjob.ValidColumn,
 			platformuser.Table:       platformuser.ValidColumn,

@@ -31,6 +31,9 @@ var (
 	ErrNoLeader      = errors.New("group has no leader")
 	ErrNotLeader     = errors.New("caller is not the group leader")
 	ErrNoLeaderGroup = errors.New("leaderless group")
+	// ErrVersionOrder guards the linear history: an up migration may not be
+	// queued while an earlier version of the same database is not applied yet.
+	ErrVersionOrder = errors.New("earlier migration version is not applied yet")
 )
 
 // ValidateWrite confirms the shared create/update body: sql_up required,
@@ -549,6 +552,16 @@ func Approve(ctx context.Context, client *ent.Client, userID, approvalID int) (*
 	}
 	var job *ent.MigrationJob
 	if remaining == 0 {
+		// Linear history guard: a brand-new up migration may only be queued
+		// once every earlier version of this database has settled. Rollback,
+		// forward, retry, and batch_revert of ALREADY-reviewed migrations are
+		// exempt — they follow the linear order that already exists.
+		if exec.Kind == migrationexecution.KindUp {
+			if err := earlierVersionPending(ctx, tx.Client(), entry.ConnectionID, entry.Version); err != nil {
+				_ = tx.Rollback()
+				return nil, nil, nil, err
+			}
+		}
 		if err := tx.Migration.UpdateOneID(entry.ID).SetStatus(migration.StatusQueued).Exec(ctx); err != nil {
 			_ = tx.Rollback()
 			return nil, nil, nil, err
@@ -656,6 +669,35 @@ func pendingExecution(ctx context.Context, client *ent.Client, migrationID int) 
 		First(ctx)
 }
 
+// earlierVersionPending rejects queueing an up migration while an earlier
+// version of the same connection is still unresolved (draft, in review, in
+// flight, or left partial). A terminally failed earlier version does NOT
+// block: its failure is already a permanent, linear entry of the history and
+// later versions may proceed (the queue's partial gate and the latest-active
+// rollback rule keep ordering safe in the remaining cases).
+func earlierVersionPending(ctx context.Context, client *ent.Client, connectionID, version int) error {
+	blocked, err := client.Migration.Query().
+		Where(
+			migration.ConnectionID(connectionID),
+			migration.VersionLT(version),
+			migration.StatusIn(
+				migration.StatusDraft,
+				migration.StatusPendingReview,
+				migration.StatusQueued,
+				migration.StatusRunning,
+				migration.StatusPartial,
+			),
+		).
+		First(ctx)
+	if ent.IsNotFound(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return fmt.Errorf("%w: migration version %d of this database must run first", ErrVersionOrder, blocked.Version)
+}
+
 // MyApprovals lists approvals the caller can act on or has decided: current
 // group leader, or decided_by them, with migration and author for display.
 func MyApprovals(ctx context.Context, client *ent.Client, userID int, status *migrationapproval.Status) ([]*ent.MigrationApproval, error) {
@@ -744,13 +786,13 @@ func CancelJob(ctx context.Context, client *ent.Client, jobID int) (*ent.Migrati
 	}
 }
 
-// MigrationWithHistory loads a migration with executions and approvals
-// eager-loaded for the list/detail mappers.
+// MigrationWithHistory loads a migration with executions, per-attempt
+// history, and approvals eager-loaded for the list/detail mappers.
 func MigrationWithHistory(ctx context.Context, client *ent.Client, entry *ent.Migration) (*ent.Migration, error) {
 	return client.Migration.Query().
 		Where(migration.ID(entry.ID)).
 		WithExecutions(func(q *ent.MigrationExecutionQuery) {
-			q.WithActor().Order(ent.Desc(migrationexecution.FieldCreatedAt))
+			q.WithActor().WithAttempts().Order(ent.Desc(migrationexecution.FieldCreatedAt))
 		}).
 		WithApprovals().
 		Only(ctx)

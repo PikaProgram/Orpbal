@@ -34,14 +34,9 @@ services:
       HOST: 0.0.0.0
       PORT: 8080
       DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-Orpbal}?sslmode=disable
-      LOG_LEVEL: production
-      OTEL_SERVICE_NAME: orpbal-server
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
     depends_on:
       db:
         condition: service_healthy
-      otel-collector:
-        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/health >/dev/null || exit 1"]
       interval: 10s
@@ -57,21 +52,45 @@ services:
     command: ["/app/worker"]
     env_file:
       - apps/server/.env
-    ports:
-      - "9090:9090"
     environment:
       APP_ENV: ${APP_ENV:-development}
       DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-Orpbal}?sslmode=disable
       WORKER_ID: worker-1
-      LOG_LEVEL: production
-      OTEL_SERVICE_NAME: orpbal-worker
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
-      ORPBAL_METRICS_ADDR: ":9090"
+      WORKER_METRICS_ADDR: ":9102"
+    ports:
+      - "9102:9102"
     depends_on:
       db:
         condition: service_healthy
-      otel-collector:
-        condition: service_started
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v2.53.3
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=7d
+    volumes:
+      - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./deploy/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deploy/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3001:3000"
+    depends_on:
+      - prometheus
     restart: unless-stopped
 
   db:
@@ -109,75 +128,8 @@ services:
     restart: unless-stopped
 
 
-  otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.116.0
-    command: ["--config=/etc/otel/config.yaml"]
-    volumes:
-      - ./observability/otel-collector-config.yaml:/etc/otel/config.yaml:ro
-    environment:
-      APP_ENV: ${APP_ENV:-development}
-    ports:
-      - "4317:4317"
-      - "4318:4318"
-      - "8889:8889"
-    depends_on:
-      - loki
-      - tempo
-    restart: unless-stopped
-
-  loki:
-    image: grafana/loki:2.9.8
-    command: ["-config.file=/etc/loki/config.yaml"]
-    volumes:
-      - ./observability/loki-config.yaml:/etc/loki/config.yaml:ro
-      - loki_data:/loki
-    ports:
-      - "3100:3100"
-    restart: unless-stopped
-
-  tempo:
-    image: grafana/tempo:2.6.1
-    command: ["-config.file=/etc/tempo/config.yaml"]
-    volumes:
-      - ./observability/tempo-config.yaml:/etc/tempo/config.yaml:ro
-      - tempo_data:/tmp/tempo
-    ports:
-      - "3200:3200"
-    restart: unless-stopped
-
-  prometheus:
-    image: prom/prometheus:v2.54.1
-    volumes:
-      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - prometheus_data:/prometheus
-    ports:
-      - "9091:9090"
-    depends_on:
-      - app
-      - worker
-    restart: unless-stopped
-
-  grafana:
-    image: grafana/grafana:11.3.0
-    environment:
-      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
-    volumes:
-      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
-      - grafana_data:/var/lib/grafana
-    ports:
-      - "3001:3000"
-    depends_on:
-      - prometheus
-      - loki
-      - tempo
-    restart: unless-stopped
-
 volumes:
   postgres_data:
   postgres_user_data:
-  loki_data:
-  tempo_data:
   prometheus_data:
   grafana_data:

@@ -4,6 +4,7 @@ package ent
 
 import (
 	"Orpbal/ent/migration"
+	"Orpbal/ent/migrationattempt"
 	"Orpbal/ent/migrationexecution"
 	"Orpbal/ent/migrationjob"
 	"Orpbal/ent/platformuser"
@@ -322,6 +323,21 @@ func (meu *MigrationExecutionUpdate) AddJobs(m ...*MigrationJob) *MigrationExecu
 	return meu.AddJobIDs(ids...)
 }
 
+// AddAttemptIDs adds the "attempts" edge to the MigrationAttempt entity by IDs.
+func (meu *MigrationExecutionUpdate) AddAttemptIDs(ids ...int) *MigrationExecutionUpdate {
+	meu.mutation.AddAttemptIDs(ids...)
+	return meu
+}
+
+// AddAttempts adds the "attempts" edges to the MigrationAttempt entity.
+func (meu *MigrationExecutionUpdate) AddAttempts(m ...*MigrationAttempt) *MigrationExecutionUpdate {
+	ids := make([]int, len(m))
+	for i := range m {
+		ids[i] = m[i].ID
+	}
+	return meu.AddAttemptIDs(ids...)
+}
+
 // AddSnapshotIDs adds the "snapshots" edge to the SchemaSnapshot entity by IDs.
 func (meu *MigrationExecutionUpdate) AddSnapshotIDs(ids ...int) *MigrationExecutionUpdate {
 	meu.mutation.AddSnapshotIDs(ids...)
@@ -379,6 +395,27 @@ func (meu *MigrationExecutionUpdate) RemoveJobs(m ...*MigrationJob) *MigrationEx
 		ids[i] = m[i].ID
 	}
 	return meu.RemoveJobIDs(ids...)
+}
+
+// ClearAttempts clears all "attempts" edges to the MigrationAttempt entity.
+func (meu *MigrationExecutionUpdate) ClearAttempts() *MigrationExecutionUpdate {
+	meu.mutation.ClearAttempts()
+	return meu
+}
+
+// RemoveAttemptIDs removes the "attempts" edge to MigrationAttempt entities by IDs.
+func (meu *MigrationExecutionUpdate) RemoveAttemptIDs(ids ...int) *MigrationExecutionUpdate {
+	meu.mutation.RemoveAttemptIDs(ids...)
+	return meu
+}
+
+// RemoveAttempts removes "attempts" edges to MigrationAttempt entities.
+func (meu *MigrationExecutionUpdate) RemoveAttempts(m ...*MigrationAttempt) *MigrationExecutionUpdate {
+	ids := make([]int, len(m))
+	for i := range m {
+		ids[i] = m[i].ID
+	}
+	return meu.RemoveAttemptIDs(ids...)
 }
 
 // ClearSnapshots clears all "snapshots" edges to the SchemaSnapshot entity.
@@ -659,6 +696,51 @@ func (meu *MigrationExecutionUpdate) sqlSave(ctx context.Context) (n int, err er
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(migrationjob.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if meu.mutation.AttemptsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   migrationexecution.AttemptsTable,
+			Columns: []string{migrationexecution.AttemptsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(migrationattempt.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := meu.mutation.RemovedAttemptsIDs(); len(nodes) > 0 && !meu.mutation.AttemptsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   migrationexecution.AttemptsTable,
+			Columns: []string{migrationexecution.AttemptsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(migrationattempt.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := meu.mutation.AttemptsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   migrationexecution.AttemptsTable,
+			Columns: []string{migrationexecution.AttemptsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(migrationattempt.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {
@@ -1021,6 +1103,21 @@ func (meuo *MigrationExecutionUpdateOne) AddJobs(m ...*MigrationJob) *MigrationE
 	return meuo.AddJobIDs(ids...)
 }
 
+// AddAttemptIDs adds the "attempts" edge to the MigrationAttempt entity by IDs.
+func (meuo *MigrationExecutionUpdateOne) AddAttemptIDs(ids ...int) *MigrationExecutionUpdateOne {
+	meuo.mutation.AddAttemptIDs(ids...)
+	return meuo
+}
+
+// AddAttempts adds the "attempts" edges to the MigrationAttempt entity.
+func (meuo *MigrationExecutionUpdateOne) AddAttempts(m ...*MigrationAttempt) *MigrationExecutionUpdateOne {
+	ids := make([]int, len(m))
+	for i := range m {
+		ids[i] = m[i].ID
+	}
+	return meuo.AddAttemptIDs(ids...)
+}
+
 // AddSnapshotIDs adds the "snapshots" edge to the SchemaSnapshot entity by IDs.
 func (meuo *MigrationExecutionUpdateOne) AddSnapshotIDs(ids ...int) *MigrationExecutionUpdateOne {
 	meuo.mutation.AddSnapshotIDs(ids...)
@@ -1078,6 +1175,27 @@ func (meuo *MigrationExecutionUpdateOne) RemoveJobs(m ...*MigrationJob) *Migrati
 		ids[i] = m[i].ID
 	}
 	return meuo.RemoveJobIDs(ids...)
+}
+
+// ClearAttempts clears all "attempts" edges to the MigrationAttempt entity.
+func (meuo *MigrationExecutionUpdateOne) ClearAttempts() *MigrationExecutionUpdateOne {
+	meuo.mutation.ClearAttempts()
+	return meuo
+}
+
+// RemoveAttemptIDs removes the "attempts" edge to MigrationAttempt entities by IDs.
+func (meuo *MigrationExecutionUpdateOne) RemoveAttemptIDs(ids ...int) *MigrationExecutionUpdateOne {
+	meuo.mutation.RemoveAttemptIDs(ids...)
+	return meuo
+}
+
+// RemoveAttempts removes "attempts" edges to MigrationAttempt entities.
+func (meuo *MigrationExecutionUpdateOne) RemoveAttempts(m ...*MigrationAttempt) *MigrationExecutionUpdateOne {
+	ids := make([]int, len(m))
+	for i := range m {
+		ids[i] = m[i].ID
+	}
+	return meuo.RemoveAttemptIDs(ids...)
 }
 
 // ClearSnapshots clears all "snapshots" edges to the SchemaSnapshot entity.
@@ -1388,6 +1506,51 @@ func (meuo *MigrationExecutionUpdateOne) sqlSave(ctx context.Context) (_node *Mi
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(migrationjob.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if meuo.mutation.AttemptsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   migrationexecution.AttemptsTable,
+			Columns: []string{migrationexecution.AttemptsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(migrationattempt.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := meuo.mutation.RemovedAttemptsIDs(); len(nodes) > 0 && !meuo.mutation.AttemptsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   migrationexecution.AttemptsTable,
+			Columns: []string{migrationexecution.AttemptsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(migrationattempt.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := meuo.mutation.AttemptsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   migrationexecution.AttemptsTable,
+			Columns: []string{migrationexecution.AttemptsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(migrationattempt.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {

@@ -60,13 +60,15 @@ type MigrationEdges struct {
 	Author *PlatformUser `json:"author,omitempty"`
 	// Executions holds the value of the executions edge.
 	Executions []*MigrationExecution `json:"executions,omitempty"`
+	// Attempts holds the value of the attempts edge.
+	Attempts []*MigrationAttempt `json:"attempts,omitempty"`
 	// Approvals holds the value of the approvals edge.
 	Approvals []*MigrationApproval `json:"approvals,omitempty"`
 	// Snapshots holds the value of the snapshots edge.
 	Snapshots []*SchemaSnapshot `json:"snapshots,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [5]bool
+	loadedTypes [6]bool
 }
 
 // ConnectionOrErr returns the Connection value or an error if the edge
@@ -100,10 +102,19 @@ func (e MigrationEdges) ExecutionsOrErr() ([]*MigrationExecution, error) {
 	return nil, &NotLoadedError{edge: "executions"}
 }
 
+// AttemptsOrErr returns the Attempts value or an error if the edge
+// was not loaded in eager-loading.
+func (e MigrationEdges) AttemptsOrErr() ([]*MigrationAttempt, error) {
+	if e.loadedTypes[3] {
+		return e.Attempts, nil
+	}
+	return nil, &NotLoadedError{edge: "attempts"}
+}
+
 // ApprovalsOrErr returns the Approvals value or an error if the edge
 // was not loaded in eager-loading.
 func (e MigrationEdges) ApprovalsOrErr() ([]*MigrationApproval, error) {
-	if e.loadedTypes[3] {
+	if e.loadedTypes[4] {
 		return e.Approvals, nil
 	}
 	return nil, &NotLoadedError{edge: "approvals"}
@@ -112,7 +123,7 @@ func (e MigrationEdges) ApprovalsOrErr() ([]*MigrationApproval, error) {
 // SnapshotsOrErr returns the Snapshots value or an error if the edge
 // was not loaded in eager-loading.
 func (e MigrationEdges) SnapshotsOrErr() ([]*SchemaSnapshot, error) {
-	if e.loadedTypes[4] {
+	if e.loadedTypes[5] {
 		return e.Snapshots, nil
 	}
 	return nil, &NotLoadedError{edge: "snapshots"}
@@ -262,6 +273,11 @@ func (m *Migration) QueryAuthor() *PlatformUserQuery {
 // QueryExecutions queries the "executions" edge of the Migration entity.
 func (m *Migration) QueryExecutions() *MigrationExecutionQuery {
 	return NewMigrationClient(m.config).QueryExecutions(m)
+}
+
+// QueryAttempts queries the "attempts" edge of the Migration entity.
+func (m *Migration) QueryAttempts() *MigrationAttemptQuery {
+	return NewMigrationClient(m.config).QueryAttempts(m)
 }
 
 // QueryApprovals queries the "approvals" edge of the Migration entity.

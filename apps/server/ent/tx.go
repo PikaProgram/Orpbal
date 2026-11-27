@@ -24,6 +24,8 @@ type Tx struct {
 	Migration *MigrationClient
 	// MigrationApproval is the client for interacting with the MigrationApproval builders.
 	MigrationApproval *MigrationApprovalClient
+	// MigrationAttempt is the client for interacting with the MigrationAttempt builders.
+	MigrationAttempt *MigrationAttemptClient
 	// MigrationExecution is the client for interacting with the MigrationExecution builders.
 	MigrationExecution *MigrationExecutionClient
 	// MigrationJob is the client for interacting with the MigrationJob builders.
@@ -171,6 +173,7 @@ func (tx *Tx) init() {
 	tx.GroupMembership = NewGroupMembershipClient(tx.config)
 	tx.Migration = NewMigrationClient(tx.config)
 	tx.MigrationApproval = NewMigrationApprovalClient(tx.config)
+	tx.MigrationAttempt = NewMigrationAttemptClient(tx.config)
 	tx.MigrationExecution = NewMigrationExecutionClient(tx.config)
 	tx.MigrationJob = NewMigrationJobClient(tx.config)
 	tx.PlatformUser = NewPlatformUserClient(tx.config)

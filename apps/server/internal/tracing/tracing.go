@@ -1,18 +1,15 @@
-// Package tracing wires OpenTelemetry tracing and zerolog correlation:
-// trace_id/span_id land on every log line, and W3C traceparent strings travel
-// API → queue → worker via the job row. Spans go to the OTel Collector when
-// OTEL_EXPORTER_OTLP_ENDPOINT is set, otherwise to stdout for local demos.
+// Package tracing wires OpenTelemetry tracing with a stdout (console)
+// exporter and zerolog correlation: trace_id/span_id land on every log line,
+// and W3C traceparent strings travel API → queue → worker via the job row.
 package tracing
 
 import (
 	"context"
-	"os"
 	"sync"
 
 	"github.com/rs/zerolog"
 
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -27,19 +24,14 @@ var (
 	shutdown func(context.Context) error = func(context.Context) error { return nil }
 )
 
-// Init installs the tracer provider. Safe to call once; later calls are
-// no-ops. With OTLP configured spans go to the collector; otherwise they
-// print as JSON to stdout.
+// Init installs the stdout-exporting tracer provider. Safe to call once;
+// later calls are no-ops. Spans print as JSON to stdout.
 func Init(serviceName string) (func(context.Context) error, error) {
 	var err error
 	once.Do(func() {
-		var exp sdktrace.SpanExporter
-		if os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT") != "" || os.Getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT") != "" {
-			exp, err = otlptracehttp.New(context.Background())
-		} else {
-			exp, err = stdouttrace.New()
-		}
-		if err != nil {
+		exp, expErr := stdouttrace.New()
+		if expErr != nil {
+			err = expErr
 			return
 		}
 		res, resErr := resource.Merge(resource.Default(),
@@ -84,9 +76,7 @@ func StartSpan(ctx context.Context, traceparent, event string) (context.Context,
 type traceLoggerKey struct{}
 
 // WithLogCtx stores ctx so TraceLogger can read it back.
-func WithLogCtx(ctx context.Context) context.Context {
-	return context.WithValue(ctx, traceLoggerKey{}, ctx)
-}
+func WithLogCtx(ctx context.Context) context.Context { return context.WithValue(ctx, traceLoggerKey{}, ctx) }
 
 func TraceLogger(base zerolog.Logger, ctx context.Context) zerolog.Logger {
 	span := trace.SpanFromContext(ctx)

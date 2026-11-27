@@ -512,6 +512,51 @@ paths:
           $ref: "#/components/responses/Conflict"
         "500":
           $ref: "#/components/responses/InternalError"
+    delete:
+      operationId: deleteDatabaseConnection
+      tags: [admin]
+      summary: Remove a managed database connection (rejected while migration history exists)
+      parameters:
+        - $ref: "#/components/parameters/Id"
+        - $ref: "#/components/parameters/CsrfToken"
+      responses:
+        "204":
+          description: Connection removed together with its grants
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /admin/databases/{id}/test:
+    post:
+      operationId: testDatabaseConnection
+      tags: [admin]
+      summary: Ping an existing managed connection with its stored credentials
+      parameters:
+        - $ref: "#/components/parameters/Id"
+        - $ref: "#/components/parameters/CsrfToken"
+      responses:
+        "200":
+          description: Reachability result of the target database
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConnectionTestResult"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "502":
+          $ref: "#/components/responses/TargetError"
+        "500":
+          $ref: "#/components/responses/InternalError"
   /databases/{id}/schema:
     get:
       operationId: getDatabaseSchema
@@ -1912,6 +1957,59 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/SchemaSnapshotInfo"
+        attempts:
+          type: array
+          description: Append-only per-attempt history of this execution (one row per run, failures included, never overwritten)
+          items:
+            $ref: "#/components/schemas/MigrationAttempt"
+    MigrationAttempt:
+      type: object
+      required: [id, migration_id, execution_id, connection_id, attempt, kind, status, actor_id, started_at, batches_done, rows_done]
+      properties:
+        id:
+          type: integer
+        migration_id:
+          type: integer
+        execution_id:
+          type: integer
+        connection_id:
+          type: integer
+        attempt:
+          type: integer
+          description: 1-based attempt number within the execution
+        kind:
+          $ref: "#/components/schemas/ExecutionKind"
+        status:
+          type: string
+          enum: [running, success, failed, partial, cancelled]
+        actor_id:
+          type: integer
+        actor_username:
+          type: string
+        worker_id:
+          type: string
+        sql_executed:
+          type: string
+          description: Copy of the SQL that actually ran in this attempt
+        error:
+          type: string
+          nullable: true
+        batch_cursor:
+          type: integer
+          format: int64
+          nullable: true
+        batches_done:
+          type: integer
+        rows_done:
+          type: integer
+          format: int64
+        started_at:
+          type: string
+          format: date-time
+        finished_at:
+          type: string
+          format: date-time
+          nullable: true
     SchemaSnapshotInfo:
       type: object
       required: [phase]
@@ -2064,6 +2162,16 @@ components:
         finished_at:
           type: string
           format: date-time
+          nullable: true
+    ConnectionTestResult:
+      type: object
+      required: [reachable]
+      properties:
+        reachable:
+          type: boolean
+        message:
+          type: string
+          description: "Error detail when reachable is false (credentials redacted)"
           nullable: true
     MyDatabase:
       type: object

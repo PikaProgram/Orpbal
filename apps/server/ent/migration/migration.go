@@ -48,6 +48,8 @@ const (
 	EdgeAuthor = "author"
 	// EdgeExecutions holds the string denoting the executions edge name in mutations.
 	EdgeExecutions = "executions"
+	// EdgeAttempts holds the string denoting the attempts edge name in mutations.
+	EdgeAttempts = "attempts"
 	// EdgeApprovals holds the string denoting the approvals edge name in mutations.
 	EdgeApprovals = "approvals"
 	// EdgeSnapshots holds the string denoting the snapshots edge name in mutations.
@@ -75,6 +77,13 @@ const (
 	ExecutionsInverseTable = "migration_executions"
 	// ExecutionsColumn is the table column denoting the executions relation/edge.
 	ExecutionsColumn = "migration_id"
+	// AttemptsTable is the table that holds the attempts relation/edge.
+	AttemptsTable = "migration_attempts"
+	// AttemptsInverseTable is the table name for the MigrationAttempt entity.
+	// It exists in this package in order to avoid circular dependency with the "migrationattempt" package.
+	AttemptsInverseTable = "migration_attempts"
+	// AttemptsColumn is the table column denoting the attempts relation/edge.
+	AttemptsColumn = "migration_id"
 	// ApprovalsTable is the table that holds the approvals relation/edge.
 	ApprovalsTable = "migration_approvals"
 	// ApprovalsInverseTable is the table name for the MigrationApproval entity.
@@ -269,6 +278,20 @@ func ByExecutions(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	}
 }
 
+// ByAttemptsCount orders the results by attempts count.
+func ByAttemptsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newAttemptsStep(), opts...)
+	}
+}
+
+// ByAttempts orders the results by attempts terms.
+func ByAttempts(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newAttemptsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
 // ByApprovalsCount orders the results by approvals count.
 func ByApprovalsCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -315,6 +338,13 @@ func newExecutionsStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(ExecutionsInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, ExecutionsTable, ExecutionsColumn),
+	)
+}
+func newAttemptsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(AttemptsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, AttemptsTable, AttemptsColumn),
 	)
 }
 func newApprovalsStep() *sqlgraph.Step {

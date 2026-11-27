@@ -6,6 +6,7 @@ import (
 	"Orpbal/ent/databaseconnection"
 	"Orpbal/ent/migration"
 	"Orpbal/ent/migrationapproval"
+	"Orpbal/ent/migrationattempt"
 	"Orpbal/ent/migrationexecution"
 	"Orpbal/ent/platformuser"
 	"Orpbal/ent/schemasnapshot"
@@ -203,6 +204,21 @@ func (mc *MigrationCreate) AddExecutions(m ...*MigrationExecution) *MigrationCre
 		ids[i] = m[i].ID
 	}
 	return mc.AddExecutionIDs(ids...)
+}
+
+// AddAttemptIDs adds the "attempts" edge to the MigrationAttempt entity by IDs.
+func (mc *MigrationCreate) AddAttemptIDs(ids ...int) *MigrationCreate {
+	mc.mutation.AddAttemptIDs(ids...)
+	return mc
+}
+
+// AddAttempts adds the "attempts" edges to the MigrationAttempt entity.
+func (mc *MigrationCreate) AddAttempts(m ...*MigrationAttempt) *MigrationCreate {
+	ids := make([]int, len(m))
+	for i := range m {
+		ids[i] = m[i].ID
+	}
+	return mc.AddAttemptIDs(ids...)
 }
 
 // AddApprovalIDs adds the "approvals" edge to the MigrationApproval entity by IDs.
@@ -444,6 +460,22 @@ func (mc *MigrationCreate) createSpec() (*Migration, *sqlgraph.CreateSpec) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(migrationexecution.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := mc.mutation.AttemptsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   migration.AttemptsTable,
+			Columns: []string{migration.AttemptsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(migrationattempt.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {

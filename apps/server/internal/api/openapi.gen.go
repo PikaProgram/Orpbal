@@ -133,6 +133,33 @@ func (e JobStatus) Valid() bool {
 	}
 }
 
+// Defines values for MigrationAttemptStatus.
+const (
+	MigrationAttemptStatusCancelled MigrationAttemptStatus = "cancelled"
+	MigrationAttemptStatusFailed    MigrationAttemptStatus = "failed"
+	MigrationAttemptStatusPartial   MigrationAttemptStatus = "partial"
+	MigrationAttemptStatusRunning   MigrationAttemptStatus = "running"
+	MigrationAttemptStatusSuccess   MigrationAttemptStatus = "success"
+)
+
+// Valid indicates whether the value is a known member of the MigrationAttemptStatus enum.
+func (e MigrationAttemptStatus) Valid() bool {
+	switch e {
+	case MigrationAttemptStatusCancelled:
+		return true
+	case MigrationAttemptStatusFailed:
+		return true
+	case MigrationAttemptStatusPartial:
+		return true
+	case MigrationAttemptStatusRunning:
+		return true
+	case MigrationAttemptStatusSuccess:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for MigrationDiffStatus.
 const (
 	MigrationDiffStatusFailed  MigrationDiffStatus = "failed"
@@ -156,37 +183,37 @@ func (e MigrationDiffStatus) Valid() bool {
 
 // Defines values for MigrationStatus.
 const (
-	MigrationStatusApproved      MigrationStatus = "approved"
-	MigrationStatusCancelled     MigrationStatus = "cancelled"
-	MigrationStatusDraft         MigrationStatus = "draft"
-	MigrationStatusFailed        MigrationStatus = "failed"
-	MigrationStatusPartial       MigrationStatus = "partial"
-	MigrationStatusPendingReview MigrationStatus = "pending_review"
-	MigrationStatusQueued        MigrationStatus = "queued"
-	MigrationStatusRunning       MigrationStatus = "running"
-	MigrationStatusSuccess       MigrationStatus = "success"
+	Approved      MigrationStatus = "approved"
+	Cancelled     MigrationStatus = "cancelled"
+	Draft         MigrationStatus = "draft"
+	Failed        MigrationStatus = "failed"
+	Partial       MigrationStatus = "partial"
+	PendingReview MigrationStatus = "pending_review"
+	Queued        MigrationStatus = "queued"
+	Running       MigrationStatus = "running"
+	Success       MigrationStatus = "success"
 )
 
 // Valid indicates whether the value is a known member of the MigrationStatus enum.
 func (e MigrationStatus) Valid() bool {
 	switch e {
-	case MigrationStatusApproved:
+	case Approved:
 		return true
-	case MigrationStatusCancelled:
+	case Cancelled:
 		return true
-	case MigrationStatusDraft:
+	case Draft:
 		return true
-	case MigrationStatusFailed:
+	case Failed:
 		return true
-	case MigrationStatusPartial:
+	case Partial:
 		return true
-	case MigrationStatusPendingReview:
+	case PendingReview:
 		return true
-	case MigrationStatusQueued:
+	case Queued:
 		return true
-	case MigrationStatusRunning:
+	case Running:
 		return true
-	case MigrationStatusSuccess:
+	case Success:
 		return true
 	default:
 		return false
@@ -378,6 +405,13 @@ type ChangePasswordRequest struct {
 	NewPassword     string `json:"new_password"`
 }
 
+// ConnectionTestResult defines model for ConnectionTestResult.
+type ConnectionTestResult struct {
+	// Message Error detail when reachable is false (credentials redacted)
+	Message   *string `json:"message,omitempty"`
+	Reachable bool    `json:"reachable"`
+}
+
 // CreateConnectionRequest defines model for CreateConnectionRequest.
 type CreateConnectionRequest struct {
 	DatabaseName string `json:"database_name"`
@@ -469,6 +503,9 @@ type ExecuteQueryRequest struct {
 type Execution struct {
 	ActorId       int    `json:"actor_id"`
 	ActorUsername string `json:"actor_username"`
+
+	// Attempts Append-only per-attempt history of this execution (one row per run, failures included, never overwritten)
+	Attempts *[]MigrationAttempt `json:"attempts,omitempty"`
 
 	// BatchCursor Last committed batch upper bound (exclusive) for batch migrations
 	BatchCursor  *int64        `json:"batch_cursor,omitempty"`
@@ -617,6 +654,34 @@ type Migration struct {
 	UpdatedAt          time.Time       `json:"updated_at"`
 	Version            int             `json:"version"`
 }
+
+// MigrationAttempt defines model for MigrationAttempt.
+type MigrationAttempt struct {
+	ActorId       int     `json:"actor_id"`
+	ActorUsername *string `json:"actor_username,omitempty"`
+
+	// Attempt 1-based attempt number within the execution
+	Attempt      int           `json:"attempt"`
+	BatchCursor  *int64        `json:"batch_cursor,omitempty"`
+	BatchesDone  int           `json:"batches_done"`
+	ConnectionId int           `json:"connection_id"`
+	Error        *string       `json:"error,omitempty"`
+	ExecutionId  int           `json:"execution_id"`
+	FinishedAt   *time.Time    `json:"finished_at,omitempty"`
+	Id           int           `json:"id"`
+	Kind         ExecutionKind `json:"kind"`
+	MigrationId  int           `json:"migration_id"`
+	RowsDone     int64         `json:"rows_done"`
+
+	// SqlExecuted Copy of the SQL that actually ran in this attempt
+	SqlExecuted *string                `json:"sql_executed,omitempty"`
+	StartedAt   time.Time              `json:"started_at"`
+	Status      MigrationAttemptStatus `json:"status"`
+	WorkerId    *string                `json:"worker_id,omitempty"`
+}
+
+// MigrationAttemptStatus defines model for MigrationAttempt.Status.
+type MigrationAttemptStatus string
 
 // MigrationDiff defines model for MigrationDiff.
 type MigrationDiff struct {
@@ -852,8 +917,20 @@ type CreateDatabaseConnectionParams struct {
 	XCSRFToken CsrfToken `json:"X-CSRF-Token"`
 }
 
+// DeleteDatabaseConnectionParams defines parameters for DeleteDatabaseConnection.
+type DeleteDatabaseConnectionParams struct {
+	// XCSRFToken Per-session CSRF token from GET /auth/session
+	XCSRFToken CsrfToken `json:"X-CSRF-Token"`
+}
+
 // UpdateDatabaseConnectionParams defines parameters for UpdateDatabaseConnection.
 type UpdateDatabaseConnectionParams struct {
+	// XCSRFToken Per-session CSRF token from GET /auth/session
+	XCSRFToken CsrfToken `json:"X-CSRF-Token"`
+}
+
+// TestDatabaseConnectionParams defines parameters for TestDatabaseConnection.
+type TestDatabaseConnectionParams struct {
 	// XCSRFToken Per-session CSRF token from GET /auth/session
 	XCSRFToken CsrfToken `json:"X-CSRF-Token"`
 }
@@ -1084,12 +1161,18 @@ type ServerInterface interface {
 
 	// (POST /admin/databases)
 	CreateDatabaseConnection(c *gin.Context, params CreateDatabaseConnectionParams)
+	// Remove a managed database connection (rejected while migration history exists)
+	// (DELETE /admin/databases/{id})
+	DeleteDatabaseConnection(c *gin.Context, id Id, params DeleteDatabaseConnectionParams)
 
 	// (GET /admin/databases/{id})
 	GetDatabaseConnection(c *gin.Context, id Id)
 
 	// (PATCH /admin/databases/{id})
 	UpdateDatabaseConnection(c *gin.Context, id Id, params UpdateDatabaseConnectionParams)
+	// Ping an existing managed connection with its stored credentials
+	// (POST /admin/databases/{id}/test)
+	TestDatabaseConnection(c *gin.Context, id Id, params TestDatabaseConnectionParams)
 
 	// (GET /admin/grants)
 	ListGrants(c *gin.Context, params ListGrantsParams)
@@ -1281,6 +1364,60 @@ func (siw *ServerInterfaceWrapper) CreateDatabaseConnection(c *gin.Context) {
 	siw.Handler.CreateDatabaseConnection(c, params)
 }
 
+// DeleteDatabaseConnection operation middleware
+func (siw *ServerInterfaceWrapper) DeleteDatabaseConnection(c *gin.Context) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", c.Param("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter id: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	c.Set(string(CookieAuthScopes), []string{})
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteDatabaseConnectionParams
+
+	headers := c.Request.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandler(c, fmt.Errorf("Expected one value for X-CSRF-Token, got %d", n), http.StatusBadRequest)
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter X-CSRF-Token: %w", err), http.StatusBadRequest)
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		siw.ErrorHandler(c, fmt.Errorf("Header parameter X-CSRF-Token is required, but not found"), http.StatusBadRequest)
+		return
+	}
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.DeleteDatabaseConnection(c, id, params)
+}
+
 // GetDatabaseConnection operation middleware
 func (siw *ServerInterfaceWrapper) GetDatabaseConnection(c *gin.Context) {
 
@@ -1360,6 +1497,60 @@ func (siw *ServerInterfaceWrapper) UpdateDatabaseConnection(c *gin.Context) {
 	}
 
 	siw.Handler.UpdateDatabaseConnection(c, id, params)
+}
+
+// TestDatabaseConnection operation middleware
+func (siw *ServerInterfaceWrapper) TestDatabaseConnection(c *gin.Context) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", c.Param("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter id: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	c.Set(string(CookieAuthScopes), []string{})
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params TestDatabaseConnectionParams
+
+	headers := c.Request.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandler(c, fmt.Errorf("Expected one value for X-CSRF-Token, got %d", n), http.StatusBadRequest)
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter X-CSRF-Token: %w", err), http.StatusBadRequest)
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		siw.ErrorHandler(c, fmt.Errorf("Header parameter X-CSRF-Token is required, but not found"), http.StatusBadRequest)
+		return
+	}
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.TestDatabaseConnection(c, id, params)
 }
 
 // ListGrants operation middleware
@@ -3156,8 +3347,10 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 
 	router.GET(options.BaseURL+"/admin/databases", wrapper.ListDatabaseConnections)
 	router.POST(options.BaseURL+"/admin/databases", wrapper.CreateDatabaseConnection)
+	router.DELETE(options.BaseURL+"/admin/databases/:id", wrapper.DeleteDatabaseConnection)
 	router.GET(options.BaseURL+"/admin/databases/:id", wrapper.GetDatabaseConnection)
 	router.PATCH(options.BaseURL+"/admin/databases/:id", wrapper.UpdateDatabaseConnection)
+	router.POST(options.BaseURL+"/admin/databases/:id/test", wrapper.TestDatabaseConnection)
 	router.GET(options.BaseURL+"/admin/grants", wrapper.ListGrants)
 	router.GET(options.BaseURL+"/admin/groups", wrapper.ListGroups)
 	router.POST(options.BaseURL+"/admin/groups", wrapper.CreateGroup)

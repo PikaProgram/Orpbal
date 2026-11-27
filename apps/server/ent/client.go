@@ -17,6 +17,7 @@ import (
 	"Orpbal/ent/groupmembership"
 	"Orpbal/ent/migration"
 	"Orpbal/ent/migrationapproval"
+	"Orpbal/ent/migrationattempt"
 	"Orpbal/ent/migrationexecution"
 	"Orpbal/ent/migrationjob"
 	"Orpbal/ent/platformuser"
@@ -46,6 +47,8 @@ type Client struct {
 	Migration *MigrationClient
 	// MigrationApproval is the client for interacting with the MigrationApproval builders.
 	MigrationApproval *MigrationApprovalClient
+	// MigrationAttempt is the client for interacting with the MigrationAttempt builders.
+	MigrationAttempt *MigrationAttemptClient
 	// MigrationExecution is the client for interacting with the MigrationExecution builders.
 	MigrationExecution *MigrationExecutionClient
 	// MigrationJob is the client for interacting with the MigrationJob builders.
@@ -73,6 +76,7 @@ func (c *Client) init() {
 	c.GroupMembership = NewGroupMembershipClient(c.config)
 	c.Migration = NewMigrationClient(c.config)
 	c.MigrationApproval = NewMigrationApprovalClient(c.config)
+	c.MigrationAttempt = NewMigrationAttemptClient(c.config)
 	c.MigrationExecution = NewMigrationExecutionClient(c.config)
 	c.MigrationJob = NewMigrationJobClient(c.config)
 	c.PlatformUser = NewPlatformUserClient(c.config)
@@ -176,6 +180,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		GroupMembership:    NewGroupMembershipClient(cfg),
 		Migration:          NewMigrationClient(cfg),
 		MigrationApproval:  NewMigrationApprovalClient(cfg),
+		MigrationAttempt:   NewMigrationAttemptClient(cfg),
 		MigrationExecution: NewMigrationExecutionClient(cfg),
 		MigrationJob:       NewMigrationJobClient(cfg),
 		PlatformUser:       NewPlatformUserClient(cfg),
@@ -206,6 +211,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		GroupMembership:    NewGroupMembershipClient(cfg),
 		Migration:          NewMigrationClient(cfg),
 		MigrationApproval:  NewMigrationApprovalClient(cfg),
+		MigrationAttempt:   NewMigrationAttemptClient(cfg),
 		MigrationExecution: NewMigrationExecutionClient(cfg),
 		MigrationJob:       NewMigrationJobClient(cfg),
 		PlatformUser:       NewPlatformUserClient(cfg),
@@ -241,8 +247,8 @@ func (c *Client) Close() error {
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.DatabaseConnection, c.DatabaseGrant, c.Group, c.GroupMembership, c.Migration,
-		c.MigrationApproval, c.MigrationExecution, c.MigrationJob, c.PlatformUser,
-		c.SchemaSnapshot, c.Session,
+		c.MigrationApproval, c.MigrationAttempt, c.MigrationExecution, c.MigrationJob,
+		c.PlatformUser, c.SchemaSnapshot, c.Session,
 	} {
 		n.Use(hooks...)
 	}
@@ -253,8 +259,8 @@ func (c *Client) Use(hooks ...Hook) {
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.DatabaseConnection, c.DatabaseGrant, c.Group, c.GroupMembership, c.Migration,
-		c.MigrationApproval, c.MigrationExecution, c.MigrationJob, c.PlatformUser,
-		c.SchemaSnapshot, c.Session,
+		c.MigrationApproval, c.MigrationAttempt, c.MigrationExecution, c.MigrationJob,
+		c.PlatformUser, c.SchemaSnapshot, c.Session,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -275,6 +281,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Migration.mutate(ctx, m)
 	case *MigrationApprovalMutation:
 		return c.MigrationApproval.mutate(ctx, m)
+	case *MigrationAttemptMutation:
+		return c.MigrationAttempt.mutate(ctx, m)
 	case *MigrationExecutionMutation:
 		return c.MigrationExecution.mutate(ctx, m)
 	case *MigrationJobMutation:
@@ -1106,6 +1114,22 @@ func (c *MigrationClient) QueryExecutions(m *Migration) *MigrationExecutionQuery
 	return query
 }
 
+// QueryAttempts queries the attempts edge of a Migration.
+func (c *MigrationClient) QueryAttempts(m *Migration) *MigrationAttemptQuery {
+	query := (&MigrationAttemptClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(migration.Table, migration.FieldID, id),
+			sqlgraph.To(migrationattempt.Table, migrationattempt.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, migration.AttemptsTable, migration.AttemptsColumn),
+		)
+		fromV = sqlgraph.Neighbors(m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // QueryApprovals queries the approvals edge of a Migration.
 func (c *MigrationClient) QueryApprovals(m *Migration) *MigrationApprovalQuery {
 	query := (&MigrationApprovalClient{config: c.config}).Query()
@@ -1344,6 +1368,187 @@ func (c *MigrationApprovalClient) mutate(ctx context.Context, m *MigrationApprov
 	}
 }
 
+// MigrationAttemptClient is a client for the MigrationAttempt schema.
+type MigrationAttemptClient struct {
+	config
+}
+
+// NewMigrationAttemptClient returns a client for the MigrationAttempt from the given config.
+func NewMigrationAttemptClient(c config) *MigrationAttemptClient {
+	return &MigrationAttemptClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `migrationattempt.Hooks(f(g(h())))`.
+func (c *MigrationAttemptClient) Use(hooks ...Hook) {
+	c.hooks.MigrationAttempt = append(c.hooks.MigrationAttempt, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `migrationattempt.Intercept(f(g(h())))`.
+func (c *MigrationAttemptClient) Intercept(interceptors ...Interceptor) {
+	c.inters.MigrationAttempt = append(c.inters.MigrationAttempt, interceptors...)
+}
+
+// Create returns a builder for creating a MigrationAttempt entity.
+func (c *MigrationAttemptClient) Create() *MigrationAttemptCreate {
+	mutation := newMigrationAttemptMutation(c.config, OpCreate)
+	return &MigrationAttemptCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of MigrationAttempt entities.
+func (c *MigrationAttemptClient) CreateBulk(builders ...*MigrationAttemptCreate) *MigrationAttemptCreateBulk {
+	return &MigrationAttemptCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *MigrationAttemptClient) MapCreateBulk(slice any, setFunc func(*MigrationAttemptCreate, int)) *MigrationAttemptCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &MigrationAttemptCreateBulk{err: fmt.Errorf("calling to MigrationAttemptClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*MigrationAttemptCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &MigrationAttemptCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for MigrationAttempt.
+func (c *MigrationAttemptClient) Update() *MigrationAttemptUpdate {
+	mutation := newMigrationAttemptMutation(c.config, OpUpdate)
+	return &MigrationAttemptUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *MigrationAttemptClient) UpdateOne(ma *MigrationAttempt) *MigrationAttemptUpdateOne {
+	mutation := newMigrationAttemptMutation(c.config, OpUpdateOne, withMigrationAttempt(ma))
+	return &MigrationAttemptUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *MigrationAttemptClient) UpdateOneID(id int) *MigrationAttemptUpdateOne {
+	mutation := newMigrationAttemptMutation(c.config, OpUpdateOne, withMigrationAttemptID(id))
+	return &MigrationAttemptUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for MigrationAttempt.
+func (c *MigrationAttemptClient) Delete() *MigrationAttemptDelete {
+	mutation := newMigrationAttemptMutation(c.config, OpDelete)
+	return &MigrationAttemptDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *MigrationAttemptClient) DeleteOne(ma *MigrationAttempt) *MigrationAttemptDeleteOne {
+	return c.DeleteOneID(ma.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *MigrationAttemptClient) DeleteOneID(id int) *MigrationAttemptDeleteOne {
+	builder := c.Delete().Where(migrationattempt.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &MigrationAttemptDeleteOne{builder}
+}
+
+// Query returns a query builder for MigrationAttempt.
+func (c *MigrationAttemptClient) Query() *MigrationAttemptQuery {
+	return &MigrationAttemptQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeMigrationAttempt},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a MigrationAttempt entity by its id.
+func (c *MigrationAttemptClient) Get(ctx context.Context, id int) (*MigrationAttempt, error) {
+	return c.Query().Where(migrationattempt.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *MigrationAttemptClient) GetX(ctx context.Context, id int) *MigrationAttempt {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryExecution queries the execution edge of a MigrationAttempt.
+func (c *MigrationAttemptClient) QueryExecution(ma *MigrationAttempt) *MigrationExecutionQuery {
+	query := (&MigrationExecutionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := ma.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(migrationattempt.Table, migrationattempt.FieldID, id),
+			sqlgraph.To(migrationexecution.Table, migrationexecution.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, migrationattempt.ExecutionTable, migrationattempt.ExecutionColumn),
+		)
+		fromV = sqlgraph.Neighbors(ma.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryMigration queries the migration edge of a MigrationAttempt.
+func (c *MigrationAttemptClient) QueryMigration(ma *MigrationAttempt) *MigrationQuery {
+	query := (&MigrationClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := ma.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(migrationattempt.Table, migrationattempt.FieldID, id),
+			sqlgraph.To(migration.Table, migration.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, migrationattempt.MigrationTable, migrationattempt.MigrationColumn),
+		)
+		fromV = sqlgraph.Neighbors(ma.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryActor queries the actor edge of a MigrationAttempt.
+func (c *MigrationAttemptClient) QueryActor(ma *MigrationAttempt) *PlatformUserQuery {
+	query := (&PlatformUserClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := ma.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(migrationattempt.Table, migrationattempt.FieldID, id),
+			sqlgraph.To(platformuser.Table, platformuser.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, migrationattempt.ActorTable, migrationattempt.ActorColumn),
+		)
+		fromV = sqlgraph.Neighbors(ma.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *MigrationAttemptClient) Hooks() []Hook {
+	return c.hooks.MigrationAttempt
+}
+
+// Interceptors returns the client interceptors.
+func (c *MigrationAttemptClient) Interceptors() []Interceptor {
+	return c.inters.MigrationAttempt
+}
+
+func (c *MigrationAttemptClient) mutate(ctx context.Context, m *MigrationAttemptMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&MigrationAttemptCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&MigrationAttemptUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&MigrationAttemptUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&MigrationAttemptDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown MigrationAttempt mutation op: %q", m.Op())
+	}
+}
+
 // MigrationExecutionClient is a client for the MigrationExecution schema.
 type MigrationExecutionClient struct {
 	config
@@ -1509,6 +1714,22 @@ func (c *MigrationExecutionClient) QueryJobs(me *MigrationExecution) *MigrationJ
 			sqlgraph.From(migrationexecution.Table, migrationexecution.FieldID, id),
 			sqlgraph.To(migrationjob.Table, migrationjob.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, migrationexecution.JobsTable, migrationexecution.JobsColumn),
+		)
+		fromV = sqlgraph.Neighbors(me.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryAttempts queries the attempts edge of a MigrationExecution.
+func (c *MigrationExecutionClient) QueryAttempts(me *MigrationExecution) *MigrationAttemptQuery {
+	query := (&MigrationAttemptClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := me.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(migrationexecution.Table, migrationexecution.FieldID, id),
+			sqlgraph.To(migrationattempt.Table, migrationattempt.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, migrationexecution.AttemptsTable, migrationexecution.AttemptsColumn),
 		)
 		fromV = sqlgraph.Neighbors(me.driver.Dialect(), step)
 		return fromV, nil
@@ -2205,12 +2426,12 @@ func (c *SessionClient) mutate(ctx context.Context, m *SessionMutation) (Value, 
 type (
 	hooks struct {
 		DatabaseConnection, DatabaseGrant, Group, GroupMembership, Migration,
-		MigrationApproval, MigrationExecution, MigrationJob, PlatformUser,
-		SchemaSnapshot, Session []ent.Hook
+		MigrationApproval, MigrationAttempt, MigrationExecution, MigrationJob,
+		PlatformUser, SchemaSnapshot, Session []ent.Hook
 	}
 	inters struct {
 		DatabaseConnection, DatabaseGrant, Group, GroupMembership, Migration,
-		MigrationApproval, MigrationExecution, MigrationJob, PlatformUser,
-		SchemaSnapshot, Session []ent.Interceptor
+		MigrationApproval, MigrationAttempt, MigrationExecution, MigrationJob,
+		PlatformUser, SchemaSnapshot, Session []ent.Interceptor
 	}
 )

@@ -36,6 +36,30 @@ export const batchConfigSchema = z.object({
 });
 export type BatchConfig = z.infer<typeof batchConfigSchema>;
 
+export const migrationAttemptStatusSchema = z.enum(["running", "success", "failed", "partial", "cancelled"]);
+export type MigrationAttemptStatus = z.infer<typeof migrationAttemptStatusSchema>;
+
+export const migrationAttemptSchema = z.object({
+	id: z.number().int(),
+	migration_id: z.number().int(),
+	execution_id: z.number().int(),
+	connection_id: z.number().int(),
+	attempt: z.number().int(),
+	kind: executionKindSchema,
+	status: migrationAttemptStatusSchema,
+	actor_id: z.number().int(),
+	actor_username: z.string().optional(),
+	worker_id: z.string().optional(),
+	sql_executed: z.string().optional(),
+	error: z.string().nullable().optional(),
+	batch_cursor: z.number().int().nullable().optional(),
+	batches_done: z.number().int().optional(),
+	rows_done: z.number().int().optional(),
+	started_at: z.string(),
+	finished_at: z.string().nullable().optional(),
+});
+export type MigrationAttempt = z.infer<typeof migrationAttemptSchema>;
+
 export const executionSchema = z.object({
 	id: z.number().int(),
 	migration_id: z.number().int(),
@@ -55,6 +79,7 @@ export const executionSchema = z.object({
 	snapshots: z
 		.array(z.object({ phase: z.enum(["before", "after"]), captured_at: z.string().optional() }))
 		.optional(),
+	attempts: z.array(migrationAttemptSchema).optional(),
 });
 export type Execution = z.infer<typeof executionSchema>;
 

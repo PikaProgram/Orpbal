@@ -4,6 +4,7 @@ package ent
 
 import (
 	"Orpbal/ent/migration"
+	"Orpbal/ent/migrationattempt"
 	"Orpbal/ent/migrationexecution"
 	"Orpbal/ent/migrationjob"
 	"Orpbal/ent/platformuser"
@@ -31,6 +32,7 @@ type MigrationExecutionQuery struct {
 	withActor     *PlatformUserQuery
 	withReverted  *MigrationExecutionQuery
 	withJobs      *MigrationJobQuery
+	withAttempts  *MigrationAttemptQuery
 	withSnapshots *SchemaSnapshotQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
@@ -149,6 +151,28 @@ func (meq *MigrationExecutionQuery) QueryJobs() *MigrationJobQuery {
 			sqlgraph.From(migrationexecution.Table, migrationexecution.FieldID, selector),
 			sqlgraph.To(migrationjob.Table, migrationjob.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, migrationexecution.JobsTable, migrationexecution.JobsColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(meq.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryAttempts chains the current query on the "attempts" edge.
+func (meq *MigrationExecutionQuery) QueryAttempts() *MigrationAttemptQuery {
+	query := (&MigrationAttemptClient{config: meq.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := meq.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := meq.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(migrationexecution.Table, migrationexecution.FieldID, selector),
+			sqlgraph.To(migrationattempt.Table, migrationattempt.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, migrationexecution.AttemptsTable, migrationexecution.AttemptsColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(meq.driver.Dialect(), step)
 		return fromU, nil
@@ -374,6 +398,7 @@ func (meq *MigrationExecutionQuery) Clone() *MigrationExecutionQuery {
 		withActor:     meq.withActor.Clone(),
 		withReverted:  meq.withReverted.Clone(),
 		withJobs:      meq.withJobs.Clone(),
+		withAttempts:  meq.withAttempts.Clone(),
 		withSnapshots: meq.withSnapshots.Clone(),
 		// clone intermediate query.
 		sql:  meq.sql.Clone(),
@@ -422,6 +447,17 @@ func (meq *MigrationExecutionQuery) WithJobs(opts ...func(*MigrationJobQuery)) *
 		opt(query)
 	}
 	meq.withJobs = query
+	return meq
+}
+
+// WithAttempts tells the query-builder to eager-load the nodes that are connected to
+// the "attempts" edge. The optional arguments are used to configure the query builder of the edge.
+func (meq *MigrationExecutionQuery) WithAttempts(opts ...func(*MigrationAttemptQuery)) *MigrationExecutionQuery {
+	query := (&MigrationAttemptClient{config: meq.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	meq.withAttempts = query
 	return meq
 }
 
@@ -514,11 +550,12 @@ func (meq *MigrationExecutionQuery) sqlAll(ctx context.Context, hooks ...queryHo
 	var (
 		nodes       = []*MigrationExecution{}
 		_spec       = meq.querySpec()
-		loadedTypes = [5]bool{
+		loadedTypes = [6]bool{
 			meq.withMigration != nil,
 			meq.withActor != nil,
 			meq.withReverted != nil,
 			meq.withJobs != nil,
+			meq.withAttempts != nil,
 			meq.withSnapshots != nil,
 		}
 	)
@@ -562,6 +599,13 @@ func (meq *MigrationExecutionQuery) sqlAll(ctx context.Context, hooks ...queryHo
 		if err := meq.loadJobs(ctx, query, nodes,
 			func(n *MigrationExecution) { n.Edges.Jobs = []*MigrationJob{} },
 			func(n *MigrationExecution, e *MigrationJob) { n.Edges.Jobs = append(n.Edges.Jobs, e) }); err != nil {
+			return nil, err
+		}
+	}
+	if query := meq.withAttempts; query != nil {
+		if err := meq.loadAttempts(ctx, query, nodes,
+			func(n *MigrationExecution) { n.Edges.Attempts = []*MigrationAttempt{} },
+			func(n *MigrationExecution, e *MigrationAttempt) { n.Edges.Attempts = append(n.Edges.Attempts, e) }); err != nil {
 			return nil, err
 		}
 	}
@@ -680,6 +724,36 @@ func (meq *MigrationExecutionQuery) loadJobs(ctx context.Context, query *Migrati
 	}
 	query.Where(predicate.MigrationJob(func(s *sql.Selector) {
 		s.Where(sql.InValues(s.C(migrationexecution.JobsColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.ExecutionID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "execution_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+func (meq *MigrationExecutionQuery) loadAttempts(ctx context.Context, query *MigrationAttemptQuery, nodes []*MigrationExecution, init func(*MigrationExecution), assign func(*MigrationExecution, *MigrationAttempt)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int]*MigrationExecution)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(migrationattempt.FieldExecutionID)
+	}
+	query.Where(predicate.MigrationAttempt(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(migrationexecution.AttemptsColumn), fks...))
 	}))
 	neighbors, err := query.All(ctx)
 	if err != nil {

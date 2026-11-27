@@ -300,8 +300,12 @@ func TestFinishFailedTransientRetries(t *testing.T) {
 	if got := jobStatus(t, db, job.ID); got != "queued" {
 		t.Fatalf("job status = %s, want queued", got)
 	}
-	if got := execStatus(t, db, s.executionID); got != "queued" {
-		t.Fatalf("execution status = %s, want queued", got)
+	// The execution is NOT reset to queued on retry: it keeps the failed
+	// status/error of the attempt that just ran (append-only attempt history
+	// lives in migration_attempts; the worker flips the execution back to
+	// running when the retry actually claims it).
+	if got := execStatus(t, db, s.executionID); got != "failed" {
+		t.Fatalf("execution status = %s, want failed (never reset on retry)", got)
 	}
 
 	// Drive it to terminal: two more transient failures exhaust the budget.
@@ -409,4 +413,115 @@ func TestRequestCancelAndIsCancelled(t *testing.T) {
 	if got := jobStatus(t, db, job.ID); got != "cancelled" {
 		t.Fatalf("queued job status = %s, want cancelled", got)
 	}
+}
+
+// TestClaimBlocksNewMigrationWhilePartial covers the partial gate: a NEW up
+// migration on a connection whose last run ended partial is not claimable
+// until the partial state is retried or reverted; retry and batch_revert
+// executions of the same connection stay claimable.
+func TestClaimBlocksNewMigrationWhilePartial(t *testing.T) {
+	q, db, client, s := newQueueEnv(t)
+	ctx := context.Background()
+
+	// First job runs (claim) and ends partial — direct backdate mirrors what
+	// the worker's stopBatch writes. Release is mandatory: the claim owns the
+	// per-connection advisory lock, and holding it would block every later
+	// claim on this connection.
+	first, err := q.Claim(ctx, "w1", 30*time.Second)
+	if err != nil {
+		t.Fatalf("Claim first job: %v", err)
+	}
+	first.Release()
+	if _, err := db.Exec(
+		"UPDATE migration_jobs SET status='partial', locked_by=NULL, finished_at=now() WHERE id=$1", s.jobID); err != nil {
+		t.Fatalf("mark first job partial: %v", err)
+	}
+
+	// Seed a second queued up migration on the SAME connection.
+	secondExec, err := client.MigrationExecution.Create().
+		SetMigrationID(firstMigrationID(t, client, s.connectionID)).
+		SetConnectionID(s.connectionID).
+		SetKind(migrationexecution.KindUp).
+		SetStatus(migrationexecution.StatusQueued).
+		SetActorID(actorID(t, client)).
+		Save(ctx)
+	if err != nil {
+		t.Fatalf("seed second execution: %v", err)
+	}
+	secondJob, err := client.MigrationJob.Create().
+		SetExecutionID(secondExec.ID).
+		SetConnectionID(s.connectionID).
+		Save(ctx)
+	if err != nil {
+		t.Fatalf("seed second job: %v", err)
+	}
+
+	// The partial state blocks the new migration.
+	if got, err := q.Claim(ctx, "w2", 30*time.Second); err == nil {
+		got.Release()
+		t.Fatalf("claimed job %d while connection has a partial migration; want ErrNotClaimed", got.ID)
+	} else if !errors.Is(err, ErrNotClaimed) {
+		t.Fatalf("Claim error = %v, want ErrNotClaimed", err)
+	}
+
+	// A retry of the partial execution (new execution, kind retry) is the
+	// designated way out and stays claimable.
+	if _, err := client.MigrationExecution.UpdateOneID(secondExec.ID).SetKind(migrationexecution.KindRetry).Save(ctx); err != nil {
+		t.Fatalf("switch second execution to retry: %v", err)
+	}
+	got, err := q.Claim(ctx, "w2", 30*time.Second)
+	if err != nil {
+		t.Fatalf("Claim retry job: %v", err)
+	}
+	if got.ID != secondJob.ID {
+		got.Release()
+		t.Fatalf("claimed job %d, want the retry job %d", got.ID, secondJob.ID)
+	}
+	got.Release()
+	// The claim marked the job running with a fresh heartbeat; reset it to
+	// queued so the final claim has a candidate again.
+	if _, err := db.Exec(
+		"UPDATE migration_jobs SET status='queued', locked_by=NULL, heartbeat_at=NULL WHERE id=$1", secondJob.ID); err != nil {
+		t.Fatalf("reset retry job to queued: %v", err)
+	}
+
+	// Resolving the partial state unblocks the new migration again.
+	if _, err := db.Exec("UPDATE migration_jobs SET status='success', locked_by=NULL WHERE id=$1 AND status='partial'", s.jobID); err != nil {
+		t.Fatalf("resolve partial job: %v", err)
+	}
+	if _, err := client.MigrationExecution.UpdateOneID(secondExec.ID).SetKind(migrationexecution.KindUp).Save(ctx); err != nil {
+		t.Fatalf("switch second execution back to up: %v", err)
+	}
+	got2, err := q.Claim(ctx, "w3", 30*time.Second)
+	if err != nil {
+		t.Fatalf("Claim after partial resolved: %v", err)
+	}
+	if got2.ID != secondJob.ID {
+		got2.Release()
+		t.Fatalf("claimed job %d, want %d", got2.ID, secondJob.ID)
+	}
+	got2.Release()
+}
+
+// firstMigrationID finds the seeded migration of the connection.
+func firstMigrationID(t *testing.T, client *ent.Client, connectionID int) int {
+	t.Helper()
+	mig, err := client.Migration.Query().
+		Where(migration.ConnectionID(connectionID)).
+		Order(ent.Asc(migration.FieldVersion)).
+		First(context.Background())
+	if err != nil {
+		t.Fatalf("load seeded migration: %v", err)
+	}
+	return mig.ID
+}
+
+// actorID returns any platform user id for seeding (the fixture user).
+func actorID(t *testing.T, client *ent.Client) int {
+	t.Helper()
+	user, err := client.PlatformUser.Query().First(context.Background())
+	if err != nil {
+		t.Fatalf("load fixture user: %v", err)
+	}
+	return user.ID
 }
