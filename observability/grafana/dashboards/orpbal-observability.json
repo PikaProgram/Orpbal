@@ -1,0 +1,139 @@
+{
+  "uid": "orpbal-observability",
+  "title": "Orpbal — Migration Observability",
+  "tags": ["orpbal", "migration", "otel"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Migration jobs by status",
+      "description": "Current job counts read from the platform DB at scrape time.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (status) (orpbal_jobs)",
+          "legendFormat": "{{status}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Queue wait p95",
+      "description": "Time between job creation and worker claim, including lock wait.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(orpbal_job_queue_wait_seconds_bucket[5m])))",
+          "legendFormat": "p95 queue wait"
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(orpbal_job_lock_wait_seconds_bucket[5m])))",
+          "legendFormat": "p95 lock wait"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Migration duration p95 by kind",
+      "description": "End-to-end worker duration per execution kind (up, rollback, forward, retry, batch_revert).",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le, kind) (rate(orpbal_migration_duration_seconds_bucket[5m])))",
+          "legendFormat": "{{kind}}"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Platform DB pool connections",
+      "description": "Active/idle connections of the platform database pool (scraped from database/sql Stats).",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "orpbal_db_pool_connections{pool=\"platform\",state=~\"in_use|idle\"}",
+          "legendFormat": "{{state}}"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Retries and committed batches",
+      "description": "Retry count and committed batch throughput; low-cardinality kind labels only.",
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(orpbal_job_retries_total[5m]))",
+          "legendFormat": "retries/s"
+        },
+        {
+          "refId": "B",
+          "expr": "sum by (kind) (rate(orpbal_batches_total[5m]))",
+          "legendFormat": "{{kind}} batches/s"
+        },
+        {
+          "refId": "C",
+          "expr": "sum by (kind) (rate(orpbal_rows_total[5m]))",
+          "legendFormat": "{{kind}} rows/s"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "logs",
+      "title": "Correlated logs (trace_id present)",
+      "description": "JSON logs shipped by the OTel Collector to Loki; click a trace_id to jump to Tempo.",
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 22 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{service_name=~\".*orpbal.*\"} | json | trace_id != \"\"",
+          "queryType": "range"
+        }
+      ],
+      "options": {
+        "showLabels": false,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      }
+    },
+    {
+      "id": 7,
+      "type": "traces",
+      "title": "Worker traces (API → queue → worker → DB)",
+      "description": "TraceQL search over spans exported to Tempo via the OTel Collector.",
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 31 },
+      "datasource": { "type": "tempo", "uid": "tempo" },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "traceql",
+          "query": "{ name = \"worker.execute\" }",
+          "limit": 20
+        }
+      ]
+    }
+  ]
+}
