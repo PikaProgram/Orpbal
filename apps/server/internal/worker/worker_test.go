@@ -205,6 +205,13 @@ func seedMigration(t *testing.T, client *ent.Client, connectionID int, sqlUp, sq
 // passes): Run with a cancellable context in a goroutine, poll for terminal.
 func runOneJob(t *testing.T, r *Runner, jobID int) {
 	t.Helper()
+	runOneJobDeadline(t, r, jobID, 15*time.Second)
+}
+
+// runOneJobDeadline is runOneJob with a custom poll deadline; batch migrations
+// over big datasets legitimately exceed the default 15s.
+func runOneJobDeadline(t *testing.T, r *Runner, jobID int, budget time.Duration) {
+	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	done := make(chan struct{})
@@ -212,7 +219,7 @@ func runOneJob(t *testing.T, r *Runner, jobID int) {
 		defer close(done)
 		r.Run(ctx, fmt.Sprintf("wt-%d", wkSeq.Add(1)), 20*time.Millisecond)
 	}()
-	deadline := time.Now().Add(15 * time.Second)
+	deadline := time.Now().Add(budget)
 	for time.Now().Before(deadline) {
 		row, err := r.client.MigrationJob.Query().
 			Where(migrationjob.ID(jobID)).
@@ -232,7 +239,7 @@ func runOneJob(t *testing.T, r *Runner, jobID int) {
 	}
 	cancel()
 	<-done
-	t.Fatalf("job %d did not reach a terminal state within 15s", jobID)
+	t.Fatalf("job %d did not reach a terminal state within %s", jobID, budget)
 }
 
 func jobRow(t *testing.T, client *ent.Client, jobID int) *ent.MigrationJob {

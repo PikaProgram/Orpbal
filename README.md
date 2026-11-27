@@ -347,6 +347,17 @@ Angka terukur di lingkungan demo (2.000.000 baris, batch 10.000):
 | UPDATE tanpa batching | diisi setelah demo dijalankan | spesifikasi: > 1 detik |
 | Migration per batch (10k/batch) | diisi setelah demo dijalankan | progres terlihat per batch di SPA |
 
+### Verifikasi otomatis (CI)
+
+Integrasi test `TestWorkerLargeDatasetBatch` (`apps/server/internal/worker/bigdataset_test.go`) memverifikasi ketentuan spesifikasi secara otomatis: kalibrasi jumlah baris di awal test (doubling dari 250k, cap 8M) sampai satu UPDATE tanpa batching melebihi 1 detik, lalu dataset yang **sama** dimigrasi per batch oleh worker (batch_size 10.000, checkpoint per batch). Hasil terukur di lingkungan CI lokal (tmpfs Postgres 16):
+
+| Mode | Durasi | Rows |
+| :--- | :--- | :--- |
+| UPDATE tanpa batching | 6.85 s | 250.000 |
+| Migration per batch (10k/batch, 25 batch) | 11.79 s | 250.000 |
+
+Test mengassert `rows_done == jumlah baris` dan semua row berstatus target, sehingga regresi batching gagal test.
+
 ---
 
 ## Role-Based Access Control (RBAC)
