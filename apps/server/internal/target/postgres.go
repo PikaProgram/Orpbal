@@ -165,7 +165,18 @@ func (d *PostgresDialect) BeginReadOnly(ctx context.Context, db *sql.DB) (*sql.T
 }
 
 func (d *PostgresDialect) GuardRead(statement string) error {
-	return ReadableStatement(statement)
+	// Defense-in-depth on top of the read-only transaction: PG rejects writes
+	// inside ReadOnly tx anyway, but the allowlist also blocks multi-statement
+	// strings whose first keyword hides a second statement's intent, and gives
+	// the viewer endpoint a deterministic 400 instead of a driver error.
+	if err := ReadableStatement(statement); err != nil {
+		return err
+	}
+	first := strings.ToUpper(strings.Fields(statement)[0])
+	if !mysqlReadableKeywords[first] {
+		return fmt.Errorf("only SELECT, SHOW, EXPLAIN, DESCRIBE, or WITH statements are allowed")
+	}
+	return nil
 }
 
 func (d *PostgresDialect) Explain(ctx context.Context, db *sql.DB, statement string, analyze bool) (ExplainResult, error) {
