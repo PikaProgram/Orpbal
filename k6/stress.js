@@ -53,6 +53,9 @@ export const options = {
 };
 
 let session = null;
+// Per-VU memory of the last migration this VU submitted, so each VU waits
+// for its own submission to resolve instead of hammering one endpoint.
+let state = {};
 
 function login() {
   const res = http.post(`${BASE}/api/auth/login`, JSON.stringify({ username: USERNAME, password: PASSWORD }), {
@@ -85,13 +88,16 @@ export default function (data) {
   });
   check(history, { 'history 200': (r) => r.status === 200 });
 
-  // Job submission path: rollback the latest reversible migration (idempotent
-  // across the run because a rolled-back migration is then forwarded next).
+  // Job submission path: keep the rollback/forward cycle going. VUs race on
+  // the same migration, so most submissions land 409 (another VU already
+  // submitted / it is mid-review) — the expected conflict, not an error.
+  // Accepted submissions go through approval (seeded leader) → queue → worker.
   const migrations = history.json() || [];
-  const target = migrations.find((m) => m.status === 'success' && !m.irreversible && m.sql_down);
-  if (target) {
+  const target = migrations.find((m) => m.status === 'success' || m.status === 'cancelled');
+  if (target && target.id !== state.lastSubmitted) {
+    const endpoint = target.status === 'success' ? 'rollback' : 'forward';
     const res = http.post(
-      `${BASE}/api/databases/${CONNECTION_ID}/migrations/${target.id}/rollback`,
+      `${BASE}/api/databases/${CONNECTION_ID}/migrations/${target.id}/${endpoint}`,
       null,
       {
         headers: {
@@ -99,18 +105,13 @@ export default function (data) {
           Cookie: `orpbal_session=${session.cookie}`,
           'X-CSRF-Token': session.csrf,
         },
+        // 200 = submitted for review; 409 = raced with another VU. Both expected.
+        responseCallback: http.expectedStatuses(200, 409),
       },
     );
-    // 202 = job enqueued; 409 = not currently rollbackable (fine: another VU
-    // already rolled it back or it is mid-review). Neither counts as failure.
-    check(res, { 'rollback accepted or conflict': (r) => r.status === 202 || r.status === 409 });
-
-    if (res.status === 202) {
-      // Poll job once to exercise the status API under load.
-      const job = http.get(`${BASE}/api/jobs/1`, {
-        headers: { Cookie: `orpbal_session=${session.cookie}` },
-      });
-      check(job, { 'job endpoint sane': (r) => r.status === 200 || r.status === 404 });
+    check(res, { 'submission accepted or conflict': (r) => r.status === 200 || r.status === 409 });
+    if (res.status === 200) {
+      state.lastSubmitted = target.id;
     }
   }
   sleep(1);

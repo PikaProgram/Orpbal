@@ -1,12 +1,10 @@
 #!/usr/bin/env bash
-# Seed a large demo dataset + groups/leaders for M2 demo and k6.
+# Seed the full M2 demo environment for k6 / Q&A demo.
 # Usage: scripts/native/task-5.sh
-#   Requires: DATABASE_URL pointing at the PLATFORM postgres, and
-#   DEMO_TARGET_DSN pointing at the target database to fill with rows.
+#   Requires: platform DB running as container orpbal-db-1 (Orpbal), demo
+#   target as orpbal-db-user-1 (userdb), k6demo connection row created via
+#   the admin API (encrypted password). SEED_ROWS overrides row count.
 set -euo pipefail
-
-: "${DATABASE_URL:?DATABASE_URL required}"
-: "${DEMO_TARGET_DSN:?DEMO_TARGET_DSN required}"
 
 ROWS="${SEED_ROWS:-2000000}"
 BATCH="${SEED_BATCH:-50000}"
@@ -24,10 +22,79 @@ CREATE TABLE orpbal_demo_events (
 );
 SQL
 
-# Copy-based fast seed: generate CSV in a pipeline, no client-side buffering.
 psql "$DEMO_TARGET_DSN" -v ON_ERROR_STOP=1 -c "\copy orpbal_demo_events (tenant_id, status, amount) FROM PROGRAM 'awk -v n=${ROWS} -v b=${BATCH} '\''BEGIN{srand(42); for(i=1;i<=n;i++){t=int(rand()*50)+1; s=(rand()<0.7?\"pending\":(rand()<0.5?\"done\":\"failed\")); a=int(rand()*100000)/100; print t \",\" s \",\" a}}'\''' WITH (FORMAT csv)" >/dev/null
+awk -v n="${ROWS}" -v b="${BATCH}" 'BEGIN{srand(42); for(i=1;i<=n;i++){t=int(rand()*50)+1; s=(rand()<0.7?"pending":(rand()<0.5?"done":"failed")); a=int(rand()*100000)/100; print t "," s "," a}}' \
+  | pg orpbal-db-user-1 userdb -v ON_ERROR_STOP=1 -c "\copy orpbal_demo_events (tenant_id, status, amount) FROM STDIN WITH (FORMAT csv)" >/dev/null
 
 echo "Rows seeded. Unbatched UPDATE timing (spec requires > 1s; probe runs in a rolled-back transaction):"
 psql "$DEMO_TARGET_DSN" -v ON_ERROR_STOP=1 -c "\timing on" -c "BEGIN; UPDATE orpbal_demo_events SET amount = amount + 1 WHERE tenant_id = 1; ROLLBACK;" 2>&1 | grep -E "Time|time" || true
 
 echo "Done. Record the measured duration in the README (M2 spec: dataset where one unbatched UPDATE takes > 1s)."
+
+  INSERT INTO groups (name, description, created_at, updated_at) VALUES ('DemoTeam', 'k6/Q&A demo group', now(), now())
+  ON CONFLICT (name) DO UPDATE SET description = EXCLUDED.description, updated_at = now()
+  RETURNING id INTO grp_id;
+
+  INSERT INTO group_memberships (group_id, user_id, role, created_at) VALUES (grp_id, admin_id, 'leader', now())
+  ON CONFLICT (group_id, user_id) DO UPDATE SET role = 'leader';
+
+  -- Demo connection: the db-user service (target database under test).
+  -- Password ciphertext is inserted by whoever runs this script via the
+  -- ORPBAL_CIPHER_SEED_SQL file (encrypt with the platform key first),
+  -- so here we only create the row if absent.
+  SELECT id INTO conn_id FROM database_connections WHERE name = 'k6demo';
+  IF conn_id IS NULL THEN
+    RAISE EXCEPTION 'create the k6demo connection first (encrypted password needed)';
+  END IF;
+
+  INSERT INTO database_grants (connection_id, group_id, access_level, created_at, updated_at)
+  VALUES (conn_id, grp_id, 'view_edit', now(), now())
+  ON CONFLICT DO NOTHING;
+
+  -- Two reversible migrations, approved+executed, so k6 can rollback/forward.
+  INSERT INTO migrations (connection_id, version, sql_up, sql_down, status, author_id)
+  VALUES (conn_id, 1,
+          'UPDATE orpbal_demo_events SET status=''archived'' WHERE tenant_id = 1 AND status=''pending''',
+          'UPDATE orpbal_demo_events SET status=''pending'' WHERE tenant_id = 1 AND status=''archived''',
+          'success', admin_id)
+  ON CONFLICT (connection_id, version) DO NOTHING
+  RETURNING id INTO mig1;
+  IF mig1 IS NULL THEN
+    SELECT id INTO mig1 FROM migrations WHERE connection_id = conn_id AND version = 1;
+  END IF;
+
+  INSERT INTO migrations (connection_id, version, sql_up, sql_down, status, author_id)
+  VALUES (conn_id, 2,
+          'UPDATE orpbal_demo_events SET amount = amount + 1 WHERE tenant_id = 2 AND status=''pending''',
+          'UPDATE orpbal_demo_events SET amount = amount - 1 WHERE tenant_id = 2 AND status=''pending''',
+          'success', admin_id)
+  ON CONFLICT (connection_id, version) DO NOTHING
+  RETURNING id INTO mig2;
+  IF mig2 IS NULL THEN
+    SELECT id INTO mig2 FROM migrations WHERE connection_id = conn_id AND version = 2;
+  END IF;
+
+  -- Executions: active up-run for each, so rollback/forward resolve.
+  INSERT INTO migration_executions (created_at, connection_id, migration_id, kind, status, actor_id, sql_executed, finished_at)
+  SELECT now(), conn_id, mig1, 'up', 'success', admin_id,
+         'UPDATE orpbal_demo_events SET status=''archived'' WHERE tenant_id = 1 AND status=''pending''', now()
+  WHERE NOT EXISTS (SELECT 1 FROM migration_executions WHERE migration_id = mig1 AND kind = 'up' AND status = 'success')
+  RETURNING id INTO exec1;
+  IF exec1 IS NULL THEN
+    SELECT id INTO exec1 FROM migration_executions WHERE migration_id = mig1 AND kind = 'up' AND status = 'success' ORDER BY id DESC LIMIT 1;
+  END IF;
+
+  INSERT INTO migration_executions (created_at, connection_id, migration_id, kind, status, actor_id, sql_executed, finished_at)
+  SELECT now(), conn_id, mig2, 'up', 'success', admin_id,
+         'UPDATE orpbal_demo_events SET amount = amount + 1 WHERE tenant_id = 2 AND status=''pending''', now()
+  WHERE NOT EXISTS (SELECT 1 FROM migration_executions WHERE migration_id = mig2 AND kind = 'up' AND status = 'success')
+  RETURNING id INTO exec2;
+  IF exec2 IS NULL THEN
+    SELECT id INTO exec2 FROM migration_executions WHERE migration_id = mig2 AND kind = 'up' AND status = 'success' ORDER BY id DESC LIMIT 1;
+  END IF;
+
+  RAISE NOTICE 'demo seeded: group=% conn=% mig1=% mig2=%', grp_id, conn_id, mig1, mig2;
+END $$;
+SQL
+
+echo "== Done. Record measured numbers in README (M2 spec)."

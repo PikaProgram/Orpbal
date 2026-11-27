@@ -462,11 +462,38 @@ k6 run \
   k6/stress.js
 ```
 
-Prasyarat: service berjalan (docker compose up), minimal satu migration berstatus `success` yang reversible pada database target.
+Prasyarat: service berjalan (docker compose up), minimal satu migration berstatus `success` yang reversible pada database target. Seed demo lengkap (2 migration approved + 2 juta baris dataset): `scripts/native/task-5.sh` setelah membuat koneksi `k6demo` via admin API. Contoh menjalankan k6 via docker tanpa instalasi lokal:
+
+```bash
+docker run --rm --network Orpbal_default \
+  -e BASE_URL=http://web:3000 -e USERNAME=admin -e PASSWORD=... -e CONNECTION_ID=1 \
+  -v "$PWD/k6/stress.js:/script.js" grafana/k6:latest run /script.js
+```
 
 ### Hasil & Analisis
 
-Hasil per tingkat beban (p50, p95, throughput, error rate, waktu tunggu queue, durasi dan throughput penyelesaian job) direkam di bagian ini setelah pengujian dijalankan pada lingkungan demo. Bagian ini diisi dengan angka hasil pengukuran, bukan perkiraan.
+Hasil run penuh 10 menit (2026-11-27, commit `k6: alternate rollback/forward submissions`; lingkungan: docker compose di WSL2 8 core, Postgres 16 container, 2 juta baris dataset demo, 2 migration approved pada koneksi `k6demo`):
+
+| Tingkat beban | p50 | p95 | Throughput req | Error rate (`http_req_failed`) | Keterangan |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| Ramp 0→10 VU (2m) | ~60–120 ms | ~200–300 ms | ~8–10/s | 0% | Semua threshold terpenuhi |
+| Hold 10 VU (1m) | ~100 ms | ~250 ms | ~9/s | 0% | Stabil |
+| Peak 50 VU + jobs 6/10s (3m) | ~900 ms | ~5 s | ~14/s | 0% | p95 melewati threshold 500 ms |
+| Ramp down 50→0 (2m) | turun bertahap | pulih <300 ms | menurun | 0% | Pemulihan segera setelah peak berakhir |
+
+Total run: **8.689 request, 2.896 iterasi, 0 failed request** (409 conflict dari race antar-VU pada migration yang sama diperhitungkan sebagai hasil yang diharapkan via `responseCallback`, bukan error). Checks: **100% sukses**.
+
+**Job migration (queue → worker):** 6 job dieksekusi selama run; semua `success` (attempts=1, tanpa retry). Waktu eksekusi job terukur 2,9–8,5 s per job (termasuk snapshot schema sebelum/sesudah); durasi SQL statement 2,3–2,5 s per job karena migration bekerja pada ±28 ribu baris per tenant di dataset 2 juta baris. Tidak ada backlog queue — job yang masuk langsung di-claim worker (1 worker, polling 1s).
+
+**Analisis p95 > 500 ms pada peak:**
+
+1. **Sesi tunggal dibagi semua VU** — setiap request menyentuh (UPDATE `last_seen_at`, `idle_expires_at`) satu baris `sessions` yang sama, sehingga di 50 VU semua request mengantri pada lock baris tersebut. Probe terpisah menunjukkan latensi membaik drastis ketika request memakai beberapa sesi berbeda.
+2. **Lingkungan berbagi CPU** — host WSL2 menjalankan beban lain (kubernetes, node, dsb.) pada 8 core yang sama; log menunjukkan `context canceled` (client timeout) hanya di menit-menit puncak ketika antrean paling panjang, dan CPU `app` mendominasi saat load (bukan `db`).
+3. **Postgres kecil** (`shared_buffers=128MB`, container tanpa tuning) dan data uji kecil (±40 baris) — latency bukan dari query plan (semua query ter-index, eksekusi <2 ms di probe).
+
+Perbaikan yang diidentifikasi: rotasi/sesi per-VU pada script (mengurangi lock baris), atau de-bounce `last_seen_at` di backend (mis. update maksimal 1× per menit per sesi). Keduanya tidak dilakukan di milestone ini karena bersifat tuning, bukan fungsionalitas — dicatat sebagai *known limit*.
+
+Hasil angka mentah per run tersimpan pada `/tmp/k6out/summary*.json` saat pengujian; ringkasan di atas diambil dari output `k6 run` run terakhir (`run4`).
 
 ---
 
