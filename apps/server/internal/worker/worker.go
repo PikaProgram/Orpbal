@@ -19,6 +19,7 @@ import (
 	"Orpbal/ent/migrationexecution"
 	"Orpbal/ent/migrationjob"
 	"Orpbal/ent/schemasnapshot"
+	"Orpbal/internal/observability"
 	"Orpbal/internal/queue"
 	"Orpbal/internal/target"
 	"Orpbal/internal/tracing"
@@ -122,8 +123,13 @@ func (r *Runner) run(ctx context.Context, workerID string, job *queue.ClaimedJob
 
 	kind, status := r.execute(ctx, log, workerID, job, exec, mig, t)
 
+	elapsed := time.Since(start)
+	observability.MigrationFinished(string(kind), elapsed)
+	if status == migrationexecution.StatusPartial || status == migrationexecution.StatusCancelled {
+		observability.JobFinished(string(status))
+	}
 	close(stopHeartbeat)
-	log = log.With().Int64("duration_ms", time.Since(start).Milliseconds()).Logger()
+	log = log.With().Int64("duration_ms", elapsed.Milliseconds()).Logger()
 
 	switch status {
 	case migrationexecution.StatusSuccess:
@@ -358,11 +364,13 @@ func (r *Runner) runBatch(ctx context.Context, log zerolog.Logger, workerID stri
 		}
 		batchesDone++
 		rowsDone += affected
+		batchElapsed := time.Since(batchStart)
+		observability.BatchCommitted(string(exec.Kind), affected, batchElapsed)
 		log.Info().
 			Str("event", "batch_commit").
 			Int("batch", batchesDone).
 			Int64("rows", affected).
-			Int64("duration_ms", time.Since(batchStart).Milliseconds()).
+			Int64("duration_ms", batchElapsed.Milliseconds()).
 			Msg("batch committed")
 
 		// Checkpoint AFTER commit; on error abort without touching statuses —
@@ -430,12 +438,16 @@ func (r *Runner) stopBatch(ctx context.Context, log zerolog.Logger, workerID str
 // finishJobStatus writes a terminal job status directly (cancel/partial path;
 // FinishSuccess/FinishFailed cover the rest).
 func (r *Runner) finishJobStatus(ctx context.Context, jobID int, workerID string, status string) error {
-	return r.client.MigrationJob.Update().
+	err := r.client.MigrationJob.Update().
 		Where(migrationjob.ID(jobID), migrationjob.LockedBy(workerID)).
 		SetStatus(migrationjob.Status(status)).
 		SetNillableFinishedAt(now()).
 		ClearLockedBy().
 		Exec(ctx)
+	if err == nil {
+		observability.JobFinished(status)
+	}
+	return err
 }
 
 // probeUpper returns MIN(cursor) above last within (last, max_id], or

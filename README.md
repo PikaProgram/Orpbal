@@ -158,6 +158,11 @@ Setelah semua health check berhasil dilewati, service dapat diakses melalui:
 | **Backend API** | `http://localhost:8080` | Health Endpoint : `http://localhost:8080/health` |
 | **Platform PostgreSQL** | `localhost:5432` | User: `postgres`, Password: `postgres`, DB: `Orpbal` |
 | **Sample Target PostgreSQL**| `localhost:5433` | User: `postgres`, Password: `postgres`, DB: `userdb` |
+| **API metrics** | `http://localhost:8080/metrics` | Prometheus scrape endpoint (queue/DB pool) |
+| **Worker metrics** | `http://localhost:9090/metrics` | Prometheus scrape endpoint (migration duration, batch/row, retries) |
+| **Grafana** | `http://localhost:3001` | `admin` / `admin` (override with `GRAFANA_ADMIN_*`) |
+| **Prometheus** | `http://localhost:9091` | Scrape config: `observability/prometheus.yml` |
+| **OTel Collector** | `localhost:4317` (gRPC), `localhost:4318` (HTTP) | Menerima span & log dari API/worker |
 
 Buka `http://localhost:3000/login` dan masuk dengan kredensial admin bootstrap Anda. Dari menu navigasi admin, Anda dapat langsung mendaftarkan `localhost:5433` (atau jaringan internal `db-user:5432`) sebagai koneksi database terkelola.
 
@@ -248,7 +253,9 @@ same-origin (cookie sesi otomatis terlampir tanpa konfigurasi CORS).
 | `APP_ORIGIN` | Tidak | `http://localhost:4321` | Origin web frontend yang diizinkan |
 | `HOST` | Tidak | `0.0.0.0` | Host bind untuk server HTTP Gin |
 | `PORT` | Tidak | `8080` | Port bind untuk server HTTP Gin |
-| `LOG_LEVEL` | Tidak | `debug` | Level log terstruktur (`debug`, `info`, `warn`, `error`, `production`) |
+| `LOG_LEVEL` | Tidak | `debug` | `production` menghasilkan JSON log (wajib untuk korelasi OTLP); mode lain memakai console writer |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | Tidak | - | Endpoint Collector, mis. `http://otel-collector:4318`. Kosong = span/log tetap lokal (stdout + debug exporter) |
+| `OTEL_SERVICE_NAME` | Tidak | `orpbal-server` | Nama service pada resource span/log |
 | `ORPBAL_SESSION_IDLE_TIMEOUT` | Tidak | `30m` | Durasi inaktivitas sebelum sesi kedaluwarsa |
 | `ORPBAL_SESSION_ABSOLUTE_TIMEOUT` | Tidak | `8h` | Batas maksimum masa pakai sesi terlepas dari adanya aktivitas |
 | `ORPBAL_SESSION_ROTATION_INTERVAL` | Tidak | `15m` | Interval waktu rotasi token sesi otomatis |
@@ -262,6 +269,9 @@ same-origin (cookie sesi otomatis terlampir tanpa konfigurasi CORS).
 | `ORPBAL_ENCRYPTION_KEY` | **Ya** | - | Kunci yang sama dengan server (dekripsi kredensial target) |
 | `WORKER_ID` | Tidak | hostname | Identitas worker untuk claim/heartbeat baris job |
 | `ORPBAL_POLL_INTERVAL` | Tidak | `1s` | Jeda polling queue ketika tidak ada job |
+| `ORPBAL_METRICS_ADDR` | Tidak | `:9090` | Alamat bind endpoint `/metrics` worker |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | Tidak | - | Endpoint Collector untuk span/log worker |
+| `OTEL_SERVICE_NAME` | Tidak | `orpbal-worker` | Nama service pada resource span/log worker |
 
 ### Frontend (`apps/web/.env`)
 
@@ -357,6 +367,84 @@ Integrasi test `TestWorkerLargeDatasetBatch` (`apps/server/internal/worker/bigda
 | Migration per batch (10k/batch, 25 batch) | 11.79 s | 250.000 |
 
 Test mengassert `rows_done == jumlah baris` dan semua row berstatus target, sehingga regresi batching gagal test.
+
+---
+
+## Observability (Bonus B2)
+
+Alur telemetry tambahan (instrumentasi logging/tracing wajib tetap dipakai; yang jadi bonus adalah collector terpusat, metrik Prometheus, dan dashboard Grafana):
+
+```
+API (span HTTP) ─┐
+                 ├─ OTLP/HTTP → OTel Collector ─→ Loki (logs)
+Worker (span) ───┘                              └─→ Tempo (traces)
+       │
+       └─ /metrics (worker) ─┐
+API /metrics ────────────────┼─→ Prometheus → Grafana
+Collector self-metrics ──────┘
+```
+
+Semua konfigurasi ada di `observability/`:
+
+| File | Fungsi |
+| :--- | :--- |
+| `otel-collector-config.yaml` | Receiver OTLP (gRPC 4317 / HTTP 4318), processor redaksi field sensitif, exporter Loki + Tempo + debug |
+| `loki-config.yaml` | Backend log lokal (filesystem) |
+| `tempo-config.yaml` | Backend trace lokal + receiver OTLP |
+| `prometheus.yml` | Scrape `app:8080`, `worker:9090`, dan `otel-collector:8889` |
+| `grafana/provisioning/` | Datasource Prometheus/Loki/Tempo + *derived field* `trace_id` → Tempo |
+| `grafana/dashboards/orpbal-observability.json` | Dashboard: job per status, queue/lock wait, durasi migration, koneksi DB, retry/batch, log, trace |
+
+Jalankan seperti biasa; kelima service observability ikut `docker compose up --build`:
+
+```sh
+docker compose up --build
+# Grafana: http://localhost:3001 (admin/admin)
+# Prometheus: http://localhost:9091
+```
+
+### Metrik Prometheus
+
+| Metrik | Label (kardinalitas rendah) | Sumber |
+| :--- | :--- | :--- |
+| `orpbal_jobs` | `status` | Query `migration_jobs` saat scrape (API) |
+| `orpbal_job_claims_total` | `result` (`claimed`, `contended`, `empty`, `error`) | `queue.Claim` |
+| `orpbal_job_queue_wait_seconds` | - | `created_at` → claim |
+| `orpbal_job_lock_wait_seconds` | - | Connection checkout + `pg_try_advisory_lock` |
+| `orpbal_job_retries_total` | - | `queue.FinishFailed` saat transient retry |
+| `orpbal_job_finishes_total` | `status` | FinishSuccess/FinishFailed/stopBatch |
+| `orpbal_migration_duration_seconds` | `kind` (`up`, `rollback`, `forward`, `retry`, `batch_revert`) | Worker `run` |
+| `orpbal_batches_total`, `orpbal_rows_total`, `orpbal_batch_duration_seconds` | `kind` | Tiap batch committed |
+| `orpbal_db_pool_connections` | `pool`, `state` (`open`, `idle`, `in_use`, `max_open`) | `database/sql.DB.Stats()` |
+| `orpbal_db_pool_wait_seconds_total`, `orpbal_db_pool_wait_count_total` | `pool` | `database/sql.DB.Stats()` |
+
+Label tidak pernah memakai user ID, job ID, SQL, DSN, atau session identifier. Selain metrik di atas, Go runtime/process metrics tersedia otomatis dari `promhttp.Handler()`.
+
+### Contoh korelasi log → trace → metrik
+
+Satu submission migration menghasilkan `traceparent` di baris job; worker melanjutkan trace yang sama dan menuliskan `trace_id`/`span_id` ke log (ID di bawah hanya ilustrasi):
+
+```json
+{"level":"info","trace_id":"4bf92f3577b34da6a3ce929d0e0e4736","span_id":"00f067aa0ba902b7","event":"batch_commit","batch":7,"rows":10000,"duration_ms":812,"database":"userdb","status":"running","time":"2026-11-27T05:12:33Z","message":"batch committed"}
+```
+
+Span yang diterima Collector (debug exporter) memiliki trace ID yang sama, sehingga tombol *trace_id* di panel log Loki membuka trace di Tempo:
+
+```json
+{"Name":"worker.execute","SpanContext":{"TraceID":"4bf92f3577b34da6a3ce929d0e0e4736","SpanID":"00f067aa0ba902b7","TraceFlags":"01"},"StartTime":"2026-11-27T05:12:20Z","EndTime":"2026-11-27T05:12:34Z","Duration":14.2}
+```
+
+Pada rentang waktu yang sama, Grafana/Prometheus menampilkan metrik dari eksekusi tersebut:
+
+```
+orpbal_job_queue_wait_seconds_bucket{le="1",instance="worker:9090"} 12
+orpbal_migration_duration_seconds_bucket{kind="up",le="30",instance="worker:9090"} 3
+orpbal_db_pool_connections{pool="platform",state="in_use",instance="app:8080"} 2
+```
+
+Credential, DSN, cookie, token, serta session identifier dihapus oleh `attributes/redact` di Collector dan oleh regex `scrubText` di `internal/observability/log.go`; teks SQL tidak dipakai sebagai label metrik maupun atribut span (hanya verb operasinya, mis. `db.operation="UPDATE"`).
+
+> Mode OTLP mengharuskan `LOG_LEVEL=production` (JSON log) agar field `trace_id`/`span_id` dapat diekstrak. Tanpa `OTEL_EXPORTER_OTLP_ENDPOINT`, perilaku lama tetap berjalan: span JSON ke stdout dan log console/JSON sesuai `LOG_LEVEL`.
 
 ---
 
@@ -571,6 +659,13 @@ go vet ./...
 
 # Menjalankan unit test Go dan uji skema
 go test ./...
+```
+
+Smoke test endpoint metrik (saat compose berjalan):
+
+```sh
+curl -s http://localhost:8080/metrics | grep orpbal_
+curl -s http://localhost:9090/metrics | grep orpbal_
 ```
 
 ### Uji Integrasi Menggunakan Docker

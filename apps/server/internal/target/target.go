@@ -47,6 +47,9 @@ var ErrInvalidMutation = errors.New("invalid mutation request")
 // transaction strategy, returning a result set when the statement produces
 // rows.
 func (t *Target) Query(ctx context.Context, statement string, limit int) (columns []string, rows [][]any, err error) {
+	ctx, span := statementSpan(ctx, t.dialect, statement, "SELECT")
+	defer func() { finishStatementSpan(span, err) }()
+
 	ctx, cancel := context.WithTimeout(ctx, QueryTimeout)
 	defer cancel()
 
@@ -105,10 +108,13 @@ func (t *Target) Execute(ctx context.Context, statement string) error {
 
 // ExecuteArgs runs one parameterized statement in a writable transaction and
 // returns the number of affected rows. Used by row mutations and migrations.
-func (t *Target) ExecuteArgs(ctx context.Context, statement string, args []any) (int64, error) {
+func (t *Target) ExecuteArgs(ctx context.Context, statement string, args []any) (affected int64, err error) {
 	if err := ReadableStatement(statement); err != nil {
 		return 0, err
 	}
+	ctx, span := statementSpan(ctx, t.dialect, statement, "")
+	defer func() { finishStatementSpan(span, err) }()
+
 	ctx, cancel := context.WithTimeout(ctx, QueryTimeout)
 	defer cancel()
 
@@ -121,7 +127,7 @@ func (t *Target) ExecuteArgs(ctx context.Context, statement string, args []any) 
 		tx.Rollback()
 		return 0, fmt.Errorf("execute statement: %w", err)
 	}
-	affected, err := result.RowsAffected()
+	affected, err = result.RowsAffected()
 	if err != nil {
 		tx.Rollback()
 		return 0, fmt.Errorf("read affected rows: %w", err)
@@ -133,13 +139,15 @@ func (t *Target) ExecuteArgs(ctx context.Context, statement string, args []any) 
 }
 
 // Explain runs EXPLAIN (optionally ANALYZE) for one statement via the dialect.
-func (t *Target) Explain(ctx context.Context, statement string, analyze bool) (ExplainResult, error) {
+func (t *Target) Explain(ctx context.Context, statement string, analyze bool) (result ExplainResult, err error) {
 	if err := ReadableStatement(statement); err != nil {
 		return ExplainResult{}, err
 	}
 	if firstKeyword(statement) == "EXPLAIN" {
 		return ExplainResult{}, fmt.Errorf("remove the leading EXPLAIN; the planner adds it")
 	}
+	ctx, span := statementSpan(ctx, t.dialect, statement, "EXPLAIN")
+	defer func() { finishStatementSpan(span, err) }()
 	return t.dialect.Explain(ctx, t.db, statement, analyze)
 }
 

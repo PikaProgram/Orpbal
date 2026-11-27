@@ -12,6 +12,11 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+
+	"Orpbal/internal/observability"
+	"Orpbal/internal/tracing"
+
+	"go.opentelemetry.io/otel/attribute"
 )
 
 // Table is the migration job table name (ent default pluralization).
@@ -79,42 +84,66 @@ WHERE id = (
 	LIMIT 1
 )
 RETURNING id, execution_id, connection_id, attempts,
-	COALESCE(traceparent, ''), batch_cursor, batches_done, rows_done`
+	COALESCE(traceparent, ''), batch_cursor, batches_done, rows_done,
+	EXTRACT(EPOCH FROM now() - created_at)::double precision`
 
 // Claim atomically leases the next queued job (or one whose worker died,
 // heartbeat older than lockTTL) and takes the per-connection advisory lock on
 // a dedicated checked-out platform connection. The caller MUST Release.
 func (q *Queue) Claim(ctx context.Context, workerID string, lockTTL time.Duration) (*ClaimedJob, error) {
+	connStart := time.Now()
 	conn, err := q.db.Conn(ctx)
+	connWait := time.Since(connStart)
 	if err != nil {
+		observability.JobClaimed("error", 0, connWait, 0)
 		return nil, fmt.Errorf("queue: checkout conn: %w", err)
 	}
 
 	var (
-		job      ClaimedJob
-		tracep   sql.NullString
-		batchCur sql.NullInt64
+		job         ClaimedJob
+		tracep      sql.NullString
+		batchCur    sql.NullInt64
+		waitSeconds float64
 	)
 	err = conn.QueryRowContext(ctx, claimSQL, workerID, int64(lockTTL/time.Second)).
-		Scan(&job.ID, &job.ExecutionID, &job.ConnectionID, &job.Attempts, &tracep, &batchCur, &job.BatchesDone, &job.RowsDone)
+		Scan(&job.ID, &job.ExecutionID, &job.ConnectionID, &job.Attempts, &tracep, &batchCur, &job.BatchesDone, &job.RowsDone, &waitSeconds)
+	queuedFor := time.Duration(waitSeconds * float64(time.Second))
 	if errors.Is(err, sql.ErrNoRows) {
 		_ = conn.Close()
+		observability.JobClaimed("empty", 0, connWait, 0)
 		return nil, ErrNotClaimed
 	}
 	if err != nil {
 		_ = conn.Close()
+		observability.JobClaimed("error", 0, connWait, 0)
 		return nil, fmt.Errorf("queue: claim: %w", err)
 	}
 
+	// Span only for real work: an empty poll should not emit a span every second.
+	ctx, span := tracing.StartSpan(ctx, tracep.String, "queue.lock")
+	defer span.End()
+	span.SetAttributes(
+		attribute.String("db.system", "postgresql"),
+		attribute.Float64("queue.conn_wait_seconds", connWait.Seconds()),
+		attribute.Float64("queue.wait_seconds", waitSeconds),
+	)
+
 	// Advisory lock second: if another worker already runs this connection,
 	// put the job back so it isn't held hostage by a losing claimer.
+	lockStart := time.Now()
 	var locked bool
 	if err := conn.QueryRowContext(ctx,
 		"SELECT pg_try_advisory_lock(hashtext('orpbal:conn:' || $1))", job.ConnectionID,
 	).Scan(&locked); err != nil {
 		_ = conn.Close()
+		observability.JobClaimed("error", queuedFor, connWait, time.Since(lockStart))
 		return nil, fmt.Errorf("queue: advisory lock: %w", err)
 	}
+	advisoryWait := time.Since(lockStart)
+	span.SetAttributes(
+		attribute.Float64("queue.lock_wait_seconds", advisoryWait.Seconds()),
+		attribute.Bool("queue.lock_acquired", locked),
+	)
 	if !locked {
 		if _, err := conn.ExecContext(ctx,
 			"UPDATE "+table+" SET status='queued', locked_by=NULL, heartbeat_at=NULL WHERE id=$1 AND locked_by=$2",
@@ -122,8 +151,10 @@ func (q *Queue) Claim(ctx context.Context, workerID string, lockTTL time.Duratio
 			q.logger.Error().Err(err).Int("job_id", job.ID).Msg("queue: unlock-contended revert failed")
 		}
 		_ = conn.Close()
+		observability.JobClaimed("contended", queuedFor, connWait, advisoryWait)
 		return nil, ErrNotClaimed
 	}
+	observability.JobClaimed("claimed", queuedFor, connWait, advisoryWait)
 
 	job.Traceparent = tracep.String
 	if batchCur.Valid {
@@ -175,6 +206,7 @@ func (q *Queue) FinishSuccess(ctx context.Context, jobID int, workerID string) e
 	if n, _ := res.RowsAffected(); n == 0 {
 		return ErrNotOwner
 	}
+	observability.JobFinished("success")
 	return nil
 }
 
@@ -232,6 +264,11 @@ func (q *Queue) FinishFailed(ctx context.Context, jobID int, workerID string, er
 	}
 	if err := tx.Commit(); err != nil {
 		return false, fmt.Errorf("queue: finish failed commit: %w", err)
+	}
+	if retry {
+		observability.JobRetried()
+	} else {
+		observability.JobFinished("failed")
 	}
 	return retry, nil
 }
